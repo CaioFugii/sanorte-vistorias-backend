@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities';
+import { UserRole } from '../common/enums';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -29,11 +30,13 @@ export class UsersService {
     name: string;
     email: string;
     password: string;
-    role: string;
+    role: UserRole;
   }): Promise<User> {
     const passwordHash = await bcrypt.hash(userData.password, 10);
     const user = this.usersRepository.create({
-      ...userData,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role,
       passwordHash,
     });
     return this.usersRepository.save(user);
