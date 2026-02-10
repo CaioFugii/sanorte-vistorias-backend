@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Checklist, ChecklistItem } from '../entities';
 import { ModuleType } from '../common/enums';
+import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class ChecklistsService {
@@ -13,16 +14,38 @@ export class ChecklistsService {
     private checklistItemsRepository: Repository<ChecklistItem>,
   ) {}
 
-  async findAll(module?: ModuleType): Promise<Checklist[]> {
+  async findAll(
+    module?: ModuleType,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponseDto<Checklist>> {
+    const skip = (page - 1) * limit;
     const where: any = { active: true };
     if (module) {
       where.module = module;
     }
-    return this.checklistsRepository.find({
+
+    const [data, total] = await this.checklistsRepository.findAndCount({
       where,
       relations: ['items'],
+      skip,
+      take: limit,
       order: { createdAt: 'DESC' },
     });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 
   async findOne(id: string): Promise<Checklist> {

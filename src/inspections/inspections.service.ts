@@ -24,6 +24,7 @@ import {
 } from '../common/enums';
 import { FilesService } from '../files/files.service';
 import { DataSource } from 'typeorm';
+import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class InspectionsService {
@@ -99,13 +100,19 @@ export class InspectionsService {
     return this.findOne(savedInspection.id);
   }
 
-  async findAll(filters: {
-    periodFrom?: string;
-    periodTo?: string;
-    module?: ModuleType;
-    teamId?: string;
-    status?: InspectionStatus;
-  }): Promise<Inspection[]> {
+  async findAll(
+    filters: {
+      periodFrom?: string;
+      periodTo?: string;
+      module?: ModuleType;
+      teamId?: string;
+      status?: InspectionStatus;
+    },
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponseDto<Inspection>> {
+    const skip = (page - 1) * limit;
+
     const query = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .leftJoinAndSelect('inspection.checklist', 'checklist')
@@ -135,15 +142,53 @@ export class InspectionsService {
       query.andWhere('inspection.status = :status', { status: filters.status });
     }
 
-    return query.getMany();
+    query.skip(skip).take(limit).orderBy('inspection.createdAt', 'DESC');
+
+    const [data, total] = await query.getManyAndCount();
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 
-  async findMine(userId: string): Promise<Inspection[]> {
-    return this.inspectionsRepository.find({
+  async findMine(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponseDto<Inspection>> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.inspectionsRepository.findAndCount({
       where: { createdByUserId: userId },
       relations: ['checklist', 'team', 'items', 'items.checklistItem'],
+      skip,
+      take: limit,
       order: { createdAt: 'DESC' },
     });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 
   async findOne(id: string): Promise<Inspection> {

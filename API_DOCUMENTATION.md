@@ -5,14 +5,15 @@
 1. [Informações Gerais](#informações-gerais)
 2. [Configuração Base](#configuração-base)
 3. [Autenticação](#autenticação)
-4. [Modelos de Dados](#modelos-de-dados)
-5. [Enums](#enums)
-6. [Endpoints](#endpoints)
-7. [Regras de Negócio](#regras-de-negócio)
-8. [Tratamento de Erros](#tratamento-de-erros)
-9. [Exemplos de Fluxos](#exemplos-de-fluxos)
-10. [Upload de Arquivos](#upload-de-arquivos)
-11. [Download de PDF](#download-de-pdf)
+4. [Paginação](#paginação)
+5. [Modelos de Dados](#modelos-de-dados)
+6. [Enums](#enums)
+7. [Endpoints](#endpoints)
+8. [Regras de Negócio](#regras-de-negócio)
+9. [Tratamento de Erros](#tratamento-de-erros)
+10. [Exemplos de Fluxos](#exemplos-de-fluxos)
+11. [Upload de Arquivos](#upload-de-arquivos)
+12. [Download de PDF](#download-de-pdf)
 
 ---
 
@@ -140,6 +141,119 @@ localStorage.setItem('token', data.accessToken);
 
 **Erros:**
 - `401 Unauthorized`: Token inválido ou ausente
+
+---
+
+## 📄 Paginação
+
+Todas as listagens da API suportam paginação através de query parameters.
+
+### Query Parameters
+
+| Parâmetro | Tipo | Obrigatório | Padrão | Descrição |
+|-----------|------|-------------|--------|-----------|
+| `page` | number | Não | 1 | Número da página (inicia em 1) |
+| `limit` | number | Não | 10 | Quantidade de itens por página (máximo 100) |
+
+### Response Format
+
+Todas as listagens retornam no seguinte formato:
+
+```json
+{
+  "data": [...],  // Array com os itens da página
+  "meta": {
+    "page": 1,           // Página atual
+    "limit": 10,         // Itens por página
+    "total": 150,        // Total de itens
+    "totalPages": 15,    // Total de páginas
+    "hasNext": true,     // Se existe próxima página
+    "hasPrev": false     // Se existe página anterior
+  }
+}
+```
+
+### Exemplos
+
+**Listar primeira página (10 itens):**
+```
+GET /users?page=1&limit=10
+```
+
+**Listar segunda página (20 itens por página):**
+```
+GET /users?page=2&limit=20
+```
+
+**Sem paginação (usa valores padrão):**
+```
+GET /users
+// Equivale a GET /users?page=1&limit=10
+```
+
+### Validações
+
+- `page`: Deve ser >= 1
+- `limit`: Deve ser >= 1 e <= 100
+- Se valores inválidos forem fornecidos, serão usados os padrões
+
+### Exemplo JavaScript
+
+```javascript
+async function getUsers(page = 1, limit = 10) {
+  const response = await fetch(
+    `http://localhost:3000/users?page=${page}&limit=${limit}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }
+  );
+  
+  const result = await response.json();
+  
+  console.log(`Página ${result.meta.page} de ${result.meta.totalPages}`);
+  console.log(`Total de itens: ${result.meta.total}`);
+  console.log(`Itens nesta página: ${result.data.length}`);
+  
+  return result;
+}
+
+// Uso
+const result = await getUsers(1, 20);
+const users = result.data;
+const { page, totalPages, hasNext, hasPrev } = result.meta;
+```
+
+### Componente de Paginação (Exemplo React)
+
+```javascript
+function Pagination({ meta, onPageChange }) {
+  const { page, totalPages, hasNext, hasPrev } = meta;
+  
+  return (
+    <div className="pagination">
+      <button 
+        onClick={() => onPageChange(page - 1)} 
+        disabled={!hasPrev}
+      >
+        Anterior
+      </button>
+      
+      <span>
+        Página {page} de {totalPages}
+      </span>
+      
+      <button 
+        onClick={() => onPageChange(page + 1)} 
+        disabled={!hasNext}
+      >
+        Próxima
+      </button>
+    </div>
+  );
+}
+```
 
 ---
 
@@ -355,8 +469,33 @@ Módulos hardcoded (sem CRUD):
 
 #### GET /users
 - **Autenticação:** Requerida (ADMIN apenas)
-- **Descrição:** Lista todos os usuários
-- **Response:** Array de User (sem passwordHash)
+- **Descrição:** Lista todos os usuários (paginado)
+- **Query Parameters:**
+  - `page` (opcional): Número da página (padrão: 1)
+  - `limit` (opcional): Itens por página (padrão: 10, máximo: 100)
+- **Response 200:**
+```json
+{
+  "data": [
+    {
+      "id": "...",
+      "name": "...",
+      "email": "...",
+      "role": "...",
+      "createdAt": "...",
+      "updatedAt": "..."
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 50,
+    "totalPages": 5,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
 
 #### POST /users
 - **Autenticação:** Requerida (ADMIN apenas)
@@ -394,8 +533,11 @@ Módulos hardcoded (sem CRUD):
 
 #### GET /teams
 - **Autenticação:** Requerida
-- **Descrição:** Lista todas as equipes ativas
-- **Response:** Array de Team (com collaborators quando disponível)
+- **Descrição:** Lista todas as equipes ativas (paginado)
+- **Query Parameters:**
+  - `page` (opcional): Número da página (padrão: 1)
+  - `limit` (opcional): Itens por página (padrão: 10, máximo: 100)
+- **Response 200:** PaginatedResponseDto<Team>
 
 #### POST /teams
 - **Autenticação:** Requerida (ADMIN apenas)
@@ -429,8 +571,11 @@ Módulos hardcoded (sem CRUD):
 
 #### GET /collaborators
 - **Autenticação:** Requerida
-- **Descrição:** Lista todos os colaboradores ativos
-- **Response:** Array de Collaborator
+- **Descrição:** Lista todos os colaboradores ativos (paginado)
+- **Query Parameters:**
+  - `page` (opcional): Número da página (padrão: 1)
+  - `limit` (opcional): Itens por página (padrão: 10, máximo: 100)
+- **Response 200:** PaginatedResponseDto<Collaborator>
 
 #### POST /collaborators
 - **Autenticação:** Requerida (ADMIN apenas)
@@ -466,8 +611,10 @@ Módulos hardcoded (sem CRUD):
 - **Autenticação:** Requerida
 - **Query Parameters:**
   - `module` (opcional): ModuleType para filtrar
-- **Descrição:** Lista checklists ativos, opcionalmente filtrados por módulo
-- **Response:** Array de Checklist (com items quando disponível)
+  - `page` (opcional): Número da página (padrão: 1)
+  - `limit` (opcional): Itens por página (padrão: 10, máximo: 100)
+- **Descrição:** Lista checklists ativos, opcionalmente filtrados por módulo (paginado)
+- **Response 200:** PaginatedResponseDto<Checklist>
 
 **Exemplo:**
 ```
@@ -572,8 +719,10 @@ GET /checklists?module=SEGURANCA_TRABALHO
   - `module` (opcional): ModuleType
   - `teamId` (opcional): UUID da equipe
   - `status` (opcional): InspectionStatus
-- **Descrição:** Lista vistorias com filtros
-- **Response:** Array de Inspection
+  - `page` (opcional): Número da página (padrão: 1)
+  - `limit` (opcional): Itens por página (padrão: 10, máximo: 100)
+- **Descrição:** Lista vistorias com filtros (paginado)
+- **Response 200:** PaginatedResponseDto<Inspection>
 
 **Exemplo:**
 ```
@@ -582,8 +731,11 @@ GET /inspections?periodFrom=2024-01-01&periodTo=2024-12-31&module=SEGURANCA_TRAB
 
 #### GET /inspections/mine
 - **Autenticação:** Requerida (FISCAL apenas)
-- **Descrição:** Lista vistorias criadas pelo fiscal logado
-- **Response:** Array de Inspection
+- **Query Parameters:**
+  - `page` (opcional): Número da página (padrão: 1)
+  - `limit` (opcional): Itens por página (padrão: 10, máximo: 100)
+- **Descrição:** Lista vistorias criadas pelo fiscal logado (paginado)
+- **Response 200:** PaginatedResponseDto<Inspection>
 
 #### GET /inspections/:id
 - **Autenticação:** Requerida
@@ -1462,9 +1614,15 @@ export const PENDING_STATUS = {
 
 ### 6. Paginação
 
-**Atualmente não implementada.** Se necessário, considere:
-- Limitar resultados no frontend
-- Implementar paginação no backend (futuro)
+**✅ Implementada em todas as listagens:**
+- GET /users
+- GET /teams
+- GET /collaborators
+- GET /checklists
+- GET /inspections
+- GET /inspections/mine
+
+Todos os endpoints de listagem retornam dados paginados com metadados (total, totalPages, hasNext, hasPrev).
 
 ### 7. CORS
 

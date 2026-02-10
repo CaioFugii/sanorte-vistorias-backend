@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Collaborator } from '../entities';
+import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class CollaboratorsService {
@@ -10,10 +11,32 @@ export class CollaboratorsService {
     private collaboratorsRepository: Repository<Collaborator>,
   ) {}
 
-  async findAll(): Promise<Collaborator[]> {
-    return this.collaboratorsRepository.find({
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponseDto<Collaborator>> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.collaboratorsRepository.findAndCount({
       where: { active: true },
+      skip,
+      take: limit,
+      order: { createdAt: 'DESC' },
     });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 
   async findOne(id: string): Promise<Collaborator> {

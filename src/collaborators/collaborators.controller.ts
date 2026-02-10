@@ -7,12 +7,14 @@ import {
   Param,
   Delete,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { CollaboratorsService } from './collaborators.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
+import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @Controller('collaborators')
 @UseGuards(JwtAuthGuard)
@@ -22,8 +24,11 @@ export class CollaboratorsController {
   ) {}
 
   @Get()
-  findAll() {
-    return this.collaboratorsService.findAll();
+  findAll(@Query() pagination: PaginationQueryDto) {
+    return this.collaboratorsService.findAll(
+      pagination.page || 1,
+      pagination.limit || 10,
+    );
   }
 
   @Post()
