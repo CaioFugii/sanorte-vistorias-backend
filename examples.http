@@ -1,0 +1,171 @@
+### Exemplos de Requisições HTTP
+### Use a extensão REST Client do VS Code ou similar
+
+@baseUrl = http://localhost:3000
+@token = seu-token-aqui
+
+### 1. Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "fiscal@sanorte.com",
+  "password": "senha123"
+}
+
+### 2. Obter dados do usuário logado
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### 3. Listar equipes
+GET {{baseUrl}}/teams
+Authorization: Bearer {{token}}
+
+### 4. Listar colaboradores
+GET {{baseUrl}}/collaborators
+Authorization: Bearer {{token}}
+
+### 5. Listar checklists por módulo
+GET {{baseUrl}}/checklists?module=SEGURANCA_TRABALHO
+Authorization: Bearer {{token}}
+
+### 6. Criar vistoria
+POST {{baseUrl}}/inspections
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "module": "SEGURANCA_TRABALHO",
+  "checklistId": "checklist-id-aqui",
+  "teamId": "team-id-aqui",
+  "serviceDescription": "Vistoria de segurança do trabalho no canteiro",
+  "locationDescription": "Canteiro principal - Obra X",
+  "collaboratorIds": ["collaborator-id-1", "collaborator-id-2"]
+}
+
+### 7. Listar minhas vistorias (FISCAL)
+GET {{baseUrl}}/inspections/mine
+Authorization: Bearer {{token}}
+
+### 8. Listar todas as vistorias (ADMIN/GESTOR)
+GET {{baseUrl}}/inspections?status=FINALIZADA&module=SEGURANCA_TRABALHO
+Authorization: Bearer {{token}}
+
+### 9. Obter detalhes de uma vistoria
+GET {{baseUrl}}/inspections/inspection-id-aqui
+Authorization: Bearer {{token}}
+
+### 10. Atualizar respostas dos itens
+PUT {{baseUrl}}/inspections/inspection-id-aqui/items
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+[
+  {
+    "inspectionItemId": "item-id-1",
+    "answer": "CONFORME",
+    "notes": "Tudo ok"
+  },
+  {
+    "inspectionItemId": "item-id-2",
+    "answer": "NAO_CONFORME",
+    "notes": "Falta EPI"
+  }
+]
+
+### 11. Upload de evidência (multipart/form-data)
+POST {{baseUrl}}/inspections/inspection-id-aqui/evidences
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="foto.jpg"
+Content-Type: image/jpeg
+
+< ./foto.jpg
+------WebKitFormBoundary
+Content-Disposition: form-data; name="inspectionItemId"
+
+item-id-aqui
+------WebKitFormBoundary--
+
+### 12. Adicionar assinatura
+POST {{baseUrl}}/inspections/inspection-id-aqui/signature
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "signerName": "João Silva",
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+}
+
+### 13. Finalizar vistoria
+POST {{baseUrl}}/inspections/inspection-id-aqui/finalize
+Authorization: Bearer {{token}}
+
+### 14. Resolver pendência (GESTOR/ADMIN)
+POST {{baseUrl}}/inspections/inspection-id-aqui/resolve
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "resolutionNotes": "Problema corrigido. EPI fornecido e treinamento realizado.",
+  "resolutionEvidence": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+}
+
+### 15. Gerar PDF da vistoria
+GET {{baseUrl}}/inspections/inspection-id-aqui/pdf
+Authorization: Bearer {{token}}
+
+### 16. Dashboard - Resumo
+GET {{baseUrl}}/dashboards/summary?from=2024-01-01&to=2024-12-31&module=SEGURANCA_TRABALHO
+Authorization: Bearer {{token}}
+
+### 17. Dashboard - Ranking de Equipes
+GET {{baseUrl}}/dashboards/ranking/teams?from=2024-01-01&to=2024-12-31
+Authorization: Bearer {{token}}
+
+### 18. Criar equipe (ADMIN)
+POST {{baseUrl}}/teams
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Equipe Alpha",
+  "active": true
+}
+
+### 19. Criar colaborador (ADMIN)
+POST {{baseUrl}}/collaborators
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Maria Santos",
+  "active": true
+}
+
+### 20. Criar checklist (ADMIN)
+POST {{baseUrl}}/checklists
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "module": "SEGURANCA_TRABALHO",
+  "name": "Checklist Segurança Básica",
+  "description": "Checklist para vistoria de segurança básica",
+  "active": true
+}
+
+### 21. Adicionar item ao checklist (ADMIN)
+POST {{baseUrl}}/checklists/checklist-id-aqui/items
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Uso de EPI obrigatório",
+  "description": "Verificar se todos os colaboradores estão usando EPI adequado",
+  "order": 1,
+  "requiresPhotoOnNonConformity": true,
+  "active": true
+}

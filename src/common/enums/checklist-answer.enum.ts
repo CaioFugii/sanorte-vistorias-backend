@@ -1,0 +1,5 @@
+export enum ChecklistAnswer {
+  CONFORME = 'CONFORME',
+  NAO_CONFORME = 'NAO_CONFORME',
+  NAO_APLICAVEL = 'NAO_APLICAVEL',
+}
