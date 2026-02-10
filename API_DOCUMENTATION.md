@@ -714,15 +714,32 @@ GET /checklists?module=SEGURANCA_TRABALHO
 #### GET /inspections
 - **Autenticação:** Requerida (ADMIN ou GESTOR)
 - **Query Parameters:**
-  - `periodFrom` (opcional): `YYYY-MM-DD` - Data inicial
-  - `periodTo` (opcional): `YYYY-MM-DD` - Data final
-  - `module` (opcional): ModuleType
-  - `teamId` (opcional): UUID da equipe
-  - `status` (opcional): InspectionStatus
-  - `page` (opcional): Número da página (padrão: 1)
-  - `limit` (opcional): Itens por página (padrão: 10, máximo: 100)
-- **Descrição:** Lista vistorias com filtros (paginado)
+  - `periodFrom` (opcional): `YYYY-MM-DD` - Data inicial (validação: formato de data)
+  - `periodTo` (opcional): `YYYY-MM-DD` - Data final (validação: formato de data)
+  - `module` (opcional): ModuleType - Valores válidos: `SEGURANCA_TRABALHO`, `OBRAS_INVESTIMENTO`, `OBRAS_GLOBAL`, `CANTEIRO`
+  - `teamId` (opcional): UUID da equipe (validação: UUID v4)
+  - `status` (opcional): InspectionStatus - Valores válidos: `RASCUNHO`, `FINALIZADA`, `PENDENTE_AJUSTE`, `RESOLVIDA`
+  - `page` (opcional): Número da página (padrão: 1, mínimo: 1)
+  - `limit` (opcional): Itens por página (padrão: 10, mínimo: 1, máximo: 100)
+- **Descrição:** Lista vistorias com filtros (paginado). Todos os parâmetros são validados automaticamente.
+- **Validações:**
+  - `status`: Apenas valores do enum `InspectionStatus` são aceitos
+  - `module`: Apenas valores do enum `ModuleType` são aceitos
+  - `teamId`: Deve ser um UUID válido
+  - `periodFrom` e `periodTo`: Devem estar no formato `YYYY-MM-DD`
 - **Response 200:** PaginatedResponseDto<Inspection>
+- **Erros:**
+  - `400 Bad Request`: Se algum parâmetro tiver valor inválido (ex: status inexistente, UUID inválido, data em formato incorreto)
+
+**Exemplo com status:**
+```
+GET /inspections?status=PENDENTE_AJUSTE&page=1&limit=20
+```
+
+**Exemplo com múltiplos filtros:**
+```
+GET /inspections?status=FINALIZADA&module=SEGURANCA_TRABALHO&periodFrom=2024-01-01&periodTo=2024-12-31
+```
 
 **Exemplo:**
 ```

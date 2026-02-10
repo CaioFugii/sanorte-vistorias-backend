@@ -19,8 +19,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { UserRole, ModuleType, InspectionStatus } from '../common/enums';
+import { UserRole } from '../common/enums';
 import { ConfigService } from '@nestjs/config';
+import { FilterInspectionsDto } from './dto/filter-inspections.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @Controller('inspections')
@@ -41,24 +42,17 @@ export class InspectionsController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.GESTOR)
-  findAll(
-    @Query('periodFrom') periodFrom?: string,
-    @Query('periodTo') periodTo?: string,
-    @Query('module') module?: ModuleType,
-    @Query('teamId') teamId?: string,
-    @Query('status') status?: InspectionStatus,
-    @Query() pagination?: PaginationQueryDto,
-  ) {
+  findAll(@Query() filterDto: FilterInspectionsDto) {
     return this.inspectionsService.findAll(
       {
-        periodFrom,
-        periodTo,
-        module,
-        teamId,
-        status,
+        periodFrom: filterDto.periodFrom,
+        periodTo: filterDto.periodTo,
+        module: filterDto.module,
+        teamId: filterDto.teamId,
+        status: filterDto.status,
       },
-      pagination?.page || 1,
-      pagination?.limit || 10,
+      filterDto.page || 1,
+      filterDto.limit || 10,
     );
   }
 
