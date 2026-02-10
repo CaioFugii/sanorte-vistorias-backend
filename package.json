@@ -24,6 +24,10 @@
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
     "seed": "ts-node src/database/seeds/run-seed.ts"
   },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
     "@nestjs/core": "^10.3.0",

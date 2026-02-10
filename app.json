@@ -1,0 +1,42 @@
+{
+  "name": "Sanorte Vistorias Backend",
+  "description": "Backend API para sistema de Vistorias em Campo",
+  "repository": "https://github.com/seu-usuario/sanorte-vistorias-backend",
+  "logo": "https://node-js-sample.herokuapp.com/node.png",
+  "keywords": ["nestjs", "typescript", "postgresql", "api"],
+  "image": "heroku/nodejs",
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "free"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:mini"
+    }
+  ],
+  "env": {
+    "NODE_ENV": {
+      "required": true,
+      "value": "production"
+    },
+    "JWT_SECRET": {
+      "required": true,
+      "generator": "secret"
+    },
+    "JWT_EXPIRES_IN": {
+      "required": false,
+      "value": "24h"
+    },
+    "UPLOAD_MAX_SIZE": {
+      "required": false,
+      "value": "5242880"
+    }
+  }
+}

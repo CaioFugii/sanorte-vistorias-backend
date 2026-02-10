@@ -318,17 +318,142 @@ curl -X POST http://localhost:3000/inspections/inspection-id/finalize \
   -H "Authorization: Bearer <token>"
 ```
 
+## 🚀 Deploy na Heroku
+
+### Pré-requisitos
+
+- Conta na [Heroku](https://www.heroku.com)
+- [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli) instalado
+- Git configurado
+
+### Passo a Passo
+
+1. **Login na Heroku:**
+```bash
+heroku login
+```
+
+2. **Criar aplicação na Heroku:**
+```bash
+heroku create sua-app-name
+```
+
+3. **Adicionar addon PostgreSQL:**
+```bash
+heroku addons:create heroku-postgresql:mini
+```
+
+4. **Configurar variáveis de ambiente:**
+```bash
+heroku config:set NODE_ENV=production
+heroku config:set JWT_SECRET=seu-jwt-secret-super-seguro-aqui
+heroku config:set JWT_EXPIRES_IN=24h
+heroku config:set UPLOAD_MAX_SIZE=5242880
+```
+
+**Nota:** A variável `DATABASE_URL` é configurada automaticamente pelo addon PostgreSQL.
+
+5. **Fazer deploy:**
+```bash
+git push heroku main
+```
+
+6. **Executar migrations:**
+```bash
+heroku run npm run migration:run
+```
+
+7. **Executar seed (opcional):**
+```bash
+heroku run npm run seed
+```
+
+8. **Abrir aplicação:**
+```bash
+heroku open
+```
+
+### Comandos Úteis
+
+```bash
+# Ver logs
+heroku logs --tail
+
+# Executar comando no dyno
+heroku run bash
+
+# Ver variáveis de ambiente
+heroku config
+
+# Verificar status
+heroku ps
+
+# Reiniciar aplicação
+heroku restart
+```
+
+### ⚠️ Limitações na Heroku
+
+**Filesystem Efêmero:**
+- O filesystem da Heroku é efêmero (arquivos são perdidos quando o dyno reinicia)
+- Uploads de evidências e assinaturas serão perdidos após reinicialização
+- **Recomendação:** Para produção, implemente armazenamento em nuvem (AWS S3, Cloudinary, etc)
+
+**Solução Temporária:**
+- Para desenvolvimento/testes, os arquivos funcionarão normalmente
+- Para produção, considere migrar para serviço de storage externo
+
+### Variáveis de Ambiente na Heroku
+
+| Variável | Descrição | Obrigatório |
+|----------|-----------|-------------|
+| `DATABASE_URL` | URL do PostgreSQL (configurado automaticamente) | Sim |
+| `NODE_ENV` | Ambiente (production) | Sim |
+| `JWT_SECRET` | Secret para JWT | Sim |
+| `JWT_EXPIRES_IN` | Expiração do token (padrão: 24h) | Não |
+| `UPLOAD_MAX_SIZE` | Tamanho máximo de upload em bytes | Não |
+| `PORT` | Porta (configurada automaticamente pela Heroku) | Não |
+
+### Troubleshooting
+
+**Erro de conexão com banco:**
+```bash
+# Verificar se o addon está ativo
+heroku addons
+
+# Verificar DATABASE_URL
+heroku config:get DATABASE_URL
+```
+
+**Erro ao executar migrations:**
+```bash
+# Verificar se o build foi bem-sucedido
+heroku logs --tail
+
+# Executar migration manualmente
+heroku run npm run migration:run
+```
+
+**Aplicação não inicia:**
+```bash
+# Verificar logs
+heroku logs --tail
+
+# Verificar se o Procfile está correto
+cat Procfile
+```
+
 ## 📝 Notas
 
 - O sistema foi desenvolvido para funcionar localmente
-- Uploads e PDFs são gerados no filesystem
-- Não há dependência de serviços externos (S3, GCP, etc)
+- Uploads e PDFs são gerados no filesystem (na Heroku são efêmeros)
+- Não há dependência de serviços externos (S3, GCP, etc) - mas recomendado para produção
 - Em produção, considere implementar:
-  - Armazenamento em nuvem para arquivos
+  - Armazenamento em nuvem para arquivos (AWS S3, Cloudinary, etc)
   - Cache para dashboards
   - Rate limiting
   - Logging estruturado
-  - Monitoramento
+  - Monitoramento (Sentry, New Relic, etc)
 
 ## 📄 Licença
 

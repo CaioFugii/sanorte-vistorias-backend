@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { typeormConfig } from './config/typeorm.config';
+import { getDatabaseConfig } from './config/database.config';
 import appConfig from './config/app.config';
 
 import { AuthModule } from './auth/auth.module';
@@ -22,7 +22,7 @@ import { PdfModule } from './pdf/pdf.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: () => typeormConfig,
+      useFactory: (configService: ConfigService) => getDatabaseConfig(configService),
       inject: [ConfigService],
     }),
     AuthModule,

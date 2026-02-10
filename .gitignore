@@ -42,6 +42,9 @@ lerna-debug.log*
 # Storage
 /storage
 
+# Heroku
+.heroku
+
 # TypeORM
 *.sqlite
 *.db
