@@ -48,6 +48,15 @@ export class Inspection {
   @Column({ name: 'service_description', type: 'text' })
   serviceDescription: string;
 
+  @Column({ name: 'external_id', type: 'uuid', nullable: true, unique: true })
+  externalId: string | null;
+
+  @Column({ name: 'created_offline', default: false })
+  createdOffline: boolean;
+
+  @Column({ name: 'synced_at', nullable: true })
+  syncedAt: Date | null;
+
   @Column({ name: 'location_description', type: 'text', nullable: true })
   locationDescription: string;
 

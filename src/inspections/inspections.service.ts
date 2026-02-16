@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import {
   Inspection,
   InspectionItem,
@@ -21,10 +21,49 @@ import {
   ChecklistAnswer,
   ModuleType,
   PendingStatus,
+  UserRole,
 } from '../common/enums';
 import { FilesService } from '../files/files.service';
-import { DataSource } from 'typeorm';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { InspectionDomainService } from './inspection-domain.service';
+
+type SyncInspectionItemPayload = {
+  checklistItemId: string;
+  answer?: ChecklistAnswer;
+  notes?: string;
+};
+
+type SyncEvidencePayload = {
+  inspectionItemId?: string;
+  filePath: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+};
+
+type SyncSignaturePayload = {
+  signerName: string;
+  signerRoleLabel?: string;
+  imageBase64?: string;
+  imagePath?: string;
+  signedAt?: string;
+};
+
+type SyncInspectionPayload = {
+  externalId: string;
+  module: ModuleType;
+  checklistId: string;
+  teamId: string;
+  serviceDescription: string;
+  locationDescription?: string;
+  collaboratorIds?: string[];
+  createdOffline?: boolean;
+  syncedAt?: string;
+  finalize?: boolean;
+  items?: SyncInspectionItemPayload[];
+  evidences?: SyncEvidencePayload[];
+  signature?: SyncSignaturePayload;
+};
 
 @Injectable()
 export class InspectionsService {
@@ -43,6 +82,7 @@ export class InspectionsService {
     private checklistItemsRepository: Repository<ChecklistItem>,
     private filesService: FilesService,
     private dataSource: DataSource,
+    private inspectionDomainService: InspectionDomainService,
   ) {}
 
   async create(
@@ -53,6 +93,9 @@ export class InspectionsService {
       serviceDescription: string;
       locationDescription?: string;
       collaboratorIds?: string[];
+      externalId?: string;
+      createdOffline?: boolean;
+      syncedAt?: string;
     },
     userId: string,
   ): Promise<Inspection> {
@@ -60,6 +103,8 @@ export class InspectionsService {
       ...inspectionData,
       createdByUserId: userId,
       status: InspectionStatus.RASCUNHO,
+      createdOffline: inspectionData.createdOffline || false,
+      syncedAt: inspectionData.syncedAt ? new Date(inspectionData.syncedAt) : null,
     });
 
     const savedInspection = await this.inspectionsRepository.save(inspection);
@@ -120,6 +165,7 @@ export class InspectionsService {
       .leftJoinAndSelect('inspection.createdBy', 'createdBy')
       .leftJoinAndSelect('inspection.items', 'items')
       .leftJoinAndSelect('items.checklistItem', 'checklistItem')
+      .leftJoinAndSelect('checklistItem.section', 'checklistSection')
       .leftJoinAndSelect('inspection.collaborators', 'collaborators');
 
     if (filters.periodFrom) {
@@ -170,7 +216,16 @@ export class InspectionsService {
 
     const [data, total] = await this.inspectionsRepository.findAndCount({
       where: { createdByUserId: userId },
-      relations: ['checklist', 'team', 'items', 'items.checklistItem'],
+      relations: [
+        'checklist',
+        'checklist.sections',
+        'checklist.items',
+        'checklist.items.section',
+        'team',
+        'items',
+        'items.checklistItem',
+        'items.checklistItem.section',
+      ],
       skip,
       take: limit,
       order: { createdAt: 'DESC' },
@@ -197,11 +252,14 @@ export class InspectionsService {
       relations: [
         'checklist',
         'checklist.items',
+        'checklist.items.section',
+        'checklist.sections',
         'team',
         'team.collaborators',
         'createdBy',
         'items',
         'items.checklistItem',
+        'items.checklistItem.section',
         'items.evidences',
         'evidences',
         'signatures',
@@ -329,20 +387,7 @@ export class InspectionsService {
     const items = await this.inspectionItemsRepository.find({
       where: { inspectionId },
     });
-
-    const evaluatedItems = items.filter(
-      (item) => item.answer && item.answer !== ChecklistAnswer.NAO_APLICAVEL,
-    );
-
-    if (evaluatedItems.length === 0) {
-      return 100; // Decisão prática: se não há itens avaliados, retorna 100
-    }
-
-    const conformeCount = evaluatedItems.filter(
-      (item) => item.answer === ChecklistAnswer.CONFORME,
-    ).length;
-
-    return (conformeCount / evaluatedItems.length) * 100;
+    return this.inspectionDomainService.calculateScorePercent(items);
   }
 
   async finalize(id: string, userId: string, userRole: string): Promise<Inspection> {
@@ -390,14 +435,8 @@ export class InspectionsService {
     // Calcular percentual
     const scorePercent = await this.calculateScorePercent(id);
 
-    // Verificar se há itens NAO_CONFORME
-    const hasNonConformity = items.some(
-      (item) => item.answer === ChecklistAnswer.NAO_CONFORME,
-    );
-
-    let status = InspectionStatus.FINALIZADA;
-    if (hasNonConformity) {
-      status = InspectionStatus.PENDENTE_AJUSTE;
+    const status = this.inspectionDomainService.resolveFinalStatus(items);
+    if (status === InspectionStatus.PENDENTE_AJUSTE) {
       // Criar ou atualizar PendingAdjustment
       let pending = await this.pendingAdjustmentsRepository.findOne({
         where: { inspectionId: id },
@@ -422,6 +461,233 @@ export class InspectionsService {
     });
 
     return this.findOne(id);
+  }
+
+  async syncInspections(
+    inspections: SyncInspectionPayload[],
+    userId: string,
+    userRole: UserRole,
+  ): Promise<{
+    results: Array<{
+      externalId: string;
+      serverId?: string;
+      status: 'CREATED' | 'UPDATED' | 'ERROR';
+      message?: string;
+    }>;
+  }> {
+    if (!Array.isArray(inspections)) {
+      throw new BadRequestException('Payload de sincronização inválido');
+    }
+
+    const results: Array<{
+      externalId: string;
+      serverId?: string;
+      status: 'CREATED' | 'UPDATED' | 'ERROR';
+      message?: string;
+    }> = [];
+
+    for (const payload of inspections) {
+      const externalId = payload?.externalId || '';
+      try {
+        const result = await this.syncSingleInspection(payload, userId, userRole);
+        results.push(result);
+      } catch (error: any) {
+        results.push({
+          externalId,
+          status: 'ERROR',
+          message: error?.message || 'Erro ao sincronizar vistoria',
+        });
+      }
+    }
+
+    return { results };
+  }
+
+  private async syncSingleInspection(
+    payload: SyncInspectionPayload,
+    userId: string,
+    userRole: UserRole,
+  ): Promise<{
+    externalId: string;
+    serverId: string;
+    status: 'CREATED' | 'UPDATED';
+  }> {
+    if (!payload?.externalId) {
+      throw new BadRequestException('externalId é obrigatório para sincronização');
+    }
+
+    let inspection = await this.inspectionsRepository.findOne({
+      where: { externalId: payload.externalId },
+      relations: ['collaborators'],
+    });
+
+    let status: 'CREATED' | 'UPDATED' = 'UPDATED';
+
+    if (!inspection) {
+      inspection = await this.create(
+        {
+          module: payload.module,
+          checklistId: payload.checklistId,
+          teamId: payload.teamId,
+          serviceDescription: payload.serviceDescription,
+          locationDescription: payload.locationDescription,
+          collaboratorIds: payload.collaboratorIds || [],
+          externalId: payload.externalId,
+          createdOffline: payload.createdOffline ?? true,
+          syncedAt: payload.syncedAt || new Date().toISOString(),
+        },
+        userId,
+      );
+      status = 'CREATED';
+    } else {
+      if (userRole === UserRole.FISCAL && inspection.status !== InspectionStatus.RASCUNHO) {
+        throw new ForbiddenException(
+          'Fiscal não pode editar vistoria após finalização',
+        );
+      }
+
+      await this.inspectionsRepository.update(inspection.id, {
+        module: payload.module ?? inspection.module,
+        checklistId: payload.checklistId ?? inspection.checklistId,
+        teamId: payload.teamId ?? inspection.teamId,
+        serviceDescription: payload.serviceDescription ?? inspection.serviceDescription,
+        locationDescription: payload.locationDescription ?? inspection.locationDescription,
+        createdOffline: payload.createdOffline ?? inspection.createdOffline,
+        syncedAt: payload.syncedAt ? new Date(payload.syncedAt) : new Date(),
+      });
+
+      if (payload.collaboratorIds) {
+        const inspectionWithRelations = await this.inspectionsRepository.findOne({
+          where: { id: inspection.id },
+          relations: ['collaborators'],
+        });
+        if (inspectionWithRelations) {
+          const collaboratorRepository = this.dataSource.getRepository(Collaborator);
+          inspectionWithRelations.collaborators = await collaboratorRepository.findBy({
+            id: In(payload.collaboratorIds),
+          });
+          await this.inspectionsRepository.save(inspectionWithRelations);
+        }
+      }
+    }
+
+    if (payload.items?.length) {
+      for (const item of payload.items) {
+        const existingItem = await this.inspectionItemsRepository.findOne({
+          where: {
+            inspectionId: inspection.id,
+            checklistItemId: item.checklistItemId,
+          },
+        });
+
+        if (existingItem) {
+          await this.inspectionItemsRepository.update(existingItem.id, {
+            answer: item.answer,
+            notes: item.notes,
+          });
+        } else {
+          const newItem = this.inspectionItemsRepository.create({
+            inspectionId: inspection.id,
+            checklistItemId: item.checklistItemId,
+            answer: item.answer,
+            notes: item.notes,
+          });
+          await this.inspectionItemsRepository.save(newItem);
+        }
+      }
+    }
+
+    if (payload.evidences?.length) {
+      for (const evidence of payload.evidences) {
+        const existingEvidence = await this.evidencesRepository.findOne({
+          where: {
+            inspectionId: inspection.id,
+            inspectionItemId: evidence.inspectionItemId || null,
+            fileName: evidence.fileName,
+            filePath: evidence.filePath,
+            size: evidence.size,
+          },
+        });
+
+        if (!existingEvidence) {
+          const newEvidence = this.evidencesRepository.create({
+            inspectionId: inspection.id,
+            inspectionItemId: evidence.inspectionItemId,
+            filePath: evidence.filePath,
+            fileName: evidence.fileName,
+            mimeType: evidence.mimeType,
+            size: evidence.size,
+            uploadedByUserId: userId,
+          });
+          await this.evidencesRepository.save(newEvidence);
+        }
+      }
+    }
+
+    if (payload.signature) {
+      await this.upsertSignatureFromSync(inspection.id, payload.signature);
+    }
+
+    if (payload.finalize) {
+      await this.finalize(inspection.id, userId, userRole);
+    } else {
+      await this.inspectionsRepository.update(inspection.id, {
+        syncedAt: payload.syncedAt ? new Date(payload.syncedAt) : new Date(),
+      });
+    }
+
+    return {
+      externalId: payload.externalId,
+      serverId: inspection.id,
+      status,
+    };
+  }
+
+  private async upsertSignatureFromSync(
+    inspectionId: string,
+    signaturePayload: SyncSignaturePayload,
+  ): Promise<void> {
+    const existing = await this.signaturesRepository.findOne({
+      where: { inspectionId },
+    });
+
+    let imagePath = signaturePayload.imagePath || '';
+    if (signaturePayload.imageBase64) {
+      const imageBuffer = Buffer.from(signaturePayload.imageBase64, 'base64');
+      imagePath = await this.filesService.saveSignature(imageBuffer, inspectionId, 'image/png');
+    }
+
+    if (!imagePath && existing) {
+      imagePath = existing.imagePath;
+    }
+
+    if (!imagePath) {
+      throw new BadRequestException('Assinatura inválida: imageBase64 ou imagePath é obrigatório');
+    }
+
+    if (existing) {
+      await this.signaturesRepository.update(existing.id, {
+        signerName: signaturePayload.signerName || existing.signerName,
+        signerRoleLabel: signaturePayload.signerRoleLabel || existing.signerRoleLabel,
+        imagePath,
+        signedAt: signaturePayload.signedAt
+          ? new Date(signaturePayload.signedAt)
+          : existing.signedAt,
+      });
+      return;
+    }
+
+    await this.signaturesRepository.save(
+      this.signaturesRepository.create({
+        inspectionId,
+        signerName: signaturePayload.signerName,
+        signerRoleLabel: signaturePayload.signerRoleLabel || 'Lider/Encarregado',
+        imagePath,
+        signedAt: signaturePayload.signedAt
+          ? new Date(signaturePayload.signedAt)
+          : new Date(),
+      }),
+    );
   }
 
   async resolve(

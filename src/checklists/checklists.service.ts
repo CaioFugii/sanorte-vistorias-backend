@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Checklist, ChecklistItem } from '../entities';
+import { Checklist, ChecklistItem, ChecklistSection } from '../entities';
 import { ModuleType } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
@@ -12,6 +12,8 @@ export class ChecklistsService {
     private checklistsRepository: Repository<Checklist>,
     @InjectRepository(ChecklistItem)
     private checklistItemsRepository: Repository<ChecklistItem>,
+    @InjectRepository(ChecklistSection)
+    private checklistSectionsRepository: Repository<ChecklistSection>,
   ) {}
 
   async findAll(
@@ -27,7 +29,7 @@ export class ChecklistsService {
 
     const [data, total] = await this.checklistsRepository.findAndCount({
       where,
-      relations: ['items'],
+      relations: ['items', 'items.section', 'sections'],
       skip,
       take: limit,
       order: { createdAt: 'DESC' },
@@ -51,7 +53,7 @@ export class ChecklistsService {
   async findOne(id: string): Promise<Checklist> {
     return this.checklistsRepository.findOne({
       where: { id },
-      relations: ['items'],
+      relations: ['items', 'items.section', 'sections'],
     });
   }
 
@@ -62,7 +64,9 @@ export class ChecklistsService {
     active?: boolean;
   }): Promise<Checklist> {
     const checklist = this.checklistsRepository.create(checklistData);
-    return this.checklistsRepository.save(checklist);
+    const savedChecklist = await this.checklistsRepository.save(checklist);
+    await this.ensureDefaultSection(savedChecklist.id);
+    return this.findOne(savedChecklist.id);
   }
 
   async update(id: string, checklistData: Partial<Checklist>): Promise<Checklist> {
@@ -76,13 +80,17 @@ export class ChecklistsService {
       title: string;
       description?: string;
       order: number;
+      sectionId?: string;
       requiresPhotoOnNonConformity?: boolean;
       active?: boolean;
     },
   ): Promise<ChecklistItem> {
+    const defaultSection = await this.ensureDefaultSection(checklistId);
+
     const item = this.checklistItemsRepository.create({
       ...itemData,
       checklistId,
+      sectionId: itemData.sectionId || defaultSection.id,
     });
     return this.checklistItemsRepository.save(item);
   }
@@ -101,7 +109,52 @@ export class ChecklistsService {
     });
   }
 
+  async addSection(
+    checklistId: string,
+    sectionData: { name: string; order: number; active?: boolean },
+  ): Promise<ChecklistSection> {
+    const section = this.checklistSectionsRepository.create({
+      checklistId,
+      name: sectionData.name,
+      order: sectionData.order,
+      active: sectionData.active ?? true,
+    });
+    return this.checklistSectionsRepository.save(section);
+  }
+
+  async updateSection(
+    checklistId: string,
+    sectionId: string,
+    sectionData: Partial<ChecklistSection>,
+  ): Promise<ChecklistSection> {
+    await this.checklistSectionsRepository.update(
+      { id: sectionId, checklistId },
+      sectionData,
+    );
+    return this.checklistSectionsRepository.findOne({
+      where: { id: sectionId, checklistId },
+    });
+  }
+
   async removeItem(checklistId: string, itemId: string): Promise<void> {
     await this.checklistItemsRepository.delete({ id: itemId, checklistId });
+  }
+
+  private async ensureDefaultSection(checklistId: string): Promise<ChecklistSection> {
+    let section = await this.checklistSectionsRepository.findOne({
+      where: { checklistId, order: 1 },
+    });
+
+    if (!section) {
+      section = this.checklistSectionsRepository.create({
+        checklistId,
+        name: 'Seção padrão',
+        order: 1,
+        active: true,
+      });
+      section = await this.checklistSectionsRepository.save(section);
+    }
+
+    return section;
   }
 }

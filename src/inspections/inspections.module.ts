@@ -11,8 +11,11 @@ import {
   ChecklistItem,
   Checklist,
   Collaborator,
+  ChecklistSection,
 } from '../entities';
 import { FilesModule } from '../files/files.module';
+import { InspectionDomainService } from './inspection-domain.service';
+import { SyncController } from './sync.controller';
 
 @Module({
   imports: [
@@ -25,11 +28,12 @@ import { FilesModule } from '../files/files.module';
       ChecklistItem,
       Checklist,
       Collaborator,
+      ChecklistSection,
     ]),
     FilesModule,
   ],
-  controllers: [InspectionsController],
-  providers: [InspectionsService],
+  controllers: [InspectionsController, SyncController],
+  providers: [InspectionsService, InspectionDomainService],
   exports: [InspectionsService],
 })
 export class InspectionsModule {}

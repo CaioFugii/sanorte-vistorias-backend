@@ -20,17 +20,13 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
-import { ConfigService } from '@nestjs/config';
 import { FilterInspectionsDto } from './dto/filter-inspections.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @Controller('inspections')
 @UseGuards(JwtAuthGuard)
 export class InspectionsController {
-  constructor(
-    private readonly inspectionsService: InspectionsService,
-    private configService: ConfigService,
-  ) {}
+  constructor(private readonly inspectionsService: InspectionsService) {}
 
   @Post()
   @UseGuards(RolesGuard)

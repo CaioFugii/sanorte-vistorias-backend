@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Checklist } from './checklist.entity';
 import { InspectionItem } from './inspection-item.entity';
+import { ChecklistSection } from './checklist-section.entity';
 
 @Entity('checklist_items')
 export class ChecklistItem {
@@ -20,6 +21,13 @@ export class ChecklistItem {
   @ManyToOne(() => Checklist, (checklist) => checklist.items)
   @JoinColumn({ name: 'checklist_id' })
   checklist: Checklist;
+
+  @Column({ name: 'section_id' })
+  sectionId: string;
+
+  @ManyToOne(() => ChecklistSection, (section) => section.items)
+  @JoinColumn({ name: 'section_id' })
+  section: ChecklistSection;
 
   @Column()
   title: string;

@@ -1,102 +1,79 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { InspectionsService } from './inspections.service';
-import { Inspection, InspectionItem, ChecklistItem } from '../entities';
-import { InspectionStatus, ChecklistAnswer } from '../common/enums';
+import {
+  Inspection,
+  InspectionItem,
+  Evidence,
+  Signature,
+  PendingAdjustment,
+  ChecklistItem,
+} from '../entities';
+import { ChecklistAnswer, ModuleType, UserRole } from '../common/enums';
+import { InspectionDomainService } from './inspection-domain.service';
 
 describe('InspectionsService', () => {
   let service: InspectionsService;
-  let inspectionRepository: Repository<Inspection>;
-  let inspectionItemRepository: Repository<InspectionItem>;
-  let checklistItemRepository: Repository<ChecklistItem>;
-
-  const mockInspectionRepository = {
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    update: jest.fn(),
-    createQueryBuilder: jest.fn(),
-  };
-
-  const mockInspectionItemRepository = {
-    find: jest.fn(),
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    update: jest.fn(),
-  };
-
-  const mockChecklistItemRepository = {
-    findOne: jest.fn(),
-  };
+  let inspectionsRepository: any;
+  let inspectionItemsRepository: any;
+  let evidencesRepository: any;
+  let signaturesRepository: any;
+  let pendingAdjustmentsRepository: any;
+  let checklistItemsRepository: any;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        InspectionsService,
-        {
-          provide: getRepositoryToken(Inspection),
-          useValue: mockInspectionRepository,
-        },
-        {
-          provide: getRepositoryToken(InspectionItem),
-          useValue: mockInspectionItemRepository,
-        },
-        {
-          provide: getRepositoryToken(ChecklistItem),
-          useValue: mockChecklistItemRepository,
-        },
-        {
-          provide: 'DataSource',
-          useValue: {
-            getRepository: jest.fn(),
-            createQueryBuilder: jest.fn(),
-          },
-        },
-        {
-          provide: 'FilesService',
-          useValue: {
-            saveEvidence: jest.fn(),
-            saveSignature: jest.fn(),
-            getFile: jest.fn(),
-          },
-        },
-        {
-          provide: 'PendingAdjustmentRepository',
-          useValue: {
-            findOne: jest.fn(),
-            create: jest.fn(),
-            save: jest.fn(),
-          },
-        },
-        {
-          provide: 'SignatureRepository',
-          useValue: {
-            findOne: jest.fn(),
-            create: jest.fn(),
-            save: jest.fn(),
-          },
-        },
-        {
-          provide: 'EvidenceRepository',
-          useValue: {
-            create: jest.fn(),
-            save: jest.fn(),
-          },
-        },
-      ],
-    }).compile();
+    inspectionsRepository = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+      findAndCount: jest.fn(),
+      createQueryBuilder: jest.fn(),
+    };
+    inspectionItemsRepository = {
+      find: jest.fn(),
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+    };
+    evidencesRepository = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+    signaturesRepository = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+    };
+    pendingAdjustmentsRepository = {
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+    checklistItemsRepository = {
+      findOne: jest.fn(),
+    };
 
-    service = module.get<InspectionsService>(InspectionsService);
-    inspectionRepository = module.get<Repository<Inspection>>(
-      getRepositoryToken(Inspection),
-    );
-    inspectionItemRepository = module.get<Repository<InspectionItem>>(
-      getRepositoryToken(InspectionItem),
-    );
-    checklistItemRepository = module.get<Repository<ChecklistItem>>(
-      getRepositoryToken(ChecklistItem),
+    const filesService = {
+      saveEvidence: jest.fn(),
+      saveSignature: jest.fn(),
+    };
+
+    const dataSource = {
+      getRepository: jest.fn(),
+    };
+
+    service = new InspectionsService(
+      inspectionsRepository as any,
+      inspectionItemsRepository as any,
+      evidencesRepository as any,
+      signaturesRepository as any,
+      pendingAdjustmentsRepository as any,
+      checklistItemsRepository as any,
+      filesService as any,
+      dataSource as any,
+      new InspectionDomainService(),
     );
   });
 
@@ -109,11 +86,11 @@ describe('InspectionsService', () => {
       { answer: ChecklistAnswer.NAO_APLICAVEL },
     ];
 
-    mockInspectionItemRepository.find.mockResolvedValue(mockItems);
+    inspectionItemsRepository.find.mockResolvedValue(mockItems);
 
     const percent = await service.calculateScorePercent(inspectionId);
 
-    expect(percent).toBe(66.67); // 2 conforme / 3 avaliados = 66.67%
+    expect(percent).toBeCloseTo(66.67, 2); // 2 conforme / 3 avaliados = 66.67%
   });
 
   it('deve retornar 100 quando não há itens avaliados', async () => {
@@ -123,10 +100,66 @@ describe('InspectionsService', () => {
       { answer: ChecklistAnswer.NAO_APLICAVEL },
     ];
 
-    mockInspectionItemRepository.find.mockResolvedValue(mockItems);
+    inspectionItemsRepository.find.mockResolvedValue(mockItems);
 
     const percent = await service.calculateScorePercent(inspectionId);
 
     expect(percent).toBe(100);
+  });
+
+  it('deve ser idempotente por externalId no endpoint de sync', async () => {
+    const syncPayload = {
+      externalId: '31a9e29b-1ca9-4d69-a6cf-e6367471743f',
+      module: ModuleType.QUALIDADE,
+      checklistId: 'checklist-id',
+      teamId: 'team-id',
+      serviceDescription: 'Vistoria offline',
+      createdOffline: true,
+    };
+
+    const createdInspection = {
+      id: 'server-id-1',
+      status: 'RASCUNHO',
+      module: ModuleType.QUALIDADE,
+      checklistId: 'checklist-id',
+      teamId: 'team-id',
+      serviceDescription: 'Vistoria offline',
+      locationDescription: null,
+      createdOffline: true,
+    } as unknown as Inspection;
+
+    const createSpy = jest
+      .spyOn(service, 'create')
+      .mockResolvedValue(createdInspection);
+
+    inspectionsRepository.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...createdInspection,
+        id: 'server-id-1',
+      });
+
+    const first = await service.syncInspections(
+      [syncPayload],
+      'user-id',
+      UserRole.FISCAL,
+    );
+    const second = await service.syncInspections(
+      [syncPayload],
+      'user-id',
+      UserRole.FISCAL,
+    );
+
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(first.results[0]).toMatchObject({
+      externalId: syncPayload.externalId,
+      serverId: 'server-id-1',
+      status: 'CREATED',
+    });
+    expect(second.results[0]).toMatchObject({
+      externalId: syncPayload.externalId,
+      serverId: 'server-id-1',
+      status: 'UPDATED',
+    });
   });
 });

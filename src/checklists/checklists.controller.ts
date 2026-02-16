@@ -59,6 +59,24 @@ export class ChecklistsController {
     return this.checklistsService.addItem(id, createItemDto);
   }
 
+  @Post(':id/sections')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  addSection(@Param('id') id: string, @Body() createSectionDto: any) {
+    return this.checklistsService.addSection(id, createSectionDto);
+  }
+
+  @Put(':id/sections/:sectionId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  updateSection(
+    @Param('id') id: string,
+    @Param('sectionId') sectionId: string,
+    @Body() updateSectionDto: any,
+  ) {
+    return this.checklistsService.updateSection(id, sectionId, updateSectionDto);
+  }
+
   @Put(':id/items/:itemId')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)

@@ -157,6 +157,8 @@ Authorization: Bearer <token>
 - `POST /checklists/:id/items` - Adicionar item (ADMIN)
 - `PUT /checklists/:id/items/:itemId` - Atualizar item (ADMIN)
 - `DELETE /checklists/:id/items/:itemId` - Remover item (ADMIN)
+- `POST /checklists/:id/sections` - Adicionar seção (ADMIN)
+- `PUT /checklists/:id/sections/:sectionId` - Atualizar seção (ADMIN)
 
 ### Vistorias
 - `POST /inspections` - Criar vistoria (FISCAL/GESTOR)
@@ -170,6 +172,7 @@ Authorization: Bearer <token>
 - `POST /inspections/:id/finalize` - Finalizar vistoria (FISCAL/GESTOR)
 - `POST /inspections/:id/resolve` - Resolver pendência (GESTOR/ADMIN)
 - `GET /inspections/:id/pdf` - Gerar PDF da vistoria
+- `POST /sync/inspections` - Sincronização offline em lote (FISCAL/GESTOR/ADMIN)
 
 ### Dashboards
 - `GET /dashboards/summary?from=2024-01-01&to=2024-12-31` - Resumo geral
@@ -178,6 +181,7 @@ Authorization: Bearer <token>
 ## 🎯 Módulos (Hardcoded)
 
 Os módulos são fixos e não possuem CRUD:
+- `QUALIDADE`
 - `SEGURANCA_TRABALHO`
 - `OBRAS_INVESTIMENTO`
 - `OBRAS_GLOBAL`
@@ -206,6 +210,15 @@ Os módulos são fixos e não possuem CRUD:
 - Itens avaliados = itens com resposta diferente de `NAO_APLICAVEL`
 - Percentual = (qtd CONFORME / qtd avaliados) * 100
 - Se não houver itens avaliados, percentual = 100
+
+### Checklist com Seções
+- Checklist suporta seções (`ChecklistSection`) e itens vinculados por `sectionId`
+- Payload legado de item sem `sectionId` continua aceito com fallback para seção padrão
+
+### Sincronização Offline-First
+- Vistoria suporta `externalId`, `createdOffline` e `syncedAt`
+- `POST /sync/inspections` realiza upsert idempotente por `externalId`
+- Retorna mapeamento por registro sincronizado: `externalId -> serverId`
 
 ### Pendência
 - Se existir pelo menos 1 item `NAO_CONFORME` em vistoria finalizada:

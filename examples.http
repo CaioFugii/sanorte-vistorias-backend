@@ -26,7 +26,7 @@ GET {{baseUrl}}/collaborators
 Authorization: Bearer {{token}}
 
 ### 5. Listar checklists por módulo
-GET {{baseUrl}}/checklists?module=SEGURANCA_TRABALHO
+GET {{baseUrl}}/checklists?module=QUALIDADE
 Authorization: Bearer {{token}}
 
 ### 6. Criar vistoria
@@ -35,12 +35,14 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "module": "SEGURANCA_TRABALHO",
+  "module": "QUALIDADE",
   "checklistId": "checklist-id-aqui",
   "teamId": "team-id-aqui",
   "serviceDescription": "Vistoria de segurança do trabalho no canteiro",
   "locationDescription": "Canteiro principal - Obra X",
-  "collaboratorIds": ["collaborator-id-1", "collaborator-id-2"]
+  "collaboratorIds": ["collaborator-id-1", "collaborator-id-2"],
+  "externalId": "cd0c9f74-28fb-435e-a9ef-80df70117f3b",
+  "createdOffline": true
 }
 
 ### 7. Listar minhas vistorias (FISCAL)
@@ -48,7 +50,7 @@ GET {{baseUrl}}/inspections/mine
 Authorization: Bearer {{token}}
 
 ### 8. Listar todas as vistorias (ADMIN/GESTOR)
-GET {{baseUrl}}/inspections?status=FINALIZADA&module=SEGURANCA_TRABALHO
+GET {{baseUrl}}/inspections?status=FINALIZADA&module=QUALIDADE
 Authorization: Bearer {{token}}
 
 ### 9. Obter detalhes de uma vistoria
@@ -166,6 +168,63 @@ Content-Type: application/json
   "title": "Uso de EPI obrigatório",
   "description": "Verificar se todos os colaboradores estão usando EPI adequado",
   "order": 1,
+  "sectionId": "section-id-opcional",
   "requiresPhotoOnNonConformity": true,
+  "active": true
+}
+
+### 22. Sincronização offline em lote (idempotente por externalId)
+POST {{baseUrl}}/sync/inspections
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "inspections": [
+    {
+      "externalId": "cd0c9f74-28fb-435e-a9ef-80df70117f3b",
+      "module": "QUALIDADE",
+      "checklistId": "checklist-id-aqui",
+      "teamId": "team-id-aqui",
+      "serviceDescription": "Vistoria coletada offline",
+      "locationDescription": "Setor A",
+      "createdOffline": true,
+      "items": [
+        {
+          "checklistItemId": "item-id-1",
+          "answer": "CONFORME",
+          "notes": "ok"
+        },
+        {
+          "checklistItemId": "item-id-2",
+          "answer": "NAO_CONFORME",
+          "notes": "ajuste necessário"
+        }
+      ],
+      "evidences": [
+        {
+          "inspectionItemId": "item-id-2",
+          "filePath": "evidences/offline-item-2.jpg",
+          "fileName": "offline-item-2.jpg",
+          "mimeType": "image/jpeg",
+          "size": 120031
+        }
+      ],
+      "signature": {
+        "signerName": "João Silva",
+        "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+      },
+      "finalize": true
+    }
+  ]
+}
+
+### 23. Criar seção de checklist (ADMIN)
+POST {{baseUrl}}/checklists/checklist-id-aqui/sections
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Seção Elétrica",
+  "order": 2,
   "active": true
 }

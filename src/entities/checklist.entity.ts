@@ -9,6 +9,7 @@ import {
 import { ModuleType } from '../common/enums';
 import { ChecklistItem } from './checklist-item.entity';
 import { Inspection } from './inspection.entity';
+import { ChecklistSection } from './checklist-section.entity';
 
 @Entity('checklists')
 export class Checklist {
@@ -38,6 +39,9 @@ export class Checklist {
 
   @OneToMany(() => ChecklistItem, (item) => item.checklist)
   items: ChecklistItem[];
+
+  @OneToMany(() => ChecklistSection, (section) => section.checklist)
+  sections: ChecklistSection[];
 
   @OneToMany(() => Inspection, (inspection) => inspection.checklist)
   inspections: Inspection[];

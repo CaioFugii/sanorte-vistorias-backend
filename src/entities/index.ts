@@ -2,6 +2,7 @@ export * from './user.entity';
 export * from './team.entity';
 export * from './collaborator.entity';
 export * from './checklist.entity';
+export * from './checklist-section.entity';
 export * from './checklist-item.entity';
 export * from './inspection.entity';
 export * from './inspection-item.entity';
