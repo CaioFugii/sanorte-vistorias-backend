@@ -304,7 +304,22 @@ function Pagination({ meta, onPageChange }) {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  sections?: ChecklistSection[]; // Opcional, apenas quando solicitado
   items?: ChecklistItem[]; // Opcional, apenas quando solicitado
+}
+```
+
+### ChecklistSection
+```typescript
+{
+  id: string;              // UUID
+  checklistId: string;     // UUID
+  name: string;
+  order: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  items?: ChecklistItem[]; // Opcional, quando solicitado
 }
 ```
 
@@ -313,6 +328,8 @@ function Pagination({ meta, onPageChange }) {
 {
   id: string;              // UUID
   checklistId: string;
+  sectionId: string;
+  section?: ChecklistSection; // Opcional, quando solicitado
   title: string;
   description?: string;    // Opcional
   order: number;
@@ -332,6 +349,9 @@ function Pagination({ meta, onPageChange }) {
   team?: Team;             // Opcional, quando solicitado
   serviceDescription: string;
   locationDescription?: string;  // Opcional
+  externalId?: string;      // UUID gerado no frontend (offline-first)
+  createdOffline: boolean;
+  syncedAt?: string;        // ISO 8601
   status: InspectionStatus; // Ver Enums
   scorePercent?: number;    // null até finalizar, depois 0-100
   createdByUserId: string;
@@ -412,6 +432,7 @@ function Pagination({ meta, onPageChange }) {
 ### ModuleType
 Módulos hardcoded (sem CRUD):
 ```typescript
+"QUALIDADE"
 "SEGURANCA_TRABALHO"
 "OBRAS_INVESTIMENTO"
 "OBRAS_GLOBAL"
@@ -618,7 +639,7 @@ Módulos hardcoded (sem CRUD):
 
 **Exemplo:**
 ```
-GET /checklists?module=SEGURANCA_TRABALHO
+GET /checklists?module=QUALIDADE
 ```
 
 #### GET /checklists/:id
@@ -631,9 +652,9 @@ GET /checklists?module=SEGURANCA_TRABALHO
 - **Request Body:**
 ```json
 {
-  "module": "SEGURANCA_TRABALHO",
-  "name": "Checklist Segurança Básica",
-  "description": "Checklist para vistoria de segurança básica",
+  "module": "QUALIDADE",
+  "name": "Checklist Qualidade - Frente de Serviço",
+  "description": "Checklist para vistoria de qualidade em campo",
   "active": true
 }
 ```
@@ -659,11 +680,36 @@ GET /checklists?module=SEGURANCA_TRABALHO
   "title": "Uso de EPI obrigatório",
   "description": "Verificar se todos estão usando EPI adequado",
   "order": 1,
+  "sectionId": "550e8400-e29b-41d4-a716-446655440020",
   "requiresPhotoOnNonConformity": true,
   "active": true
 }
 ```
 - **Response 201:** ChecklistItem criado
+
+#### POST /checklists/:id/sections
+- **Autenticação:** Requerida (ADMIN apenas)
+- **Request Body:**
+```json
+{
+  "name": "Seção Elétrica",
+  "order": 2,
+  "active": true
+}
+```
+- **Response 201:** ChecklistSection criado
+
+#### PUT /checklists/:id/sections/:sectionId
+- **Autenticação:** Requerida (ADMIN apenas)
+- **Request Body:**
+```json
+{
+  "name": "Seção Elétrica - Atualizada",
+  "order": 2,
+  "active": true
+}
+```
+- **Response 200:** ChecklistSection atualizado
 
 #### PUT /checklists/:id/items/:itemId
 - **Autenticação:** Requerida (ADMIN apenas)
@@ -692,18 +738,22 @@ GET /checklists?module=SEGURANCA_TRABALHO
 - **Request Body:**
 ```json
 {
-  "module": "SEGURANCA_TRABALHO",
+  "module": "QUALIDADE",
   "checklistId": "550e8400-e29b-41d4-a716-446655440000",
   "teamId": "550e8400-e29b-41d4-a716-446655440001",
-  "serviceDescription": "Vistoria de segurança do trabalho no canteiro",
-  "locationDescription": "Canteiro principal - Obra X",
+  "serviceDescription": "Vistoria de qualidade da frente de concretagem",
+  "locationDescription": "Setor A - Bloco 2",
+  "externalId": "550e8400-e29b-41d4-a716-446655440100",
+  "createdOffline": true,
   "collaboratorIds": [
     "550e8400-e29b-41d4-a716-446655440002",
     "550e8400-e29b-41d4-a716-446655440003"
   ]
 }
 ```
-- **Nota:** `collaboratorIds` é opcional
+- **Notas:**
+  - `collaboratorIds` é opcional
+  - `externalId`, `createdOffline` e `syncedAt` são opcionais para compatibilidade com fluxo offline-first
 - **Response 201:** Inspection criada (com items baseados no checklist)
 
 **Comportamento:**
@@ -716,7 +766,7 @@ GET /checklists?module=SEGURANCA_TRABALHO
 - **Query Parameters:**
   - `periodFrom` (opcional): `YYYY-MM-DD` - Data inicial (validação: formato de data)
   - `periodTo` (opcional): `YYYY-MM-DD` - Data final (validação: formato de data)
-  - `module` (opcional): ModuleType - Valores válidos: `SEGURANCA_TRABALHO`, `OBRAS_INVESTIMENTO`, `OBRAS_GLOBAL`, `CANTEIRO`
+  - `module` (opcional): ModuleType - Valores válidos: `QUALIDADE`, `SEGURANCA_TRABALHO`, `OBRAS_INVESTIMENTO`, `OBRAS_GLOBAL`, `CANTEIRO`
   - `teamId` (opcional): UUID da equipe (validação: UUID v4)
   - `status` (opcional): InspectionStatus - Valores válidos: `RASCUNHO`, `FINALIZADA`, `PENDENTE_AJUSTE`, `RESOLVIDA`
   - `page` (opcional): Número da página (padrão: 1, mínimo: 1)
@@ -738,12 +788,12 @@ GET /inspections?status=PENDENTE_AJUSTE&page=1&limit=20
 
 **Exemplo com múltiplos filtros:**
 ```
-GET /inspections?status=FINALIZADA&module=SEGURANCA_TRABALHO&periodFrom=2024-01-01&periodTo=2024-12-31
+GET /inspections?status=FINALIZADA&module=QUALIDADE&periodFrom=2024-01-01&periodTo=2024-12-31
 ```
 
 **Exemplo:**
 ```
-GET /inspections?periodFrom=2024-01-01&periodTo=2024-12-31&module=SEGURANCA_TRABALHO&status=FINALIZADA
+GET /inspections?periodFrom=2024-01-01&periodTo=2024-12-31&module=QUALIDADE&status=FINALIZADA
 ```
 
 #### GET /inspections/mine
@@ -908,6 +958,77 @@ a.download = `vistoria-${inspectionId}.pdf`;
 a.click();
 ```
 
+#### POST /sync/inspections
+- **Autenticação:** Requerida (FISCAL, GESTOR ou ADMIN)
+- **Descrição:** Sincroniza vistorias geradas offline em lote com idempotência por `externalId`
+- **Comportamento:**
+  - faz upsert por `externalId` (retry seguro, sem duplicação de vistoria)
+  - atualiza itens/evidências/assinatura quando enviados
+  - pode finalizar a vistoria no mesmo payload (`finalize: true`)
+  - retorna resultado por registro sincronizado
+- **Request Body:**
+```json
+{
+  "inspections": [
+    {
+      "externalId": "550e8400-e29b-41d4-a716-446655440100",
+      "module": "QUALIDADE",
+      "checklistId": "550e8400-e29b-41d4-a716-446655440000",
+      "teamId": "550e8400-e29b-41d4-a716-446655440001",
+      "serviceDescription": "Vistoria de qualidade coletada offline",
+      "locationDescription": "Setor A",
+      "createdOffline": true,
+      "syncedAt": "2026-02-16T12:00:00.000Z",
+      "items": [
+        {
+          "checklistItemId": "550e8400-e29b-41d4-a716-446655440010",
+          "answer": "CONFORME",
+          "notes": "ok"
+        },
+        {
+          "checklistItemId": "550e8400-e29b-41d4-a716-446655440011",
+          "answer": "NAO_CONFORME",
+          "notes": "ajuste necessário"
+        }
+      ],
+      "evidences": [
+        {
+          "inspectionItemId": "550e8400-e29b-41d4-a716-446655440011",
+          "filePath": "evidences/offline-item-2.jpg",
+          "fileName": "offline-item-2.jpg",
+          "mimeType": "image/jpeg",
+          "size": 120031
+        }
+      ],
+      "signature": {
+        "signerName": "João Silva",
+        "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+      },
+      "finalize": true
+    }
+  ]
+}
+```
+- **Response 200:**
+```json
+{
+  "results": [
+    {
+      "externalId": "550e8400-e29b-41d4-a716-446655440100",
+      "serverId": "550e8400-e29b-41d4-a716-446655440999",
+      "status": "CREATED"
+    }
+  ]
+}
+```
+- **Observações importantes:**
+  - retries com o mesmo `externalId` retornam `UPDATED` para o mesmo `serverId` (sem duplicar vistoria)
+  - se `finalize=true`, aplicam-se as mesmas validações de `POST /inspections/:id/finalize`
+- **Status por item sincronizado:**
+  - `CREATED`
+  - `UPDATED`
+  - `ERROR`
+
 ---
 
 ### 📊 Dashboards
@@ -982,6 +1103,12 @@ Percentual = (qtd CONFORME / qtd avaliados) * 100
 - NAO_APLICAVEL: 1
 - Itens avaliados: 9 (7 + 2)
 - Percentual: (7 / 9) * 100 = **77.78%**
+
+### Idempotência para Offline-First
+
+- Cada vistoria pode carregar `externalId` (UUID gerado no frontend)
+- O backend garante unicidade de `externalId` no banco
+- Reenvio do mesmo registro via `POST /sync/inspections` atualiza a vistoria existente em vez de duplicar
 
 ### Pendência Automática
 
@@ -1152,7 +1279,7 @@ POST /auth/login
 
 2. **Listar Checklists**
 ```javascript
-GET /checklists?module=SEGURANCA_TRABALHO
+GET /checklists?module=QUALIDADE
 → Seleciona um checklist
 ```
 
@@ -1166,10 +1293,12 @@ GET /teams
 ```javascript
 POST /inspections
 {
-  module: "SEGURANCA_TRABALHO",
+  module: "QUALIDADE",
   checklistId: "...",
   teamId: "...",
-  serviceDescription: "..."
+  serviceDescription: "...",
+  externalId: "...",      // opcional para fluxo offline-first
+  createdOffline: true
 }
 → Recebe vistoria com items criados automaticamente
 ```
@@ -1179,7 +1308,7 @@ POST /inspections
 PUT /inspections/:id/items
 [
   { inspectionItemId: "...", answer: "CONFORME", notes: "Ok" },
-  { inspectionItemId: "...", answer: "NAO_CONFORME", notes: "Falta EPI" }
+  { inspectionItemId: "...", answer: "NAO_CONFORME", notes: "Acabamento fora do padrão" }
 ]
 ```
 
@@ -1221,7 +1350,7 @@ GET /inspections/:id
 ```javascript
 POST /inspections/:id/resolve
 {
-  resolutionNotes: "Problema corrigido...",
+  resolutionNotes: "Não conformidade corrigida e validada em campo.",
   resolutionEvidence: "..." // Opcional
 }
 → Status vira RESOLVIDA
@@ -1239,6 +1368,35 @@ GET /dashboards/summary?from=2024-01-01&to=2024-12-31
 ```javascript
 GET /dashboards/ranking/teams?from=2024-01-01&to=2024-12-31
 → Array ordenado por percentual
+```
+
+### Fluxo 4: Sincronização Offline (FISCAL)
+
+1. **Criar vistoria local no app (offline)**
+```javascript
+// frontend gera externalId UUID
+inspection.externalId = "550e8400-e29b-41d4-a716-446655440100"
+```
+
+2. **Coletar respostas/evidências/assinatura localmente**
+```javascript
+// dados ficam no storage local do app até haver conexão
+```
+
+3. **Sincronizar em lote quando online**
+```javascript
+POST /sync/inspections
+{
+  inspections: [ ... ]
+}
+→ retorna mapping externalId -> serverId
+```
+
+4. **Retry seguro em caso de falha parcial**
+```javascript
+POST /sync/inspections
+// reenviar mesmos registros com mesmo externalId
+→ backend atualiza, sem criar duplicidade
 ```
 
 ---
@@ -1516,7 +1674,7 @@ const inspections = await api.get('/inspections/mine');
 
 // Criar vistoria
 const inspection = await api.post('/inspections', {
-  module: 'SEGURANCA_TRABALHO',
+  module: 'QUALIDADE',
   checklistId: '...',
   teamId: '...',
   serviceDescription: '...'
@@ -1562,6 +1720,7 @@ function formatDate(dateString) {
 
 ```javascript
 export const MODULE_TYPES = {
+  QUALIDADE: 'QUALIDADE',
   SEGURANCA_TRABALHO: 'SEGURANCA_TRABALHO',
   OBRAS_INVESTIMENTO: 'OBRAS_INVESTIMENTO',
   OBRAS_GLOBAL: 'OBRAS_GLOBAL',
@@ -1658,5 +1817,5 @@ Para dúvidas ou problemas:
 
 ---
 
-**Última atualização:** 2024-02-10
-**Versão da API:** 1.0.0
+**Última atualização:** 2026-02-16
+**Versão da API:** 1.1.0

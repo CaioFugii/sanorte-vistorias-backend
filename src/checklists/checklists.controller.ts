@@ -13,8 +13,8 @@ import { ChecklistsService } from './checklists.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { UserRole, ModuleType } from '../common/enums';
-import { PaginationQueryDto } from '../common/dto/pagination.dto';
+import { UserRole } from '../common/enums';
+import { FilterChecklistsDto } from './dto/filter-checklists.dto';
 
 @Controller('checklists')
 @UseGuards(JwtAuthGuard)
@@ -22,14 +22,11 @@ export class ChecklistsController {
   constructor(private readonly checklistsService: ChecklistsService) {}
 
   @Get()
-  findAll(
-    @Query('module') module?: ModuleType,
-    @Query() pagination?: PaginationQueryDto,
-  ) {
+  findAll(@Query() query: FilterChecklistsDto) {
     return this.checklistsService.findAll(
-      module,
-      pagination?.page || 1,
-      pagination?.limit || 10,
+      query.module,
+      query.page || 1,
+      query.limit || 10,
     );
   }
 
