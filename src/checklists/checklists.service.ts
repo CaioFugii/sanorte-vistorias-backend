@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Checklist, ChecklistItem, ChecklistSection } from '../entities';
+import { Checklist, ChecklistItem, ChecklistSection, Inspection } from '../entities';
 import { ModuleType } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
@@ -14,17 +14,23 @@ export class ChecklistsService {
     private checklistItemsRepository: Repository<ChecklistItem>,
     @InjectRepository(ChecklistSection)
     private checklistSectionsRepository: Repository<ChecklistSection>,
+    @InjectRepository(Inspection)
+    private inspectionsRepository: Repository<Inspection>,
   ) {}
 
   async findAll(
     module?: ModuleType,
+    active?: boolean,
     page: number = 1,
     limit: number = 10,
   ): Promise<PaginatedResponseDto<Checklist>> {
     const skip = (page - 1) * limit;
-    const where: any = { active: true };
+    const where: any = {};
     if (module) {
       where.module = module;
+    }
+    if (typeof active === 'boolean') {
+      where.active = active;
     }
 
     const [data, total] = await this.checklistsRepository.findAndCount({
@@ -138,6 +144,24 @@ export class ChecklistsService {
 
   async removeItem(checklistId: string, itemId: string): Promise<void> {
     await this.checklistItemsRepository.delete({ id: itemId, checklistId });
+  }
+
+  async removeChecklist(id: string): Promise<void> {
+    const checklist = await this.checklistsRepository.findOne({ where: { id } });
+    if (!checklist) {
+      throw new NotFoundException('Checklist não encontrado');
+    }
+
+    const linkedInspections = await this.inspectionsRepository.count({
+      where: { checklistId: id },
+    });
+    if (linkedInspections > 0) {
+      throw new BadRequestException(
+        'Não é possível deletar checklist com vistorias vinculadas',
+      );
+    }
+
+    await this.checklistsRepository.delete(id);
   }
 
   private async ensureDefaultSection(checklistId: string): Promise<ChecklistSection> {

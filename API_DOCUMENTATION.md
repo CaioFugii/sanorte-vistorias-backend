@@ -649,14 +649,25 @@ Módulos hardcoded (sem CRUD):
 - **Autenticação:** Requerida
 - **Query Parameters:**
   - `module` (opcional): ModuleType para filtrar
+  - `active` (opcional): boolean (`true` ou `false`) para filtrar por status de ativação
   - `page` (opcional): Número da página (padrão: 1)
   - `limit` (opcional): Itens por página (padrão: 10, máximo: 100)
-- **Descrição:** Lista checklists ativos, opcionalmente filtrados por módulo (paginado)
+- **Descrição:** Lista checklists (ativos e inativos), opcionalmente filtrados por módulo e status de ativação (paginado)
 - **Response 200:** PaginatedResponseDto<Checklist>
 
 **Exemplo:**
 ```
 GET /checklists?module=QUALIDADE
+```
+
+**Exemplo (somente ativos):**
+```
+GET /checklists?module=QUALIDADE&active=true&page=1&limit=100
+```
+
+**Exemplo (somente inativos):**
+```
+GET /checklists?active=false&page=1&limit=100
 ```
 
 #### GET /checklists/:id
@@ -688,6 +699,16 @@ GET /checklists?module=QUALIDADE
 }
 ```
 - **Response 200:** Checklist atualizado
+
+#### DELETE /checklists/:id
+- **Autenticação:** Requerida (ADMIN apenas)
+- **Descrição:** Deleta um checklist por completo
+- **Validações:**
+  - Não permite exclusão se existir vistoria vinculada ao checklist
+- **Response 200:** Sem conteúdo
+- **Erros:**
+  - `404 Not Found`: "Checklist não encontrado"
+  - `400 Bad Request`: "Não é possível deletar checklist com vistorias vinculadas"
 
 #### POST /checklists/:id/items
 - **Autenticação:** Requerida (ADMIN apenas)

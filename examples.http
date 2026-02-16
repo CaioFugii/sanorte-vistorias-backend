@@ -171,6 +171,10 @@ Content-Type: application/json
   "active": true
 }
 
+### 20.1 Deletar checklist (ADMIN)
+DELETE {{baseUrl}}/checklists/checklist-id-aqui
+Authorization: Bearer {{token}}
+
 ### 21. Adicionar item ao checklist (ADMIN)
 POST {{baseUrl}}/checklists/checklist-id-aqui/items
 Authorization: Bearer {{token}}

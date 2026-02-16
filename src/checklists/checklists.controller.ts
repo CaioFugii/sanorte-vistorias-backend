@@ -25,6 +25,7 @@ export class ChecklistsController {
   findAll(@Query() query: FilterChecklistsDto) {
     return this.checklistsService.findAll(
       query.module,
+      query.active,
       query.page || 1,
       query.limit || 10,
     );
@@ -47,6 +48,13 @@ export class ChecklistsController {
   @Roles(UserRole.ADMIN)
   update(@Param('id') id: string, @Body() updateChecklistDto: any) {
     return this.checklistsService.update(id, updateChecklistDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  removeChecklist(@Param('id') id: string) {
+    return this.checklistsService.removeChecklist(id);
   }
 
   @Post(':id/items')

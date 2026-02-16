@@ -154,6 +154,7 @@ Authorization: Bearer <token>
 - `GET /checklists/:id` - Detalhes do checklist
 - `POST /checklists` - Criar checklist (ADMIN)
 - `PUT /checklists/:id` - Atualizar checklist (ADMIN)
+- `DELETE /checklists/:id` - Deletar checklist (ADMIN)
 - `POST /checklists/:id/items` - Adicionar item (ADMIN)
 - `PUT /checklists/:id/items/:itemId` - Atualizar item (ADMIN)
 - `DELETE /checklists/:id/items/:itemId` - Remover item (ADMIN)
