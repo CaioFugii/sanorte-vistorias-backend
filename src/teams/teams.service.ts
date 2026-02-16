@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Team } from '../entities';
+import { Repository, In } from 'typeorm';
+import { Team, Collaborator } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
@@ -9,6 +9,8 @@ export class TeamsService {
   constructor(
     @InjectRepository(Team)
     private teamsRepository: Repository<Team>,
+    @InjectRepository(Collaborator)
+    private collaboratorsRepository: Repository<Collaborator>,
   ) {}
 
   async findAll(
@@ -47,17 +49,65 @@ export class TeamsService {
     });
   }
 
-  async create(teamData: { name: string; active?: boolean }): Promise<Team> {
-    const team = this.teamsRepository.create(teamData);
-    return this.teamsRepository.save(team);
+  async create(teamData: {
+    name: string;
+    active?: boolean;
+    collaboratorIds?: string[];
+  }): Promise<Team> {
+    const { collaboratorIds, ...baseData } = teamData;
+    const team = this.teamsRepository.create(baseData);
+
+    if (collaboratorIds !== undefined) {
+      team.collaborators = await this.resolveCollaborators(collaboratorIds);
+    }
+
+    const saved = await this.teamsRepository.save(team);
+    return this.findOne(saved.id);
   }
 
-  async update(id: string, teamData: Partial<Team>): Promise<Team> {
-    await this.teamsRepository.update(id, teamData);
+  async update(
+    id: string,
+    teamData: Partial<Team> & { collaboratorIds?: string[] },
+  ): Promise<Team> {
+    const { collaboratorIds, ...baseData } = teamData;
+
+    if (Object.keys(baseData).length > 0) {
+      await this.teamsRepository.update(id, baseData);
+    }
+
+    if (collaboratorIds !== undefined) {
+      const team = await this.findOne(id);
+      if (!team) {
+        return null;
+      }
+
+      team.collaborators = await this.resolveCollaborators(collaboratorIds);
+      await this.teamsRepository.save(team);
+    }
+
     return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
     await this.teamsRepository.delete(id);
+  }
+
+  private async resolveCollaborators(collaboratorIds: string[]): Promise<Collaborator[]> {
+    const uniqueIds = [...new Set(collaboratorIds)];
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const collaborators = await this.collaboratorsRepository.findBy({
+      id: In(uniqueIds),
+    });
+
+    if (collaborators.length !== uniqueIds.length) {
+      throw new BadRequestException(
+        'Um ou mais collaboratorIds informados não existem',
+      );
+    }
+
+    return collaborators;
   }
 }

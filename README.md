@@ -139,8 +139,8 @@ Authorization: Bearer <token>
 
 ### Equipes
 - `GET /teams` - Listar equipes
-- `POST /teams` - Criar equipe (ADMIN)
-- `PUT /teams/:id` - Atualizar equipe (ADMIN)
+- `POST /teams` - Criar equipe com colaboradores opcionais (ADMIN)
+- `PUT /teams/:id` - Atualizar equipe e vínculos de colaboradores (ADMIN)
 - `DELETE /teams/:id` - Deletar equipe (ADMIN)
 
 ### Colaboradores

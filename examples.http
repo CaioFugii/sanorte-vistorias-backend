@@ -134,7 +134,19 @@ Content-Type: application/json
 
 {
   "name": "Equipe Alpha",
-  "active": true
+  "active": true,
+  "collaboratorIds": ["collaborator-id-1", "collaborator-id-2"]
+}
+
+### 18.1 Atualizar equipe e colaboradores (ADMIN)
+PUT {{baseUrl}}/teams/team-id-aqui
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Equipe Alpha Atualizada",
+  "active": true,
+  "collaboratorIds": ["collaborator-id-2", "collaborator-id-3"]
 }
 
 ### 19. Criar colaborador (ADMIN)

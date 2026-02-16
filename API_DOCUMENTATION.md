@@ -566,9 +566,16 @@ Módulos hardcoded (sem CRUD):
 ```json
 {
   "name": "Equipe Alpha",
-  "active": true
+  "active": true,
+  "collaboratorIds": [
+    "550e8400-e29b-41d4-a716-446655440002",
+    "550e8400-e29b-41d4-a716-446655440003"
+  ]
 }
 ```
+- **Notas:**
+  - `collaboratorIds` é opcional
+  - se informado, associa colaboradores à equipe no momento da criação
 - **Response 201:** Team criado
 
 #### PUT /teams/:id
@@ -577,10 +584,20 @@ Módulos hardcoded (sem CRUD):
 ```json
 {
   "name": "Equipe Beta",
-  "active": false
+  "active": false,
+  "collaboratorIds": [
+    "550e8400-e29b-41d4-a716-446655440003",
+    "550e8400-e29b-41d4-a716-446655440004"
+  ]
 }
 ```
+- **Notas:**
+  - `collaboratorIds` é opcional
+  - quando informado, substitui os vínculos atuais da equipe pelos IDs enviados
+  - para remover todos os colaboradores da equipe, envie `"collaboratorIds": []`
 - **Response 200:** Team atualizado
+- **Erros:**
+  - `400 Bad Request`: "Um ou mais collaboratorIds informados não existem"
 
 #### DELETE /teams/:id
 - **Autenticação:** Requerida (ADMIN apenas)
