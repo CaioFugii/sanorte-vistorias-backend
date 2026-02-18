@@ -1009,9 +1009,12 @@ const response = await fetch(`http://localhost:3000/inspections/${inspectionId}/
 ```json
 {
   "resolutionNotes": "Item corrigido. EPI fornecido e treinamento realizado.",
-  "resolutionEvidence": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+  "resolutionEvidence": "https://res.cloudinary.com/.../evidences/xyz.jpg"
 }
 ```
+- **resolutionEvidence** (opcional): pode ser **URL** (recomendado) ou **base64**.
+  - **URL:** se o valor começar com `http://` ou `https://`, é gravado diretamente em `resolutionEvidencePath`. Recomendado para evitar "Entity too large" em imagens grandes (ex.: limite 1MB do nginx).
+  - **Base64:** se não for URL, o backend decodifica, faz upload para o Cloudinary (`quality/evidences`) e grava a URL retornada.
 - **Descrição:** Resolve **um** item não conforme da vistoria. Quando **todos** os itens em não conformidade estiverem resolvidos, a vistoria passa automaticamente para status `RESOLVIDA`.
 - **Validações:**
   - Vistoria deve estar com status `PENDENTE_AJUSTE`
@@ -1032,9 +1035,10 @@ const response = await fetch(`http://localhost:3000/inspections/${inspectionId}/
 ```json
 {
   "resolutionNotes": "Problema corrigido. EPI fornecido e treinamento realizado.",
-  "resolutionEvidence": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+  "resolutionEvidence": "https://res.cloudinary.com/.../evidences/xyz.jpg"
 }
 ```
+- **resolutionEvidence** (opcional): aceita **URL** (recomendado) ou **base64**; mesmo comportamento do endpoint de resolução por item (URL gravada direto; base64 enviado ao Cloudinary).
 - **Descrição:** Marca a vistoria como resolvida. **Só é permitido quando todos os itens não conformes já foram resolvidos** individualmente via `POST /inspections/:id/items/:itemId/resolve`. Caso exista algum item `NAO_CONFORME` sem `resolvedAt`, a API retorna 400.
 - **Validações:**
   - Vistoria deve estar com status `PENDENTE_AJUSTE`

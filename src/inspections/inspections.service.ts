@@ -750,6 +750,26 @@ export class InspectionsService {
   }
 
   /**
+   * Aceita resolutionEvidence como URL (recomendado) ou base64.
+   * Se for URL (http/https), retorna como está. Caso contrário, faz upload e retorna a URL.
+   */
+  private async resolutionEvidenceToPath(value: string): Promise<string | null> {
+    if (!value?.trim()) return null;
+    const trimmed = value.trim();
+    if (
+      trimmed.toLowerCase().startsWith('http://') ||
+      trimmed.toLowerCase().startsWith('https://')
+    ) {
+      return trimmed;
+    }
+    const imageBuffer = this.base64ToBuffer(trimmed);
+    const uploaded = await this.cloudinaryService.uploadImage(imageBuffer, {
+      folder: 'quality/evidences',
+    });
+    return uploaded.secure_url;
+  }
+
+  /**
    * Resolve um item não conforme da vistoria. Quando todos os itens NAO_CONFORME
    * estiverem resolvidos, a vistoria passa automaticamente para RESOLVIDA.
    */
@@ -768,12 +788,18 @@ export class InspectionsService {
       throw new BadRequestException('Vistoria não está pendente de ajuste');
     }
 
-    const item = await this.inspectionItemsRepository.findOne({
-      where: { id: itemId, inspectionId },
+    let item = await this.inspectionItemsRepository.findOne({
+      where: { id: itemId },
     });
 
     if (!item) {
-      throw new NotFoundException('Item não encontrado nesta vistoria');
+      throw new NotFoundException('Item não encontrado');
+    }
+
+    if (item.inspectionId !== inspectionId) {
+      throw new BadRequestException(
+        `O item pertence à vistoria ${item.inspectionId}, não à vistoria informada na URL. Use o id da vistoria correta.`,
+      );
     }
 
     if (item.answer !== ChecklistAnswer.NAO_CONFORME) {
@@ -782,14 +808,10 @@ export class InspectionsService {
       );
     }
 
-    let resolutionEvidencePath: string | null = null;
-    if (resolutionData.resolutionEvidence) {
-      const imageBuffer = this.base64ToBuffer(resolutionData.resolutionEvidence);
-      const uploaded = await this.cloudinaryService.uploadImage(imageBuffer, {
-        folder: 'quality/evidences',
-      });
-      resolutionEvidencePath = uploaded.secure_url;
-    }
+    const resolutionEvidencePath =
+      await this.resolutionEvidenceToPath(
+        resolutionData.resolutionEvidence ?? '',
+      );
 
     item.resolvedAt = new Date();
     item.resolvedByUserId = userId;
@@ -873,14 +895,10 @@ export class InspectionsService {
       );
     }
 
-    let resolutionEvidencePath: string | null = null;
-    if (resolutionData.resolutionEvidence) {
-      const imageBuffer = this.base64ToBuffer(resolutionData.resolutionEvidence);
-      const uploaded = await this.cloudinaryService.uploadImage(imageBuffer, {
-        folder: 'quality/evidences',
-      });
-      resolutionEvidencePath = uploaded.secure_url;
-    }
+    const resolutionEvidencePath =
+      await this.resolutionEvidenceToPath(
+        resolutionData.resolutionEvidence ?? '',
+      );
 
     const inspectionId = inspection.id;
 
