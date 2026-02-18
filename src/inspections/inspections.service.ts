@@ -749,6 +749,105 @@ export class InspectionsService {
     return Buffer.from(sanitizedValue, 'base64');
   }
 
+  /**
+   * Resolve um item não conforme da vistoria. Quando todos os itens NAO_CONFORME
+   * estiverem resolvidos, a vistoria passa automaticamente para RESOLVIDA.
+   */
+  async resolveItem(
+    inspectionId: string,
+    itemId: string,
+    resolutionData: {
+      resolutionNotes: string;
+      resolutionEvidence?: string;
+    },
+    userId: string,
+  ): Promise<InspectionItem> {
+    const inspection = await this.findOne(inspectionId);
+
+    if (inspection.status !== InspectionStatus.PENDENTE_AJUSTE) {
+      throw new BadRequestException('Vistoria não está pendente de ajuste');
+    }
+
+    const item = await this.inspectionItemsRepository.findOne({
+      where: { id: itemId, inspectionId },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Item não encontrado nesta vistoria');
+    }
+
+    if (item.answer !== ChecklistAnswer.NAO_CONFORME) {
+      throw new BadRequestException(
+        'Apenas itens em não conformidade podem ser resolvidos',
+      );
+    }
+
+    let resolutionEvidencePath: string | null = null;
+    if (resolutionData.resolutionEvidence) {
+      const imageBuffer = this.base64ToBuffer(resolutionData.resolutionEvidence);
+      const uploaded = await this.cloudinaryService.uploadImage(imageBuffer, {
+        folder: 'quality/evidences',
+      });
+      resolutionEvidencePath = uploaded.secure_url;
+    }
+
+    item.resolvedAt = new Date();
+    item.resolvedByUserId = userId;
+    item.resolutionNotes = resolutionData.resolutionNotes;
+    item.resolutionEvidencePath = resolutionEvidencePath;
+    await this.inspectionItemsRepository.save(item);
+
+    await this.tryMarkInspectionResolvedIfAllItemsResolved(inspectionId, userId);
+
+    const updated = await this.inspectionItemsRepository.findOne({
+      where: { id: itemId },
+      relations: ['checklistItem', 'resolvedBy'],
+    });
+    if (!updated) {
+      throw new NotFoundException('Item não encontrado');
+    }
+    return updated;
+  }
+
+  /**
+   * Se todos os itens NAO_CONFORME da vistoria tiverem resolvedAt preenchido,
+   * marca PendingAdjustment e Inspection como RESOLVIDA.
+   */
+  private async tryMarkInspectionResolvedIfAllItemsResolved(
+    inspectionId: string,
+    lastResolvedByUserId: string,
+  ): Promise<void> {
+    const nonConformItems = await this.inspectionItemsRepository.find({
+      where: { inspectionId, answer: ChecklistAnswer.NAO_CONFORME },
+    });
+
+    const allResolved = nonConformItems.every((i) => i.resolvedAt != null);
+    if (!allResolved || nonConformItems.length === 0) {
+      return;
+    }
+
+    let pending = await this.pendingAdjustmentsRepository.findOne({
+      where: { inspectionId },
+    });
+    if (!pending) {
+      pending = this.pendingAdjustmentsRepository.create({
+        inspectionId,
+      });
+    }
+    pending.status = PendingStatus.RESOLVIDA;
+    pending.resolvedAt = new Date();
+    pending.resolvedByUserId = lastResolvedByUserId;
+    await this.pendingAdjustmentsRepository.save(pending);
+
+    await this.inspectionsRepository.update(inspectionId, {
+      status: InspectionStatus.RESOLVIDA,
+    });
+  }
+
+  /**
+   * Resolve a vistoria inteira. Só é permitido quando todos os itens não conformes
+   * já foram resolvidos individualmente (resolvedAt preenchido).
+   */
   async resolve(
     id: string,
     resolutionData: {
@@ -763,6 +862,17 @@ export class InspectionsService {
       throw new BadRequestException('Vistoria não está pendente de ajuste');
     }
 
+    const nonConformItems = await this.inspectionItemsRepository.find({
+      where: { inspectionId: id, answer: ChecklistAnswer.NAO_CONFORME },
+    });
+
+    const pendingItems = nonConformItems.filter((i) => i.resolvedAt == null);
+    if (pendingItems.length > 0) {
+      throw new BadRequestException(
+        'Resolva todos os itens não conformes antes de resolver a vistoria. Use POST /inspections/:id/items/:itemId/resolve para cada item.',
+      );
+    }
+
     let resolutionEvidencePath: string | null = null;
     if (resolutionData.resolutionEvidence) {
       const imageBuffer = this.base64ToBuffer(resolutionData.resolutionEvidence);
@@ -774,7 +884,6 @@ export class InspectionsService {
 
     const inspectionId = inspection.id;
 
-    // Atualizar PendingAdjustment
     let pending = await this.pendingAdjustmentsRepository.findOne({
       where: { inspectionId },
     });
@@ -793,7 +902,6 @@ export class InspectionsService {
 
     await this.pendingAdjustmentsRepository.save(pending);
 
-    // Atualizar status da vistoria
     await this.inspectionsRepository.update(inspectionId, {
       status: InspectionStatus.RESOLVIDA,
     });

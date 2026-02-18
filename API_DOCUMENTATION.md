@@ -378,6 +378,11 @@ function Pagination({ meta, onPageChange }) {
   notes?: string;          // Opcional
   createdAt: string;
   updatedAt: string;
+  resolvedAt?: string;      // null até o item não conforme ser resolvido
+  resolvedByUserId?: string;
+  resolvedBy?: User;        // Opcional, quando solicitado
+  resolutionNotes?: string;
+  resolutionEvidencePath?: string;
   evidences?: Evidence[];   // Opcional
 }
 ```
@@ -998,6 +1003,29 @@ const response = await fetch(`http://localhost:3000/inspections/${inspectionId}/
 - `400 Bad Request`: "Item 'X' requer foto de evidência quando não conforme"
 - `400 Bad Request`: "Vistoria já foi finalizada"
 
+#### POST /inspections/:id/items/:itemId/resolve
+- **Autenticação:** Requerida (GESTOR ou ADMIN)
+- **Request Body:**
+```json
+{
+  "resolutionNotes": "Item corrigido. EPI fornecido e treinamento realizado.",
+  "resolutionEvidence": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+}
+```
+- **Descrição:** Resolve **um** item não conforme da vistoria. Quando **todos** os itens em não conformidade estiverem resolvidos, a vistoria passa automaticamente para status `RESOLVIDA`.
+- **Validações:**
+  - Vistoria deve estar com status `PENDENTE_AJUSTE`
+  - O item deve pertencer à vistoria e ter `answer` = `NAO_CONFORME`
+- **Comportamento:**
+  - Preenche no item: `resolvedAt`, `resolvedByUserId`, `resolutionNotes`, `resolutionEvidencePath`
+  - Se todos os itens `NAO_CONFORME` da vistoria ficarem resolvidos, atualiza `PendingAdjustment` e status da vistoria para `RESOLVIDA`
+- **Response 200:** InspectionItem atualizado (com `checklistItem` e `resolvedBy` quando disponíveis)
+
+**Erros:**
+- `400 Bad Request`: "Vistoria não está pendente de ajuste"
+- `400 Bad Request`: "Apenas itens em não conformidade podem ser resolvidos"
+- `404 Not Found`: "Item não encontrado nesta vistoria"
+
 #### POST /inspections/:id/resolve
 - **Autenticação:** Requerida (GESTOR ou ADMIN)
 - **Request Body:**
@@ -1007,17 +1035,19 @@ const response = await fetch(`http://localhost:3000/inspections/${inspectionId}/
   "resolutionEvidence": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 }
 ```
-- **Descrição:** Resolve pendência de ajuste
+- **Descrição:** Marca a vistoria como resolvida. **Só é permitido quando todos os itens não conformes já foram resolvidos** individualmente via `POST /inspections/:id/items/:itemId/resolve`. Caso exista algum item `NAO_CONFORME` sem `resolvedAt`, a API retorna 400.
 - **Validações:**
   - Vistoria deve estar com status `PENDENTE_AJUSTE`
+  - Todos os itens com `answer` = `NAO_CONFORME` devem ter `resolvedAt` preenchido
 - **Comportamento:**
   - Atualiza `PendingAdjustment` para `RESOLVIDA`
   - Atualiza status da vistoria para `RESOLVIDA`
-  - Define `resolvedAt` e `resolvedByUserId`
+  - Define `resolvedAt` e `resolvedByUserId` no PendingAdjustment
 - **Response 200:** Inspection resolvido
 
 **Erros:**
 - `400 Bad Request`: "Vistoria não está pendente de ajuste"
+- `400 Bad Request`: "Resolva todos os itens não conformes antes de resolver a vistoria. Use POST /inspections/:id/items/:itemId/resolve para cada item."
 
 #### GET /inspections/:id/pdf
 - **Autenticação:** Requerida
@@ -1436,17 +1466,25 @@ GET /inspections?status=PENDENTE_AJUSTE
 2. **Ver Detalhes da Vistoria**
 ```javascript
 GET /inspections/:id
-→ Ver itens não conformes
+→ Ver itens não conformes (answer = NAO_CONFORME)
 ```
 
-3. **Resolver Pendência**
+3. **Resolver cada item não conforme**
 ```javascript
-POST /inspections/:id/resolve
+POST /inspections/:id/items/:itemId/resolve
 {
   resolutionNotes: "Não conformidade corrigida e validada em campo.",
   resolutionEvidence: "..." // Opcional
 }
-→ Status vira RESOLVIDA
+→ Preenche resolvedAt no item. Quando o último item for resolvido, a vistoria passa automaticamente para RESOLVIDA
+```
+
+4. **(Opcional) Resolver vistoria em lote**
+Se todos os itens já foram resolvidos individualmente, ainda é possível chamar a rota antiga para atualizar o PendingAdjustment com notas/evidência geral:
+```javascript
+POST /inspections/:id/resolve
+{ resolutionNotes: "...", resolutionEvidence: "..." }
+→ Só funciona quando todos os itens NAO_CONFORME já têm resolvedAt
 ```
 
 ### Fluxo 3: Dashboard (GESTOR/ADMIN)

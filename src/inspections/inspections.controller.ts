@@ -21,6 +21,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import { FilterInspectionsDto } from './dto/filter-inspections.dto';
+import { ResolveItemDto } from './dto/resolve-item.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @Controller('inspections')
@@ -126,6 +127,23 @@ export class InspectionsController {
   @Roles(UserRole.FISCAL, UserRole.GESTOR)
   finalize(@Param('id') id: string, @CurrentUser() user: any) {
     return this.inspectionsService.finalize(id, user.id, user.role);
+  }
+
+  @Post(':id/items/:itemId/resolve')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  resolveItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() resolveItemDto: ResolveItemDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.inspectionsService.resolveItem(
+      id,
+      itemId,
+      resolveItemDto,
+      user.id,
+    );
   }
 
   @Post(':id/resolve')
