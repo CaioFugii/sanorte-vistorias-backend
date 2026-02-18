@@ -388,10 +388,16 @@ function Pagination({ meta, onPageChange }) {
   id: string;              // UUID
   inspectionId: string;
   inspectionItemId?: string;  // null se for evidência geral
-  filePath: string;        // Caminho relativo (ex: "evidences/file.jpg")
+  filePath: string;        // Compat legada (atualmente recebe URL quando Cloudinary)
   fileName: string;        // Nome original do arquivo
   mimeType: string;        // "image/jpeg", "image/png", etc
   size: number;            // Tamanho em bytes
+  cloudinaryPublicId?: string; // Ex: "quality/evidences/abc123"
+  url?: string;            // secure_url do Cloudinary
+  bytes?: number;          // Metadado do Cloudinary
+  format?: string;         // Ex: "jpg", "png"
+  width?: number;          // Largura da imagem
+  height?: number;         // Altura da imagem
   createdAt: string;
   uploadedByUserId: string;
 }
@@ -404,7 +410,9 @@ function Pagination({ meta, onPageChange }) {
   inspectionId: string;
   signerName: string;
   signerRoleLabel: string;  // Geralmente "Lider/Encarregado"
-  imagePath: string;        // Caminho relativo
+  imagePath: string;        // Compat legada (atualmente recebe URL quando Cloudinary)
+  cloudinaryPublicId?: string; // Ex: "quality/signatures/abc123"
+  url?: string;             // secure_url do Cloudinary
   signedAt: string;        // ISO 8601
 }
 ```
@@ -927,12 +935,50 @@ const response = await fetch(`http://localhost:3000/inspections/${inspectionId}/
   "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 }
 ```
-- **Descrição:** Adiciona assinatura digital (imagem em base64)
+- **Descrição:** Adiciona assinatura digital. A imagem pode ser enviada em base64 e o backend envia para Cloudinary internamente.
 - **Validações:**
   - Vistoria deve estar com status `RASCUNHO`
 - **Response 201:** Signature criado
 
 **Nota:** A imagem deve ser enviada em base64 (sem o prefixo `data:image/png;base64,`)
+
+#### POST /uploads
+- **Autenticação:** Requerida
+- **Content-Type:** `multipart/form-data`
+- **Descrição:** Upload de imagem no Cloudinary (signed via backend)
+- **Form Data:**
+  - `file` (obrigatório): arquivo `image/*`
+  - `folder` (opcional): pasta de destino (ex: `quality/evidences`, `quality/signatures`)
+- **Validações:**
+  - Arquivo obrigatório
+  - Tamanho máximo: 10MB
+  - Aceita apenas `image/*`
+- **Defaults de pasta:**
+  - `quality/evidences` (quando não informado)
+  - aliases suportados: `evidences`, `signatures`
+- **Response 201:**
+```json
+{
+  "publicId": "quality/evidences/abc123",
+  "url": "https://res.cloudinary.com/<cloud_name>/image/upload/v123/quality/evidences/abc123.jpg",
+  "resourceType": "image",
+  "bytes": 120031,
+  "format": "jpg",
+  "width": 1920,
+  "height": 1080
+}
+```
+
+#### DELETE /uploads/:publicId
+- **Autenticação:** Requerida
+- **Descrição:** Remove asset do Cloudinary por `publicId`
+- **Observação:** encode o `publicId` na URL (ex: `quality/evidences/abc123` → `quality%2Fevidences%2Fabc123`)
+- **Response 200:**
+```json
+{
+  "ok": true
+}
+```
 
 #### POST /inspections/:id/finalize
 - **Autenticação:** Requerida (FISCAL ou GESTOR)
@@ -1032,15 +1078,22 @@ a.click();
       "evidences": [
         {
           "inspectionItemId": "550e8400-e29b-41d4-a716-446655440011",
-          "filePath": "evidences/offline-item-2.jpg",
+          "cloudinaryPublicId": "quality/evidences/offline-item-2",
+          "url": "https://res.cloudinary.com/<cloud_name>/image/upload/v123/quality/evidences/offline-item-2.jpg",
+          "filePath": "https://res.cloudinary.com/<cloud_name>/image/upload/v123/quality/evidences/offline-item-2.jpg",
           "fileName": "offline-item-2.jpg",
           "mimeType": "image/jpeg",
-          "size": 120031
+          "size": 120031,
+          "bytes": 120031,
+          "format": "jpg",
+          "width": 1280,
+          "height": 720
         }
       ],
       "signature": {
         "signerName": "João Silva",
-        "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        "cloudinaryPublicId": "quality/signatures/signature-1",
+        "url": "https://res.cloudinary.com/<cloud_name>/image/upload/v123/quality/signatures/signature-1.png"
       },
       "finalize": true
     }
@@ -1062,6 +1115,7 @@ a.click();
 - **Observações importantes:**
   - retries com o mesmo `externalId` retornam `UPDATED` para o mesmo `serverId` (sem duplicar vistoria)
   - se `finalize=true`, aplicam-se as mesmas validações de `POST /inspections/:id/finalize`
+  - payload legado com `dataUrl`/base64 em evidência ou assinatura é rejeitado com: `Assets must be uploaded before sync`
 - **Status por item sincronizado:**
   - `CREATED`
   - `UPDATED`
@@ -1352,8 +1406,9 @@ PUT /inspections/:id/items
 
 6. **Upload de Evidência para Item Não Conforme**
 ```javascript
-POST /inspections/:id/evidences
-FormData: { file: ..., inspectionItemId: "..." }
+POST /uploads
+FormData: { file: ..., folder: "quality/evidences" }
+→ recebe { publicId, url, ... }
 ```
 
 7. **Adicionar Assinatura**
@@ -1418,7 +1473,7 @@ inspection.externalId = "550e8400-e29b-41d4-a716-446655440100"
 
 2. **Coletar respostas/evidências/assinatura localmente**
 ```javascript
-// dados ficam no storage local do app até haver conexão
+// armazenar referências de assets já enviados via /uploads (publicId/url)
 ```
 
 3. **Sincronizar em lote quando online**
@@ -1441,31 +1496,29 @@ POST /sync/inspections
 
 ## 📤 Upload de Arquivos
 
-### Evidências
+### Upload Cloudinary (recomendado)
 
-**Endpoint:** `POST /inspections/:id/evidences`
+**Endpoint:** `POST /uploads`
 
 **Formato:** `multipart/form-data`
 
 **Campos:**
-- `file` (obrigatório): Arquivo de imagem
-- `inspectionItemId` (opcional): UUID do item relacionado
+- `file` (obrigatório): Arquivo de imagem (`image/*`)
+- `folder` (opcional): `quality/evidences` ou `quality/signatures`
 
 **Limitações:**
-- Tamanho máximo: **5MB**
-- Formatos aceitos: **JPG, JPEG, PNG, WEBP**
+- Tamanho máximo: **10MB**
+- Tipo aceito: **image/\***
 
 **Exemplo Completo:**
 ```javascript
-async function uploadEvidence(inspectionId, file, inspectionItemId = null) {
+async function uploadAsset(file, folder = 'quality/evidences') {
   const formData = new FormData();
   formData.append('file', file);
-  if (inspectionItemId) {
-    formData.append('inspectionItemId', inspectionItemId);
-  }
+  formData.append('folder', folder);
 
   const response = await fetch(
-    `http://localhost:3000/inspections/${inspectionId}/evidences`,
+    `http://localhost:3000/uploads`,
     {
       method: 'POST',
       headers: {
@@ -1484,32 +1537,35 @@ async function uploadEvidence(inspectionId, file, inspectionItemId = null) {
 
 // Uso
 const fileInput = document.querySelector('input[type="file"]');
-await uploadEvidence(
-  inspectionId,
-  fileInput.files[0],
-  inspectionItemId
-);
+const asset = await uploadAsset(fileInput.files[0], 'quality/evidences');
+// asset.publicId / asset.url devem ser enviados depois no /sync/inspections
 ```
 
 **Validação de Arquivo no Frontend:**
 ```javascript
 function validateFile(file) {
-  const maxSize = 5 * 1024 * 1024; // 5MB
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const maxSize = 10 * 1024 * 1024; // 10MB
   
   if (file.size > maxSize) {
-    throw new Error('Arquivo muito grande. Máximo: 5MB');
+    throw new Error('Arquivo muito grande. Máximo: 10MB');
   }
   
-  if (!allowedTypes.includes(file.type)) {
-    throw new Error('Formato não suportado. Use: JPG, PNG ou WEBP');
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Formato não suportado. Envie image/*');
   }
   
   return true;
 }
 ```
 
-### Assinatura (Base64)
+### Endpoint legado por inspeção (compatível)
+
+`POST /inspections/:id/evidences` e `POST /inspections/:id/signature` permanecem funcionais para compatibilidade.
+
+- `evidences`: recebe arquivo multipart e o backend envia para Cloudinary.
+- `signature`: recebe `imageBase64` e o backend envia para Cloudinary.
+
+### Assinatura (Base64 - compatível)
 
 **Endpoint:** `POST /inspections/:id/signature`
 
@@ -1815,10 +1871,10 @@ export const PENDING_STATUS = {
 
 ### 4. Upload de Arquivos
 
-- Evidências: multipart/form-data
-- Assinatura: JSON com base64
-- Tamanho máximo: 5MB
-- Formatos: JPG, PNG, WEBP
+- Upload principal: `POST /uploads` (Cloudinary, signed via backend)
+- Para sync offline, envie referências de assets (`cloudinaryPublicId`/`url`)
+- `dataUrl`/base64 em `POST /sync/inspections` não é aceito (`Assets must be uploaded before sync`)
+- Endpoints legados de inspeção continuam por compatibilidade
 
 ### 5. Filtros de Data
 
@@ -1855,5 +1911,5 @@ Para dúvidas ou problemas:
 
 ---
 
-**Última atualização:** 2026-02-16
-**Versão da API:** 1.1.0
+**Última atualização:** 2026-02-18
+**Versão da API:** 1.2.0

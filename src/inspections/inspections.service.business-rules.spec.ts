@@ -68,7 +68,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
-      { saveSignature: jest.fn(), saveEvidence: jest.fn() } as any,
+      { uploadImage: jest.fn() } as any,
       { getRepository: jest.fn() } as any,
       new InspectionDomainService(),
     );

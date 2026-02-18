@@ -4,6 +4,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
+/**
+ * @deprecated Local disk storage is legacy-only. New uploads must use Cloudinary.
+ */
 export class FilesService {
   private readonly storagePath: string;
   private readonly evidencesPath: string;
@@ -58,6 +61,15 @@ export class FilesService {
   }
 
   async getFile(filePath: string): Promise<Buffer> {
+    if (/^https?:\/\//i.test(filePath)) {
+      const response = await fetch(filePath);
+      if (!response.ok) {
+        throw new Error('File not found');
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    }
+
     const fullPath = path.join(this.storagePath, filePath);
     if (!fs.existsSync(fullPath)) {
       throw new Error('File not found');

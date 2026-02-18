@@ -13,6 +13,8 @@ import { InspectionsModule } from './inspections/inspections.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
 import { FilesModule } from './files/files.module';
 import { PdfModule } from './pdf/pdf.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { PdfModule } from './pdf/pdf.module';
     DashboardsModule,
     FilesModule,
     PdfModule,
+    CloudinaryModule,
+    UploadsModule,
   ],
 })
 export class AppModule {}

@@ -41,6 +41,24 @@ export class Evidence {
   @Column()
   size: number;
 
+  @Column({ name: 'cloudinary_public_id', nullable: true })
+  cloudinaryPublicId: string;
+
+  @Column({ nullable: true })
+  url: string;
+
+  @Column({ nullable: true })
+  bytes: number;
+
+  @Column({ nullable: true })
+  format: string;
+
+  @Column({ nullable: true })
+  width: number;
+
+  @Column({ nullable: true })
+  height: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

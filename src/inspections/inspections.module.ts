@@ -13,9 +13,9 @@ import {
   Collaborator,
   ChecklistSection,
 } from '../entities';
-import { FilesModule } from '../files/files.module';
 import { InspectionDomainService } from './inspection-domain.service';
 import { SyncController } from './sync.controller';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -30,7 +30,7 @@ import { SyncController } from './sync.controller';
       Collaborator,
       ChecklistSection,
     ]),
-    FilesModule,
+    CloudinaryModule,
   ],
   controllers: [InspectionsController, SyncController],
   providers: [InspectionsService, InspectionDomainService],

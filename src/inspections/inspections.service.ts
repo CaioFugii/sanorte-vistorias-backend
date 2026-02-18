@@ -23,47 +23,13 @@ import {
   PendingStatus,
   UserRole,
 } from '../common/enums';
-import { FilesService } from '../files/files.service';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { InspectionDomainService } from './inspection-domain.service';
-
-type SyncInspectionItemPayload = {
-  checklistItemId: string;
-  answer?: ChecklistAnswer;
-  notes?: string;
-};
-
-type SyncEvidencePayload = {
-  inspectionItemId?: string;
-  filePath: string;
-  fileName: string;
-  mimeType: string;
-  size: number;
-};
-
-type SyncSignaturePayload = {
-  signerName: string;
-  signerRoleLabel?: string;
-  imageBase64?: string;
-  imagePath?: string;
-  signedAt?: string;
-};
-
-type SyncInspectionPayload = {
-  externalId: string;
-  module: ModuleType;
-  checklistId: string;
-  teamId: string;
-  serviceDescription: string;
-  locationDescription?: string;
-  collaboratorIds?: string[];
-  createdOffline?: boolean;
-  syncedAt?: string;
-  finalize?: boolean;
-  items?: SyncInspectionItemPayload[];
-  evidences?: SyncEvidencePayload[];
-  signature?: SyncSignaturePayload;
-};
+import {
+  SyncInspectionDto,
+  SyncSignatureDto,
+} from './dto/sync-inspections.dto';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
 export class InspectionsService {
@@ -80,7 +46,7 @@ export class InspectionsService {
     private pendingAdjustmentsRepository: Repository<PendingAdjustment>,
     @InjectRepository(ChecklistItem)
     private checklistItemsRepository: Repository<ChecklistItem>,
-    private filesService: FilesService,
+    private cloudinaryService: CloudinaryService,
     private dataSource: DataSource,
     private inspectionDomainService: InspectionDomainService,
   ) {}
@@ -336,16 +302,23 @@ export class InspectionsService {
       );
     }
 
-    const fileData = await this.filesService.saveEvidence(
-      file,
-      id,
-      inspectionItemId,
-    );
+    const uploaded = await this.cloudinaryService.uploadImage(file.buffer, {
+      folder: 'quality/evidences',
+    });
 
     const evidence = this.evidencesRepository.create({
       inspectionId: id,
       inspectionItemId,
-      ...fileData,
+      filePath: uploaded.secure_url,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      size: uploaded.bytes,
+      cloudinaryPublicId: uploaded.public_id,
+      url: uploaded.secure_url,
+      bytes: uploaded.bytes,
+      format: uploaded.format,
+      width: uploaded.width,
+      height: uploaded.height,
       uploadedByUserId: userId || inspection.createdByUserId,
     });
 
@@ -365,18 +338,18 @@ export class InspectionsService {
       );
     }
 
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
-    const imagePath = await this.filesService.saveSignature(
-      imageBuffer,
-      id,
-      'image/png',
-    );
+    const imageBuffer = this.base64ToBuffer(imageBase64);
+    const uploaded = await this.cloudinaryService.uploadImage(imageBuffer, {
+      folder: 'quality/signatures',
+    });
 
     const signature = this.signaturesRepository.create({
       inspectionId: id,
       signerName,
       signerRoleLabel: 'Lider/Encarregado',
-      imagePath,
+      imagePath: uploaded.secure_url,
+      cloudinaryPublicId: uploaded.public_id,
+      url: uploaded.secure_url,
       signedAt: new Date(),
     });
 
@@ -464,7 +437,7 @@ export class InspectionsService {
   }
 
   async syncInspections(
-    inspections: SyncInspectionPayload[],
+    inspections: SyncInspectionDto[],
     userId: string,
     userRole: UserRole,
   ): Promise<{
@@ -504,7 +477,7 @@ export class InspectionsService {
   }
 
   private async syncSingleInspection(
-    payload: SyncInspectionPayload,
+    payload: SyncInspectionDto,
     userId: string,
     userRole: UserRole,
   ): Promise<{
@@ -599,24 +572,68 @@ export class InspectionsService {
 
     if (payload.evidences?.length) {
       for (const evidence of payload.evidences) {
-        const existingEvidence = await this.evidencesRepository.findOne({
-          where: {
+        if (evidence.dataUrl) {
+          throw new BadRequestException('Assets must be uploaded before sync');
+        }
+
+        const evidenceUrl = evidence.url || evidence.filePath;
+        const evidencePublicId = evidence.cloudinaryPublicId || null;
+
+        if (!evidenceUrl && !evidencePublicId) {
+          throw new BadRequestException('Evidência inválida: url é obrigatória');
+        }
+
+        const normalizedFileName =
+          evidence.fileName ||
+          (evidencePublicId
+            ? evidencePublicId.split('/').pop() || evidencePublicId
+            : 'uploaded-image');
+        const normalizedMimeType =
+          evidence.mimeType ||
+          (evidence.format ? `image/${evidence.format}` : 'image/*');
+        const normalizedSize = evidence.size ?? evidence.bytes ?? 0;
+
+        const whereCandidates: Array<Record<string, any>> = [];
+        if (evidencePublicId) {
+          whereCandidates.push({
             inspectionId: inspection.id,
             inspectionItemId: evidence.inspectionItemId || null,
-            fileName: evidence.fileName,
-            filePath: evidence.filePath,
-            size: evidence.size,
-          },
+            cloudinaryPublicId: evidencePublicId,
+          });
+        }
+        if (evidenceUrl) {
+          whereCandidates.push({
+            inspectionId: inspection.id,
+            inspectionItemId: evidence.inspectionItemId || null,
+            url: evidenceUrl,
+          });
+        }
+        whereCandidates.push({
+          inspectionId: inspection.id,
+          inspectionItemId: evidence.inspectionItemId || null,
+          filePath: evidenceUrl || evidencePublicId || normalizedFileName,
+          fileName: normalizedFileName,
+          size: normalizedSize,
+        });
+
+        const existingEvidence = await this.evidencesRepository.findOne({
+          where: whereCandidates,
         });
 
         if (!existingEvidence) {
           const newEvidence = this.evidencesRepository.create({
             inspectionId: inspection.id,
             inspectionItemId: evidence.inspectionItemId,
-            filePath: evidence.filePath,
-            fileName: evidence.fileName,
-            mimeType: evidence.mimeType,
-            size: evidence.size,
+            filePath: evidenceUrl || evidencePublicId || normalizedFileName,
+            fileName: normalizedFileName,
+            mimeType: normalizedMimeType,
+            size: normalizedSize,
+            cloudinaryPublicId: evidencePublicId,
+            url: evidenceUrl,
+            bytes: evidence.bytes ?? normalizedSize,
+            format: evidence.format || null,
+            width: evidence.width || null,
+            height: evidence.height || null,
             uploadedByUserId: userId,
           });
           await this.evidencesRepository.save(newEvidence);
@@ -645,31 +662,37 @@ export class InspectionsService {
 
   private async upsertSignatureFromSync(
     inspectionId: string,
-    signaturePayload: SyncSignaturePayload,
+    signaturePayload: SyncSignatureDto,
   ): Promise<void> {
     const existing = await this.signaturesRepository.findOne({
       where: { inspectionId },
     });
 
-    let imagePath = signaturePayload.imagePath || '';
-    if (signaturePayload.imageBase64) {
-      const imageBuffer = Buffer.from(signaturePayload.imageBase64, 'base64');
-      imagePath = await this.filesService.saveSignature(imageBuffer, inspectionId, 'image/png');
+    if (signaturePayload.imageBase64 || signaturePayload.dataUrl) {
+      throw new BadRequestException('Assets must be uploaded before sync');
     }
 
-    if (!imagePath && existing) {
-      imagePath = existing.imagePath;
+    let signatureUrl = signaturePayload.url || signaturePayload.imagePath || '';
+    let cloudinaryPublicId = signaturePayload.cloudinaryPublicId || null;
+
+    if (!signatureUrl && existing) {
+      signatureUrl = existing.url || existing.imagePath;
+    }
+    if (!cloudinaryPublicId && existing) {
+      cloudinaryPublicId = existing.cloudinaryPublicId;
     }
 
-    if (!imagePath) {
-      throw new BadRequestException('Assinatura inválida: imageBase64 ou imagePath é obrigatório');
+    if (!signatureUrl) {
+      throw new BadRequestException('Assinatura inválida: url é obrigatória');
     }
 
     if (existing) {
       await this.signaturesRepository.update(existing.id, {
         signerName: signaturePayload.signerName || existing.signerName,
         signerRoleLabel: signaturePayload.signerRoleLabel || existing.signerRoleLabel,
-        imagePath,
+        imagePath: signatureUrl,
+        cloudinaryPublicId,
+        url: signatureUrl,
         signedAt: signaturePayload.signedAt
           ? new Date(signaturePayload.signedAt)
           : existing.signedAt,
@@ -682,12 +705,26 @@ export class InspectionsService {
         inspectionId,
         signerName: signaturePayload.signerName,
         signerRoleLabel: signaturePayload.signerRoleLabel || 'Lider/Encarregado',
-        imagePath,
+        imagePath: signatureUrl,
+        cloudinaryPublicId,
+        url: signatureUrl,
         signedAt: signaturePayload.signedAt
           ? new Date(signaturePayload.signedAt)
           : new Date(),
       }),
     );
+  }
+
+  private base64ToBuffer(base64Value: string): Buffer {
+    const sanitizedValue = base64Value.includes(',')
+      ? base64Value.split(',').pop() || ''
+      : base64Value;
+
+    if (!sanitizedValue) {
+      throw new BadRequestException('Assinatura inválida');
+    }
+
+    return Buffer.from(sanitizedValue, 'base64');
   }
 
   async resolve(
@@ -706,12 +743,11 @@ export class InspectionsService {
 
     let resolutionEvidencePath: string | null = null;
     if (resolutionData.resolutionEvidence) {
-      const imageBuffer = Buffer.from(resolutionData.resolutionEvidence, 'base64');
-      resolutionEvidencePath = await this.filesService.saveSignature(
-        imageBuffer,
-        id,
-        'image/png',
-      );
+      const imageBuffer = this.base64ToBuffer(resolutionData.resolutionEvidence);
+      const uploaded = await this.cloudinaryService.uploadImage(imageBuffer, {
+        folder: 'quality/evidences',
+      });
+      resolutionEvidencePath = uploaded.secure_url;
     }
 
     // Atualizar PendingAdjustment

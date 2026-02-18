@@ -29,6 +29,12 @@ export class Signature {
   @Column({ name: 'image_path' })
   imagePath: string;
 
+  @Column({ name: 'cloudinary_public_id', nullable: true })
+  cloudinaryPublicId: string;
+
+  @Column({ nullable: true })
+  url: string;
+
   @Column({ name: 'signed_at' })
   signedAt: Date;
 }

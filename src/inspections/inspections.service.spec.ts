@@ -55,9 +55,8 @@ describe('InspectionsService', () => {
       findOne: jest.fn(),
     };
 
-    const filesService = {
-      saveEvidence: jest.fn(),
-      saveSignature: jest.fn(),
+    const cloudinaryService = {
+      uploadImage: jest.fn(),
     };
 
     const dataSource = {
@@ -71,7 +70,7 @@ describe('InspectionsService', () => {
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
-      filesService as any,
+      cloudinaryService as any,
       dataSource as any,
       new InspectionDomainService(),
     );
@@ -160,6 +159,35 @@ describe('InspectionsService', () => {
       externalId: syncPayload.externalId,
       serverId: 'server-id-1',
       status: 'UPDATED',
+    });
+  });
+
+  it('deve rejeitar payload com assets em dataUrl no sync', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'server-id-2',
+      externalId: '31a9e29b-1ca9-4d69-a6cf-e6367471743f',
+      status: 'RASCUNHO',
+      collaborators: [],
+    });
+
+    const result = await service.syncInspections(
+      [
+        {
+          externalId: '31a9e29b-1ca9-4d69-a6cf-e6367471743f',
+          module: ModuleType.QUALIDADE,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceDescription: 'Vistoria offline',
+          evidences: [{ dataUrl: 'data:image/png;base64,AAAA' }],
+        },
+      ] as any,
+      'user-id',
+      UserRole.FISCAL,
+    );
+
+    expect(result.results[0]).toMatchObject({
+      status: 'ERROR',
+      message: 'Assets must be uploaded before sync',
     });
   });
 });

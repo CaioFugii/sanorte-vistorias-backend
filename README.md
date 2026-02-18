@@ -8,6 +8,7 @@ API REST desenvolvida com NestJS para gerenciamento de vistorias em campo realiz
 - **TypeORM** - ORM para PostgreSQL
 - **PostgreSQL** - Banco de dados
 - **JWT** - Autenticação
+- **Cloudinary** - Armazenamento de imagens
 - **PDFKit** - Geração de PDFs
 - **TypeScript** - Linguagem
 
@@ -51,6 +52,7 @@ JWT_EXPIRES_IN=24h
 
 UPLOAD_MAX_SIZE=5242880
 STORAGE_PATH=./storage
+CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
 ```
 
 4. Crie o banco de dados:
@@ -170,6 +172,8 @@ Authorization: Bearer <token>
 - `PUT /inspections/:id/items` - Atualizar respostas dos itens
 - `POST /inspections/:id/evidences` - Upload de evidência (multipart/form-data)
 - `POST /inspections/:id/signature` - Adicionar assinatura
+- `POST /uploads` - Upload de imagem para Cloudinary (multipart/form-data)
+- `DELETE /uploads/:publicId` - Remover asset no Cloudinary
 - `POST /inspections/:id/finalize` - Finalizar vistoria (FISCAL/GESTOR)
 - `POST /inspections/:id/resolve` - Resolver pendência (GESTOR/ADMIN)
 - `GET /inspections/:id/pdf` - Gerar PDF da vistoria
@@ -220,6 +224,7 @@ Os módulos são fixos e não possuem CRUD:
 - Vistoria suporta `externalId`, `createdOffline` e `syncedAt`
 - `POST /sync/inspections` realiza upsert idempotente por `externalId`
 - Retorna mapeamento por registro sincronizado: `externalId -> serverId`
+- Payload de sync deve enviar referências de assets (`cloudinaryPublicId`/`url`); payload com `dataUrl` retorna `Assets must be uploaded before sync`
 
 ### Pendência
 - Se existir pelo menos 1 item `NAO_CONFORME` em vistoria finalizada:
@@ -233,12 +238,15 @@ Os módulos são fixos e não possuem CRUD:
 
 ## 📁 Upload de Arquivos
 
-Arquivos são armazenados localmente em:
-- `./storage/evidences/` - Fotos de evidência
-- `./storage/signatures/` - Assinaturas
+Uploads novos são armazenados no Cloudinary (via backend, signed upload) usando a variável:
+- `CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>`
 
 Formatos aceitos: JPG, PNG, WEBP
-Tamanho máximo: 5MB (configurável via `UPLOAD_MAX_SIZE`)
+Tamanho máximo no endpoint `/uploads`: 10MB
+
+Pastas padrão no Cloudinary:
+- `quality/evidences`
+- `quality/signatures`
 
 ## 📄 Geração de PDF
 
@@ -320,10 +328,10 @@ curl -X POST http://localhost:3000/inspections \
 
 ### Upload de Evidência
 ```bash
-curl -X POST http://localhost:3000/inspections/inspection-id/evidences \
+curl -X POST http://localhost:3000/uploads \
   -H "Authorization: Bearer <token>" \
   -F "file=@foto.jpg" \
-  -F "inspectionItemId=item-id"
+  -F "folder=quality/evidences"
 ```
 
 ### Finalizar Vistoria
@@ -365,7 +373,7 @@ heroku config:set JWT_EXPIRES_IN=24h
 heroku config:set UPLOAD_MAX_SIZE=5242880
 ```
 
-**Nota:** A variável `DATABASE_URL` é configurada automaticamente pelo addon PostgreSQL.
+**Nota:** A variável `DATABASE_URL` é configurada automaticamente pelo addon PostgreSQL e `CLOUDINARY_URL` é configurada automaticamente após adicionar o add-on Cloudinary.
 
 5. **Fazer deploy:**
 ```bash
@@ -406,16 +414,10 @@ heroku ps
 heroku restart
 ```
 
-### ⚠️ Limitações na Heroku
+### ✅ Uploads em Produção (Heroku)
 
-**Filesystem Efêmero:**
-- O filesystem da Heroku é efêmero (arquivos são perdidos quando o dyno reinicia)
-- Uploads de evidências e assinaturas serão perdidos após reinicialização
-- **Recomendação:** Para produção, implemente armazenamento em nuvem (AWS S3, Cloudinary, etc)
-
-**Solução Temporária:**
-- Para desenvolvimento/testes, os arquivos funcionarão normalmente
-- Para produção, considere migrar para serviço de storage externo
+- Com o add-on Cloudinary ativo, uploads de imagens não dependem do filesystem efêmero da Heroku.
+- `CLOUDINARY_URL` deve estar presente no ambiente da aplicação.
 
 ### Variáveis de Ambiente na Heroku
 
@@ -426,6 +428,7 @@ heroku restart
 | `JWT_SECRET` | Secret para JWT | Sim |
 | `JWT_EXPIRES_IN` | Expiração do token (padrão: 24h) | Não |
 | `UPLOAD_MAX_SIZE` | Tamanho máximo de upload em bytes | Não |
+| `CLOUDINARY_URL` | URL de conexão do Cloudinary add-on | Sim (para uploads) |
 | `PORT` | Porta (configurada automaticamente pela Heroku) | Não |
 
 ### Troubleshooting
@@ -460,8 +463,8 @@ cat Procfile
 ## 📝 Notas
 
 - O sistema foi desenvolvido para funcionar localmente
-- Uploads e PDFs são gerados no filesystem (na Heroku são efêmeros)
-- Não há dependência de serviços externos (S3, GCP, etc) - mas recomendado para produção
+- Uploads novos de evidências/assinaturas usam Cloudinary
+- Campos legados de storage local foram mantidos para compatibilidade
 - Em produção, considere implementar:
   - Armazenamento em nuvem para arquivos (AWS S3, Cloudinary, etc)
   - Cache para dashboards

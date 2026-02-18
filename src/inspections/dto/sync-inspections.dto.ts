@@ -1,0 +1,57 @@
+import { ChecklistAnswer, ModuleType } from '../../common/enums';
+
+export type SyncInspectionItemDto = {
+  checklistItemId: string;
+  answer?: ChecklistAnswer;
+  notes?: string;
+};
+
+export type SyncEvidenceDto = {
+  inspectionItemId?: string;
+  cloudinaryPublicId?: string;
+  url?: string;
+  bytes?: number;
+  format?: string;
+  width?: number;
+  height?: number;
+  // Legacy references (kept for compatibility)
+  filePath?: string;
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
+  // Legacy payload that is no longer accepted
+  dataUrl?: string;
+};
+
+export type SyncSignatureDto = {
+  signerName: string;
+  signerRoleLabel?: string;
+  cloudinaryPublicId?: string;
+  url?: string;
+  // Legacy references (kept for compatibility)
+  imagePath?: string;
+  // Legacy payload that is no longer accepted
+  imageBase64?: string;
+  dataUrl?: string;
+  signedAt?: string;
+};
+
+export type SyncInspectionDto = {
+  externalId: string;
+  module: ModuleType;
+  checklistId: string;
+  teamId: string;
+  serviceDescription: string;
+  locationDescription?: string;
+  collaboratorIds?: string[];
+  createdOffline?: boolean;
+  syncedAt?: string;
+  finalize?: boolean;
+  items?: SyncInspectionItemDto[];
+  evidences?: SyncEvidenceDto[];
+  signature?: SyncSignatureDto;
+};
+
+export type SyncInspectionsRequestDto = {
+  inspections: SyncInspectionDto[];
+};
