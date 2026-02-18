@@ -214,7 +214,7 @@ export class InspectionsService {
 
   async findOne(id: string): Promise<Inspection> {
     const inspection = await this.inspectionsRepository.findOne({
-      where: { id },
+      where: [{ id }, { externalId: id }],
       relations: [
         'checklist',
         'checklist.items',
@@ -257,8 +257,8 @@ export class InspectionsService {
     }
 
     // GESTOR e ADMIN podem editar sempre
-    await this.inspectionsRepository.update(id, inspectionData);
-    return this.findOne(id);
+    await this.inspectionsRepository.update(inspection.id, inspectionData);
+    return this.findOne(inspection.id);
   }
 
   async updateItems(
@@ -307,7 +307,7 @@ export class InspectionsService {
     });
 
     const evidence = this.evidencesRepository.create({
-      inspectionId: id,
+      inspectionId: inspection.id,
       inspectionItemId,
       filePath: uploaded.secure_url,
       fileName: file.originalname,
@@ -344,7 +344,7 @@ export class InspectionsService {
     });
 
     const signature = this.signaturesRepository.create({
-      inspectionId: id,
+      inspectionId: inspection.id,
       signerName,
       signerRoleLabel: 'Lider/Encarregado',
       imagePath: uploaded.secure_url,
@@ -370,9 +370,11 @@ export class InspectionsService {
       throw new BadRequestException('Vistoria já foi finalizada');
     }
 
+    const inspectionId = inspection.id;
+
     // Validar assinatura obrigatória
     const signature = await this.signaturesRepository.findOne({
-      where: { inspectionId: id },
+      where: { inspectionId },
     });
 
     if (!signature) {
@@ -383,7 +385,7 @@ export class InspectionsService {
 
     // Validar evidências para itens NAO_CONFORME
     const items = await this.inspectionItemsRepository.find({
-      where: { inspectionId: id },
+      where: { inspectionId },
       relations: ['checklistItem', 'evidences'],
     });
 
@@ -406,18 +408,18 @@ export class InspectionsService {
     }
 
     // Calcular percentual
-    const scorePercent = await this.calculateScorePercent(id);
+    const scorePercent = await this.calculateScorePercent(inspectionId);
 
     const status = this.inspectionDomainService.resolveFinalStatus(items);
     if (status === InspectionStatus.PENDENTE_AJUSTE) {
       // Criar ou atualizar PendingAdjustment
       let pending = await this.pendingAdjustmentsRepository.findOne({
-        where: { inspectionId: id },
+        where: { inspectionId },
       });
 
       if (!pending) {
         pending = this.pendingAdjustmentsRepository.create({
-          inspectionId: id,
+          inspectionId,
           status: PendingStatus.PENDENTE,
         });
       } else {
@@ -427,13 +429,13 @@ export class InspectionsService {
     }
 
     // Atualizar vistoria
-    await this.inspectionsRepository.update(id, {
+    await this.inspectionsRepository.update(inspectionId, {
       status,
       scorePercent,
       finalizedAt: new Date(),
     });
 
-    return this.findOne(id);
+    return this.findOne(inspectionId);
   }
 
   async syncInspections(
@@ -750,14 +752,16 @@ export class InspectionsService {
       resolutionEvidencePath = uploaded.secure_url;
     }
 
+    const inspectionId = inspection.id;
+
     // Atualizar PendingAdjustment
     let pending = await this.pendingAdjustmentsRepository.findOne({
-      where: { inspectionId: id },
+      where: { inspectionId },
     });
 
     if (!pending) {
       pending = this.pendingAdjustmentsRepository.create({
-        inspectionId: id,
+        inspectionId,
       });
     }
 
@@ -770,10 +774,10 @@ export class InspectionsService {
     await this.pendingAdjustmentsRepository.save(pending);
 
     // Atualizar status da vistoria
-    await this.inspectionsRepository.update(id, {
+    await this.inspectionsRepository.update(inspectionId, {
       status: InspectionStatus.RESOLVIDA,
     });
 
-    return this.findOne(id);
+    return this.findOne(inspectionId);
   }
 }
