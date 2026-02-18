@@ -7,7 +7,10 @@ export type SyncInspectionItemDto = {
 };
 
 export type SyncEvidenceDto = {
+  /** Id do item no app (pode não existir no servidor). Preferir checklistItemId no sync. */
   inspectionItemId?: string;
+  /** Id do item do checklist; usado para resolver o inspection_item no servidor. */
+  checklistItemId?: string;
   cloudinaryPublicId?: string;
   url?: string;
   bytes?: number;

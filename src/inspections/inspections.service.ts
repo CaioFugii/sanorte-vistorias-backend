@@ -585,6 +585,26 @@ export class InspectionsService {
           throw new BadRequestException('Evidência inválida: url é obrigatória');
         }
 
+        // Resolver inspectionItemId no servidor: client pode enviar id do app (não existe aqui) ou checklistItemId
+        let resolvedInspectionItemId: string | null = null;
+        if (evidence.checklistItemId) {
+          const item = await this.inspectionItemsRepository.findOne({
+            where: {
+              inspectionId: inspection.id,
+              checklistItemId: evidence.checklistItemId,
+            },
+          });
+          if (item) resolvedInspectionItemId = item.id;
+        } else if (evidence.inspectionItemId) {
+          const item = await this.inspectionItemsRepository.findOne({
+            where: {
+              id: evidence.inspectionItemId,
+              inspectionId: inspection.id,
+            },
+          });
+          if (item) resolvedInspectionItemId = item.id;
+        }
+
         const normalizedFileName =
           evidence.fileName ||
           (evidencePublicId
@@ -599,20 +619,20 @@ export class InspectionsService {
         if (evidencePublicId) {
           whereCandidates.push({
             inspectionId: inspection.id,
-            inspectionItemId: evidence.inspectionItemId || null,
+            inspectionItemId: resolvedInspectionItemId,
             cloudinaryPublicId: evidencePublicId,
           });
         }
         if (evidenceUrl) {
           whereCandidates.push({
             inspectionId: inspection.id,
-            inspectionItemId: evidence.inspectionItemId || null,
+            inspectionItemId: resolvedInspectionItemId,
             url: evidenceUrl,
           });
         }
         whereCandidates.push({
           inspectionId: inspection.id,
-          inspectionItemId: evidence.inspectionItemId || null,
+          inspectionItemId: resolvedInspectionItemId,
           filePath: evidenceUrl || evidencePublicId || normalizedFileName,
           fileName: normalizedFileName,
           size: normalizedSize,
@@ -625,7 +645,7 @@ export class InspectionsService {
         if (!existingEvidence) {
           const newEvidence = this.evidencesRepository.create({
             inspectionId: inspection.id,
-            inspectionItemId: evidence.inspectionItemId,
+            inspectionItemId: resolvedInspectionItemId,
             filePath: evidenceUrl || evidencePublicId || normalizedFileName,
             fileName: normalizedFileName,
             mimeType: normalizedMimeType,
