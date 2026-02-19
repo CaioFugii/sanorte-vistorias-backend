@@ -1004,7 +1004,7 @@ const response = await fetch(`http://localhost:3000/inspections/${inspectionId}/
 - `400 Bad Request`: "Vistoria já foi finalizada"
 
 #### POST /inspections/:id/items/:itemId/resolve
-- **Autenticação:** Requerida (GESTOR ou ADMIN)
+- **Autenticação:** Requerida (FISCAL, GESTOR ou ADMIN)
 - **Request Body:**
 ```json
 {
@@ -1030,7 +1030,7 @@ const response = await fetch(`http://localhost:3000/inspections/${inspectionId}/
 - `404 Not Found`: "Item não encontrado nesta vistoria"
 
 #### POST /inspections/:id/resolve
-- **Autenticação:** Requerida (GESTOR ou ADMIN)
+- **Autenticação:** Requerida (FISCAL, GESTOR ou ADMIN)
 - **Request Body:**
 ```json
 {
@@ -1265,7 +1265,7 @@ Quando uma vistoria é finalizada:
 - ✅ Editar vistoria (apenas se status = `RASCUNHO`)
 - ✅ Finalizar vistoria
 - ❌ Editar vistoria finalizada
-- ❌ Resolver pendências
+- ✅ Resolver itens não conformes e pendências
 - ✅ Ver apenas suas próprias vistorias (`/inspections/mine`)
 
 #### GESTOR

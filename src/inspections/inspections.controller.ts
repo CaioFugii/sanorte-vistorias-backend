@@ -131,7 +131,7 @@ export class InspectionsController {
 
   @Post(':id/items/:itemId/resolve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
   resolveItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
@@ -148,7 +148,7 @@ export class InspectionsController {
 
   @Post(':id/resolve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
   resolve(
     @Param('id') id: string,
     @Body() resolveDto: { resolutionNotes: string; resolutionEvidence?: string },

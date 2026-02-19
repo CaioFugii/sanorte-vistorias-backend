@@ -175,8 +175,8 @@ Authorization: Bearer <token>
 - `POST /uploads` - Upload de imagem para Cloudinary (multipart/form-data)
 - `DELETE /uploads/:publicId` - Remover asset no Cloudinary
 - `POST /inspections/:id/finalize` - Finalizar vistoria (FISCAL/GESTOR)
-- `POST /inspections/:id/items/:itemId/resolve` - Resolver um item não conforme (GESTOR/ADMIN); quando todos estiverem resolvidos, a vistoria fica RESOLVIDA
-- `POST /inspections/:id/resolve` - Resolver pendência (GESTOR/ADMIN); só permite quando todos os itens não conformes já foram resolvidos
+- `POST /inspections/:id/items/:itemId/resolve` - Resolver um item não conforme (FISCAL/GESTOR/ADMIN); quando todos estiverem resolvidos, a vistoria fica RESOLVIDA
+- `POST /inspections/:id/resolve` - Resolver pendência (FISCAL/GESTOR/ADMIN); só permite quando todos os itens não conformes já foram resolvidos
 - `GET /inspections/:id/pdf` - Gerar PDF da vistoria
 - `POST /sync/inspections` - Sincronização offline em lote (FISCAL/GESTOR/ADMIN)
 
@@ -199,7 +199,7 @@ Os módulos são fixos e não possuem CRUD:
 - Pode criar e finalizar vistorias
 - Pode editar apenas vistorias em RASCUNHO
 - Não pode editar vistorias finalizadas
-- Não pode resolver pendências
+- Pode resolver itens não conformes e pendências de vistorias
 
 ### GESTOR
 - Pode criar e finalizar vistorias
