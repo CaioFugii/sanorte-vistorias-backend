@@ -793,8 +793,10 @@ Response 200: `Inspection` atualizado
 
 ### PUT /inspections/:id/items
 
-- Auth: JWT
-- Regra: apenas vistoria em `RASCUNHO`
+- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Regra:
+  - FISCAL só atualiza itens se `status = RASCUNHO`
+  - GESTOR/ADMIN podem atualizar itens em qualquer status
 
 Request JSON:
 
@@ -831,8 +833,11 @@ Response 200:
 
 ### POST /inspections/:id/evidences
 
-- Auth: JWT
+- Auth: JWT + FISCAL ou GESTOR ou ADMIN
 - Body JSON: não se aplica (multipart/form-data com campo `file`; opcional `inspectionItemId`)
+- Regra:
+  - FISCAL só adiciona evidência se `status = RASCUNHO`
+  - GESTOR/ADMIN podem adicionar evidência em qualquer status
 
 Response 201:
 
@@ -1162,8 +1167,6 @@ Mensagens relevantes do domínio:
 
 - `Vistoria não encontrada`
 - `Fiscal não pode editar vistoria após finalização`
-- `Não é possível atualizar itens de vistoria finalizada`
-- `Não é possível adicionar evidências em vistoria finalizada`
 - `Não é possível adicionar assinatura em vistoria finalizada`
 - `Vistoria já foi finalizada`
 - `Assinatura do líder/encarregado é obrigatória para finalizar`

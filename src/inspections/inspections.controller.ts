@@ -82,14 +82,19 @@ export class InspectionsController {
   }
 
   @Put(':id/items')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
   updateItems(
     @Param('id') id: string,
     @Body() items: any[],
+    @CurrentUser() user: any,
   ) {
-    return this.inspectionsService.updateItems(id, items);
+    return this.inspectionsService.updateItems(id, items, user.role);
   }
 
   @Post(':id/evidences')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('file'))
   addEvidence(
     @Param('id') id: string,
@@ -107,7 +112,13 @@ export class InspectionsController {
     @Body('inspectionItemId') inspectionItemId?: string,
     @CurrentUser() user?: any,
   ) {
-    return this.inspectionsService.addEvidence(id, file, inspectionItemId, user?.id);
+    return this.inspectionsService.addEvidence(
+      id,
+      file,
+      inspectionItemId,
+      user?.id,
+      user?.role,
+    );
   }
 
   @Post(':id/signature')

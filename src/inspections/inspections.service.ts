@@ -282,13 +282,12 @@ export class InspectionsService {
   async updateItems(
     id: string,
     items: Array<{ inspectionItemId: string; answer: ChecklistAnswer; notes?: string }>,
+    userRole: UserRole,
   ): Promise<InspectionItem[]> {
     const inspection = await this.findOne(id);
 
-    if (inspection.status !== InspectionStatus.RASCUNHO) {
-      throw new BadRequestException(
-        'Não é possível atualizar itens de vistoria finalizada',
-      );
+    if (userRole === UserRole.FISCAL && inspection.status !== InspectionStatus.RASCUNHO) {
+      throw new ForbiddenException('Fiscal não pode editar vistoria após finalização');
     }
 
     const updatedItems = [];
@@ -311,13 +310,12 @@ export class InspectionsService {
     file: Express.Multer.File,
     inspectionItemId?: string,
     userId?: string,
+    userRole?: UserRole,
   ): Promise<Evidence> {
     const inspection = await this.findOne(id);
 
-    if (inspection.status !== InspectionStatus.RASCUNHO) {
-      throw new BadRequestException(
-        'Não é possível adicionar evidências em vistoria finalizada',
-      );
+    if (userRole === UserRole.FISCAL && inspection.status !== InspectionStatus.RASCUNHO) {
+      throw new ForbiddenException('Fiscal não pode editar vistoria após finalização');
     }
 
     const uploaded = await this.cloudinaryService.uploadImage(file.buffer, {
