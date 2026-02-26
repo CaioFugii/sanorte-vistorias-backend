@@ -758,6 +758,8 @@ Response 201: `Inspection` completo (já com `items` baseados no checklist)
   - `status`
   - `page`, `limit`
 - Response: paginação de `Inspection`
+- Regra: esta listagem não retorna vistorias com status `RASCUNHO`
+- Regra: se `status=RASCUNHO` for informado, o retorno é vazio (`data: []`)
 
 ### GET /inspections/mine
 

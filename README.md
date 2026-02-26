@@ -130,7 +130,7 @@ Authorization: Bearer <token>
 ### Inspections
 
 - `POST /inspections` (FISCAL/GESTOR)
-- `GET /inspections` (GESTOR/ADMIN)
+- `GET /inspections` (GESTOR/ADMIN; não lista `RASCUNHO`)
 - `GET /inspections/mine` (FISCAL)
 - `GET /inspections/:id` (autenticado)
 - `PUT /inspections/:id` (autenticado; regra por status/role)

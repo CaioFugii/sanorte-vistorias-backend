@@ -122,6 +122,21 @@ export class InspectionsService {
     page: number = 1,
     limit: number = 10,
   ): Promise<PaginatedResponseDto<Inspection>> {
+    // Listagem de ADMIN/GESTOR não deve retornar vistorias em rascunho.
+    if (filters.status === InspectionStatus.RASCUNHO) {
+      return {
+        data: [],
+        meta: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: page > 1,
+        },
+      };
+    }
+
     const skip = (page - 1) * limit;
 
     const query = this.inspectionsRepository
@@ -132,7 +147,10 @@ export class InspectionsService {
       .leftJoinAndSelect('inspection.items', 'items')
       .leftJoinAndSelect('items.checklistItem', 'checklistItem')
       .leftJoinAndSelect('checklistItem.section', 'checklistSection')
-      .leftJoinAndSelect('inspection.collaborators', 'collaborators');
+      .leftJoinAndSelect('inspection.collaborators', 'collaborators')
+      .andWhere('inspection.status != :draftStatus', {
+        draftStatus: InspectionStatus.RASCUNHO,
+      });
 
     if (filters.periodFrom) {
       query.andWhere('inspection.createdAt >= :periodFrom', {
