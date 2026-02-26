@@ -29,6 +29,7 @@ export class ChecklistsService {
   async findAll(
     module?: ModuleType,
     active?: boolean,
+    sectorId?: string,
     page: number = 1,
     limit: number = 10,
   ): Promise<PaginatedResponseDto<Checklist>> {
@@ -39,6 +40,9 @@ export class ChecklistsService {
     }
     if (typeof active === 'boolean') {
       where.active = active;
+    }
+    if (sectorId) {
+      where.sectorId = sectorId;
     }
 
     const [data, total] = await this.checklistsRepository.findAndCount({

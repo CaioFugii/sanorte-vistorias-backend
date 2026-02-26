@@ -14,7 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
-import { PaginationQueryDto } from '../common/dto/pagination.dto';
+import { FilterCollaboratorsDto } from './dto/filter-collaborators.dto';
 
 @Controller('collaborators')
 @UseGuards(JwtAuthGuard)
@@ -24,10 +24,11 @@ export class CollaboratorsController {
   ) {}
 
   @Get()
-  findAll(@Query() pagination: PaginationQueryDto) {
+  findAll(@Query() query: FilterCollaboratorsDto) {
     return this.collaboratorsService.findAll(
-      pagination.page || 1,
-      pagination.limit || 10,
+      query.sectorId,
+      query.page || 1,
+      query.limit || 10,
     );
   }
 

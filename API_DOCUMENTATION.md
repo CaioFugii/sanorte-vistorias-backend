@@ -514,7 +514,7 @@ Response 200: `Sector` atualizado
 ### GET /collaborators
 
 - Auth: JWT
-- Query: `page`, `limit`
+- Query: `page`, `limit`, `sectorId`
 - Response: paginação de `Collaborator` com relação `sector`
 
 ### POST /collaborators
@@ -578,6 +578,7 @@ Response 200: `Collaborator` atualizado
 - Query:
   - `module` (enum `ModuleType`)
   - `active` (`true`/`false`)
+  - `sectorId` (UUID)
   - `page`, `limit`
 - Response: paginação de `Checklist` com `sector`, `sections` e `items`
 

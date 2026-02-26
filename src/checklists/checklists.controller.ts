@@ -26,6 +26,7 @@ export class ChecklistsController {
     return this.checklistsService.findAll(
       query.module,
       query.active,
+      query.sectorId,
       query.page || 1,
       query.limit || 10,
     );

@@ -14,12 +14,19 @@ export class CollaboratorsService {
   ) {}
 
   async findAll(
+    sectorId?: string,
     page: number = 1,
     limit: number = 10,
   ): Promise<PaginatedResponseDto<Collaborator>> {
     const skip = (page - 1) * limit;
+    const where: Partial<Collaborator> = {};
+
+    if (sectorId) {
+      where.sectorId = sectorId;
+    }
 
     const [data, total] = await this.collaboratorsRepository.findAndCount({
+      where,
       relations: ['sector'],
       skip,
       take: limit,

@@ -108,6 +108,7 @@ Authorization: Bearer <token>
 ### Collaborators
 
 - `GET /collaborators` (autenticado)
+  - filtros opcionais: `sectorId`, `page`, `limit`
 - `POST /collaborators` (ADMIN)
 - `PUT /collaborators/:id` (ADMIN)
 - `DELETE /collaborators/:id` (ADMIN)
@@ -115,6 +116,7 @@ Authorization: Bearer <token>
 ### Checklists
 
 - `GET /checklists` (autenticado)
+  - filtros opcionais: `module`, `active`, `sectorId`, `page`, `limit`
 - `GET /checklists/:id` (autenticado)
 - `POST /checklists` (ADMIN)
 - `PUT /checklists/:id` (ADMIN)
