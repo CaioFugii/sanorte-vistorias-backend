@@ -7,6 +7,7 @@ import appConfig from './config/app.config';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { TeamsModule } from './teams/teams.module';
+import { SectorsModule } from './sectors/sectors.module';
 import { CollaboratorsModule } from './collaborators/collaborators.module';
 import { ChecklistsModule } from './checklists/checklists.module';
 import { InspectionsModule } from './inspections/inspections.module';
@@ -30,6 +31,7 @@ import { UploadsModule } from './uploads/uploads.module';
     AuthModule,
     UsersModule,
     TeamsModule,
+    SectorsModule,
     CollaboratorsModule,
     ChecklistsModule,
     InspectionsModule,

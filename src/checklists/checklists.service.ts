@@ -1,7 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Checklist, ChecklistItem, ChecklistSection, Inspection } from '../entities';
+import {
+  Checklist,
+  ChecklistItem,
+  ChecklistSection,
+  Inspection,
+  Sector,
+} from '../entities';
 import { ModuleType } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
@@ -16,6 +22,8 @@ export class ChecklistsService {
     private checklistSectionsRepository: Repository<ChecklistSection>,
     @InjectRepository(Inspection)
     private inspectionsRepository: Repository<Inspection>,
+    @InjectRepository(Sector)
+    private sectorsRepository: Repository<Sector>,
   ) {}
 
   async findAll(
@@ -35,7 +43,7 @@ export class ChecklistsService {
 
     const [data, total] = await this.checklistsRepository.findAndCount({
       where,
-      relations: ['items', 'items.section', 'sections'],
+      relations: ['sector', 'items', 'items.section', 'sections'],
       skip,
       take: limit,
       order: { createdAt: 'DESC' },
@@ -59,7 +67,7 @@ export class ChecklistsService {
   async findOne(id: string): Promise<Checklist> {
     return this.checklistsRepository.findOne({
       where: { id },
-      relations: ['items', 'items.section', 'sections'],
+      relations: ['sector', 'items', 'items.section', 'sections'],
     });
   }
 
@@ -68,7 +76,9 @@ export class ChecklistsService {
     name: string;
     description?: string;
     active?: boolean;
+    sectorId?: string;
   }): Promise<Checklist> {
+    await this.validateSector(checklistData.sectorId);
     const checklist = this.checklistsRepository.create(checklistData);
     const savedChecklist = await this.checklistsRepository.save(checklist);
     await this.ensureDefaultSection(savedChecklist.id);
@@ -76,6 +86,10 @@ export class ChecklistsService {
   }
 
   async update(id: string, checklistData: Partial<Checklist>): Promise<Checklist> {
+    if (Object.prototype.hasOwnProperty.call(checklistData, 'sectorId')) {
+      await this.validateSector(checklistData.sectorId);
+    }
+
     await this.checklistsRepository.update(id, checklistData);
     return this.findOne(id);
   }
@@ -180,5 +194,16 @@ export class ChecklistsService {
     }
 
     return section;
+  }
+
+  private async validateSector(sectorId?: string): Promise<void> {
+    if (!sectorId) {
+      return;
+    }
+
+    const sectorExists = await this.sectorsRepository.exist({ where: { id: sectorId } });
+    if (!sectorExists) {
+      throw new BadRequestException('sectorId informado não existe');
+    }
   }
 }

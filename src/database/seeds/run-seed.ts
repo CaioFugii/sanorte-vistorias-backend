@@ -1,7 +1,7 @@
 import { DataSource } from 'typeorm';
 import { typeormConfig } from '../../config/typeorm.config';
-import { User } from '../../entities';
-import { UserRole, ModuleType } from '../../common/enums';
+import { User, Sector } from '../../entities';
+import { UserRole } from '../../common/enums';
 import * as bcrypt from 'bcrypt';
 
 async function seed() {
@@ -9,6 +9,25 @@ async function seed() {
   await dataSource.initialize();
 
   const userRepository = dataSource.getRepository(User);
+  const sectorRepository = dataSource.getRepository(Sector);
+
+  // Criar setores padrão
+  const defaultSectors = ['ESGOTO', 'AGUA', 'REPOSICAO'];
+  for (const sectorName of defaultSectors) {
+    const existingSector = await sectorRepository.findOne({
+      where: { name: sectorName },
+    });
+
+    if (!existingSector) {
+      await sectorRepository.save(
+        sectorRepository.create({
+          name: sectorName,
+          active: true,
+        }),
+      );
+      console.log(`✓ Setor criado: ${sectorName}`);
+    }
+  }
 
   // Criar usuários padrão
   const defaultPassword = 'senha123'; // Documentar no README

@@ -2,11 +2,23 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ChecklistsService } from './checklists.service';
 import { ChecklistsController } from './checklists.controller';
-import { Checklist, ChecklistItem, ChecklistSection, Inspection } from '../entities';
+import {
+  Checklist,
+  ChecklistItem,
+  ChecklistSection,
+  Inspection,
+  Sector,
+} from '../entities';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Checklist, ChecklistItem, ChecklistSection, Inspection]),
+    TypeOrmModule.forFeature([
+      Checklist,
+      ChecklistItem,
+      ChecklistSection,
+      Inspection,
+      Sector,
+    ]),
   ],
   controllers: [ChecklistsController],
   providers: [ChecklistsService],

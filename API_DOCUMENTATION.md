@@ -102,12 +102,30 @@ Resposta paginada:
 }
 ```
 
+### Sector
+
+```json
+{
+  "id": "uuid",
+  "name": "ESGOTO",
+  "active": true,
+  "createdAt": "2026-02-19T12:00:00.000Z",
+  "updatedAt": "2026-02-19T12:00:00.000Z"
+}
+```
+
 ### Collaborator
 
 ```json
 {
   "id": "uuid",
   "name": "Colaborador 1",
+  "sectorId": "uuid",
+  "sector": {
+    "id": "uuid",
+    "name": "ESGOTO",
+    "active": true
+  },
   "active": true,
   "createdAt": "2026-02-19T12:00:00.000Z",
   "updatedAt": "2026-02-19T12:00:00.000Z"
@@ -122,6 +140,12 @@ Resposta paginada:
   "module": "QUALIDADE",
   "name": "Checklist Qualidade",
   "description": "string",
+  "sectorId": "uuid",
+  "sector": {
+    "id": "uuid",
+    "name": "ESGOTO",
+    "active": true
+  },
   "active": true,
   "sections": [
     {
@@ -426,13 +450,72 @@ Response 200: `Team` atualizado
 - Auth: JWT + ADMIN
 - Response 200: vazio
 
+## Sectors
+
+### GET /sectors
+
+- Auth: JWT
+- Query: `page`, `limit`
+- Response: paginação de `Sector`
+
+### GET /sectors/:id
+
+- Auth: JWT
+- Response 200: `Sector`
+
+### POST /sectors
+
+- Auth: JWT + ADMIN
+
+Request JSON:
+
+```json
+{
+  "name": "ESGOTO",
+  "active": true
+}
+```
+
+Response 201:
+
+```json
+{
+  "id": "uuid",
+  "name": "ESGOTO",
+  "active": true,
+  "createdAt": "2026-02-19T12:00:00.000Z",
+  "updatedAt": "2026-02-19T12:00:00.000Z"
+}
+```
+
+### PUT /sectors/:id
+
+- Auth: JWT + ADMIN
+
+Request JSON (parcial):
+
+```json
+{
+  "name": "NOVO_SETOR",
+  "active": true
+}
+```
+
+Response 200: `Sector` atualizado
+
+### DELETE /sectors/:id
+
+- Auth: JWT + ADMIN
+- Response 200: vazio
+- Regra: retorna `400` se o setor estiver vinculado a colaboradores ou checklists
+
 ## Collaborators
 
 ### GET /collaborators
 
 - Auth: JWT
 - Query: `page`, `limit`
-- Response: paginação de `Collaborator` ativos
+- Response: paginação de `Collaborator` com relação `sector`
 
 ### POST /collaborators
 
@@ -443,6 +526,7 @@ Request JSON:
 ```json
 {
   "name": "Novo Colaborador",
+  "sectorId": "uuid",
   "active": true
 }
 ```
@@ -453,6 +537,12 @@ Response 201:
 {
   "id": "uuid",
   "name": "Novo Colaborador",
+  "sectorId": "uuid",
+  "sector": {
+    "id": "uuid",
+    "name": "ESGOTO",
+    "active": true
+  },
   "active": true,
   "createdAt": "2026-02-19T12:00:00.000Z",
   "updatedAt": "2026-02-19T12:00:00.000Z"
@@ -468,6 +558,7 @@ Request JSON (parcial):
 ```json
 {
   "name": "Nome Atualizado",
+  "sectorId": "uuid",
   "active": false
 }
 ```
@@ -488,12 +579,12 @@ Response 200: `Collaborator` atualizado
   - `module` (enum `ModuleType`)
   - `active` (`true`/`false`)
   - `page`, `limit`
-- Response: paginação de `Checklist` com `sections` e `items`
+- Response: paginação de `Checklist` com `sector`, `sections` e `items`
 
 ### GET /checklists/:id
 
 - Auth: JWT
-- Response 200: `Checklist` completo
+- Response 200: `Checklist` completo com relação `sector`
 
 ### POST /checklists
 
@@ -506,6 +597,7 @@ Request JSON:
   "module": "QUALIDADE",
   "name": "Checklist de Qualidade",
   "description": "Checklist padrão",
+  "sectorId": "uuid",
   "active": true
 }
 ```
@@ -521,6 +613,7 @@ Request JSON (parcial):
 ```json
 {
   "name": "Checklist Atualizado",
+  "sectorId": "uuid",
   "active": false
 }
 ```

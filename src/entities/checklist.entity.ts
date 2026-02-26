@@ -5,11 +5,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { ModuleType } from '../common/enums';
 import { ChecklistItem } from './checklist-item.entity';
 import { Inspection } from './inspection.entity';
 import { ChecklistSection } from './checklist-section.entity';
+import { Sector } from './sector.entity';
 
 @Entity('checklists')
 export class Checklist {
@@ -31,6 +34,9 @@ export class Checklist {
   @Column({ default: true })
   active: boolean;
 
+  @Column({ name: 'sector_id', nullable: true })
+  sectorId: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -45,4 +51,8 @@ export class Checklist {
 
   @OneToMany(() => Inspection, (inspection) => inspection.checklist)
   inspections: Inspection[];
+
+  @ManyToOne(() => Sector, (sector) => sector.checklists, { nullable: true })
+  @JoinColumn({ name: 'sector_id' })
+  sector: Sector;
 }

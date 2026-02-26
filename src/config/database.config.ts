@@ -6,7 +6,6 @@ import * as entities from '../entities';
 export function getDatabaseConfig(
   configService: ConfigService,
 ): TypeOrmModuleOptions {
-  // Função para parsear DATABASE_URL da Heroku
   function parseDatabaseUrl() {
     const databaseUrl = configService.get<string>('DATABASE_URL');
 

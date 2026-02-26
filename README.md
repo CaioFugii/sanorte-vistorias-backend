@@ -55,6 +55,8 @@ npm run seed
 | gestor@sanorte.com | senha123 | GESTOR |
 | fiscal@sanorte.com | senha123 | FISCAL |
 
+Setores padrão (seed): `ESGOTO`, `AGUA`, `REPOSICAO`.
+
 ## Executar
 
 ```bash
@@ -94,6 +96,14 @@ Authorization: Bearer <token>
 - `POST /teams` (ADMIN)
 - `PUT /teams/:id` (ADMIN)
 - `DELETE /teams/:id` (ADMIN)
+
+### Sectors
+
+- `GET /sectors` (autenticado)
+- `GET /sectors/:id` (autenticado)
+- `POST /sectors` (ADMIN)
+- `PUT /sectors/:id` (ADMIN)
+- `DELETE /sectors/:id` (ADMIN)
 
 ### Collaborators
 
@@ -146,6 +156,10 @@ Authorization: Bearer <token>
 
 ## Regras de negócio principais
 
+- O sistema possui setores padrão (`ESGOTO`, `AGUA`, `REPOSICAO`) e permite cadastrar novos via endpoint de `sectors`.
+- `Collaborator` e `Checklist` podem ser vinculados a um setor por `sectorId`.
+- Ao informar `sectorId` em criação/edição de colaborador ou checklist, o setor precisa existir.
+- Não é permitido deletar setor vinculado a colaboradores ou checklists.
 - FISCAL só edita vistoria em `RASCUNHO`.
 - `POST /inspections/:id/finalize` exige:
   - assinatura do líder/encarregado;

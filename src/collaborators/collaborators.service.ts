@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Collaborator } from '../entities';
+import { Collaborator, Sector } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
@@ -9,6 +9,8 @@ export class CollaboratorsService {
   constructor(
     @InjectRepository(Collaborator)
     private collaboratorsRepository: Repository<Collaborator>,
+    @InjectRepository(Sector)
+    private sectorsRepository: Repository<Sector>,
   ) {}
 
   async findAll(
@@ -18,7 +20,7 @@ export class CollaboratorsService {
     const skip = (page - 1) * limit;
 
     const [data, total] = await this.collaboratorsRepository.findAndCount({
-      where: { active: true },
+      relations: ['sector'],
       skip,
       take: limit,
       order: { createdAt: 'DESC' },
@@ -40,25 +42,45 @@ export class CollaboratorsService {
   }
 
   async findOne(id: string): Promise<Collaborator> {
-    return this.collaboratorsRepository.findOne({ where: { id } });
+    return this.collaboratorsRepository.findOne({
+      where: { id },
+      relations: ['sector'],
+    });
   }
 
   async create(
-    collaboratorData: { name: string; active?: boolean },
+    collaboratorData: { name: string; active?: boolean; sectorId?: string },
   ): Promise<Collaborator> {
+    await this.validateSector(collaboratorData.sectorId);
     const collaborator = this.collaboratorsRepository.create(collaboratorData);
-    return this.collaboratorsRepository.save(collaborator);
+    const saved = await this.collaboratorsRepository.save(collaborator);
+    return this.findOne(saved.id);
   }
 
   async update(
     id: string,
     collaboratorData: Partial<Collaborator>,
   ): Promise<Collaborator> {
+    if (Object.prototype.hasOwnProperty.call(collaboratorData, 'sectorId')) {
+      await this.validateSector(collaboratorData.sectorId);
+    }
+
     await this.collaboratorsRepository.update(id, collaboratorData);
     return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
     await this.collaboratorsRepository.delete(id);
+  }
+
+  private async validateSector(sectorId?: string): Promise<void> {
+    if (!sectorId) {
+      return;
+    }
+
+    const sectorExists = await this.sectorsRepository.exist({ where: { id: sectorId } });
+    if (!sectorExists) {
+      throw new BadRequestException('sectorId informado não existe');
+    }
   }
 }

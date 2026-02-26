@@ -1,5 +1,6 @@
 export * from './user.entity';
 export * from './team.entity';
+export * from './sector.entity';
 export * from './collaborator.entity';
 export * from './checklist.entity';
 export * from './checklist-section.entity';
