@@ -163,6 +163,8 @@ Authorization: Bearer <token>
 - Ao informar `sectorId` em criação/edição de colaborador ou checklist, o setor precisa existir.
 - Não é permitido deletar setor vinculado a colaboradores ou checklists.
 - FISCAL só edita vistoria em `RASCUNHO`.
+- Atualização de itens recalcula automaticamente a nota da vistoria (`scorePercent`).
+- Para GESTOR/ADMIN, ao atualizar itens em vistoria `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA` ↔ `PENDENTE_AJUSTE`).
 - `POST /inspections/:id/finalize` exige:
   - assinatura do líder/encarregado;
   - evidência para item `NAO_CONFORME` quando `requiresPhotoOnNonConformity = true`.

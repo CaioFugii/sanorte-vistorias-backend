@@ -70,7 +70,9 @@ export class InspectionsService {
       createdByUserId: userId,
       status: InspectionStatus.RASCUNHO,
       createdOffline: inspectionData.createdOffline || false,
-      syncedAt: inspectionData.syncedAt ? new Date(inspectionData.syncedAt) : null,
+      syncedAt: inspectionData.syncedAt
+        ? new Date(inspectionData.syncedAt)
+        : null,
     });
 
     const savedInspection = await this.inspectionsRepository.save(inspection);
@@ -93,13 +95,17 @@ export class InspectionsService {
     }
 
     // Adicionar colaboradores se fornecidos
-    if (inspectionData.collaboratorIds && inspectionData.collaboratorIds.length > 0) {
+    if (
+      inspectionData.collaboratorIds &&
+      inspectionData.collaboratorIds.length > 0
+    ) {
       const inspection = await this.inspectionsRepository.findOne({
         where: { id: savedInspection.id },
         relations: ['collaborators'],
       });
       if (inspection) {
-        const collaboratorRepository = this.dataSource.getRepository(Collaborator);
+        const collaboratorRepository =
+          this.dataSource.getRepository(Collaborator);
         const collaborators = await collaboratorRepository.findBy({
           id: In(inspectionData.collaboratorIds),
         });
@@ -268,7 +274,10 @@ export class InspectionsService {
     const inspection = await this.findOne(id);
 
     // FISCAL só pode editar se status = RASCUNHO
-    if (userRole === 'FISCAL' && inspection.status !== InspectionStatus.RASCUNHO) {
+    if (
+      userRole === 'FISCAL' &&
+      inspection.status !== InspectionStatus.RASCUNHO
+    ) {
       throw new ForbiddenException(
         'Fiscal não pode editar vistoria após finalização',
       );
@@ -281,13 +290,23 @@ export class InspectionsService {
 
   async updateItems(
     id: string,
-    items: Array<{ inspectionItemId: string; answer: ChecklistAnswer; notes?: string }>,
+    items: Array<{
+      inspectionItemId: string;
+      answer: ChecklistAnswer;
+      notes?: string;
+    }>,
+    userId: string,
     userRole: UserRole,
   ): Promise<InspectionItem[]> {
     const inspection = await this.findOne(id);
 
-    if (userRole === UserRole.FISCAL && inspection.status !== InspectionStatus.RASCUNHO) {
-      throw new ForbiddenException('Fiscal não pode editar vistoria após finalização');
+    if (
+      userRole === UserRole.FISCAL &&
+      inspection.status !== InspectionStatus.RASCUNHO
+    ) {
+      throw new ForbiddenException(
+        'Fiscal não pode editar vistoria após finalização',
+      );
     }
 
     const updatedItems = [];
@@ -302,6 +321,25 @@ export class InspectionsService {
       if (updated) updatedItems.push(updated);
     }
 
+    const refreshedItems = await this.inspectionItemsRepository.find({
+      where: { inspectionId: inspection.id },
+    });
+    const scorePercent = this.inspectionDomainService.calculateScorePercent(refreshedItems);
+
+    const inspectionUpdates: Partial<Inspection> = { scorePercent };
+
+    if (
+      (userRole === UserRole.ADMIN || userRole === UserRole.GESTOR) &&
+      (inspection.status === InspectionStatus.FINALIZADA ||
+        inspection.status === InspectionStatus.PENDENTE_AJUSTE)
+    ) {
+      const nextStatus = this.inspectionDomainService.resolveFinalStatus(refreshedItems);
+      inspectionUpdates.status = nextStatus;
+      await this.syncPendingAdjustmentByStatus(inspection.id, nextStatus, userId);
+    }
+
+    await this.inspectionsRepository.update(inspection.id, inspectionUpdates);
+
     return updatedItems;
   }
 
@@ -314,8 +352,13 @@ export class InspectionsService {
   ): Promise<Evidence> {
     const inspection = await this.findOne(id);
 
-    if (userRole === UserRole.FISCAL && inspection.status !== InspectionStatus.RASCUNHO) {
-      throw new ForbiddenException('Fiscal não pode editar vistoria após finalização');
+    if (
+      userRole === UserRole.FISCAL &&
+      inspection.status !== InspectionStatus.RASCUNHO
+    ) {
+      throw new ForbiddenException(
+        'Fiscal não pode editar vistoria após finalização',
+      );
     }
 
     const uploaded = await this.cloudinaryService.uploadImage(file.buffer, {
@@ -379,7 +422,11 @@ export class InspectionsService {
     return this.inspectionDomainService.calculateScorePercent(items);
   }
 
-  async finalize(id: string, userId: string, userRole: string): Promise<Inspection> {
+  async finalize(
+    id: string,
+    userId: string,
+    userRole: string,
+  ): Promise<Inspection> {
     const inspection = await this.findOne(id);
 
     if (inspection.status !== InspectionStatus.RASCUNHO) {
@@ -480,7 +527,11 @@ export class InspectionsService {
     for (const payload of inspections) {
       const externalId = payload?.externalId || '';
       try {
-        const result = await this.syncSingleInspection(payload, userId, userRole);
+        const result = await this.syncSingleInspection(
+          payload,
+          userId,
+          userRole,
+        );
         results.push(result);
       } catch (error: any) {
         results.push({
@@ -504,7 +555,9 @@ export class InspectionsService {
     status: 'CREATED' | 'UPDATED';
   }> {
     if (!payload?.externalId) {
-      throw new BadRequestException('externalId é obrigatório para sincronização');
+      throw new BadRequestException(
+        'externalId é obrigatório para sincronização',
+      );
     }
 
     let inspection = await this.inspectionsRepository.findOne({
@@ -531,7 +584,10 @@ export class InspectionsService {
       );
       status = 'CREATED';
     } else {
-      if (userRole === UserRole.FISCAL && inspection.status !== InspectionStatus.RASCUNHO) {
+      if (
+        userRole === UserRole.FISCAL &&
+        inspection.status !== InspectionStatus.RASCUNHO
+      ) {
         throw new ForbiddenException(
           'Fiscal não pode editar vistoria após finalização',
         );
@@ -541,22 +597,27 @@ export class InspectionsService {
         module: payload.module ?? inspection.module,
         checklistId: payload.checklistId ?? inspection.checklistId,
         teamId: payload.teamId ?? inspection.teamId,
-        serviceDescription: payload.serviceDescription ?? inspection.serviceDescription,
-        locationDescription: payload.locationDescription ?? inspection.locationDescription,
+        serviceDescription:
+          payload.serviceDescription ?? inspection.serviceDescription,
+        locationDescription:
+          payload.locationDescription ?? inspection.locationDescription,
         createdOffline: payload.createdOffline ?? inspection.createdOffline,
         syncedAt: payload.syncedAt ? new Date(payload.syncedAt) : new Date(),
       });
 
       if (payload.collaboratorIds) {
-        const inspectionWithRelations = await this.inspectionsRepository.findOne({
-          where: { id: inspection.id },
-          relations: ['collaborators'],
-        });
-        if (inspectionWithRelations) {
-          const collaboratorRepository = this.dataSource.getRepository(Collaborator);
-          inspectionWithRelations.collaborators = await collaboratorRepository.findBy({
-            id: In(payload.collaboratorIds),
+        const inspectionWithRelations =
+          await this.inspectionsRepository.findOne({
+            where: { id: inspection.id },
+            relations: ['collaborators'],
           });
+        if (inspectionWithRelations) {
+          const collaboratorRepository =
+            this.dataSource.getRepository(Collaborator);
+          inspectionWithRelations.collaborators =
+            await collaboratorRepository.findBy({
+              id: In(payload.collaboratorIds),
+            });
           await this.inspectionsRepository.save(inspectionWithRelations);
         }
       }
@@ -598,7 +659,9 @@ export class InspectionsService {
         const evidencePublicId = evidence.cloudinaryPublicId || null;
 
         if (!evidenceUrl && !evidencePublicId) {
-          throw new BadRequestException('Evidência inválida: url é obrigatória');
+          throw new BadRequestException(
+            'Evidência inválida: url é obrigatória',
+          );
         }
 
         // Resolver inspectionItemId no servidor: client pode enviar id do app (não existe aqui) ou checklistItemId
@@ -727,7 +790,8 @@ export class InspectionsService {
     if (existing) {
       await this.signaturesRepository.update(existing.id, {
         signerName: signaturePayload.signerName || existing.signerName,
-        signerRoleLabel: signaturePayload.signerRoleLabel || existing.signerRoleLabel,
+        signerRoleLabel:
+          signaturePayload.signerRoleLabel || existing.signerRoleLabel,
         imagePath: signatureUrl,
         cloudinaryPublicId,
         url: signatureUrl,
@@ -742,7 +806,8 @@ export class InspectionsService {
       this.signaturesRepository.create({
         inspectionId,
         signerName: signaturePayload.signerName,
-        signerRoleLabel: signaturePayload.signerRoleLabel || 'Lider/Encarregado',
+        signerRoleLabel:
+          signaturePayload.signerRoleLabel || 'Lider/Encarregado',
         imagePath: signatureUrl,
         cloudinaryPublicId,
         url: signatureUrl,
@@ -769,7 +834,9 @@ export class InspectionsService {
    * Aceita resolutionEvidence como URL (recomendado) ou base64.
    * Se for URL (http/https), retorna como está. Caso contrário, faz upload e retorna a URL.
    */
-  private async resolutionEvidenceToPath(value: string): Promise<string | null> {
+  private async resolutionEvidenceToPath(
+    value: string,
+  ): Promise<string | null> {
     if (!value?.trim()) return null;
     const trimmed = value.trim();
     if (
@@ -804,7 +871,7 @@ export class InspectionsService {
       throw new BadRequestException('Vistoria não está pendente de ajuste');
     }
 
-    let item = await this.inspectionItemsRepository.findOne({
+    const item = await this.inspectionItemsRepository.findOne({
       where: { id: itemId },
     });
 
@@ -824,10 +891,9 @@ export class InspectionsService {
       );
     }
 
-    const resolutionEvidencePath =
-      await this.resolutionEvidenceToPath(
-        resolutionData.resolutionEvidence ?? '',
-      );
+    const resolutionEvidencePath = await this.resolutionEvidenceToPath(
+      resolutionData.resolutionEvidence ?? '',
+    );
 
     item.resolvedAt = new Date();
     item.resolvedByUserId = userId;
@@ -835,7 +901,10 @@ export class InspectionsService {
     item.resolutionEvidencePath = resolutionEvidencePath;
     await this.inspectionItemsRepository.save(item);
 
-    await this.tryMarkInspectionResolvedIfAllItemsResolved(inspectionId, userId);
+    await this.tryMarkInspectionResolvedIfAllItemsResolved(
+      inspectionId,
+      userId,
+    );
 
     const updated = await this.inspectionItemsRepository.findOne({
       where: { id: itemId },
@@ -882,6 +951,41 @@ export class InspectionsService {
     });
   }
 
+  private async syncPendingAdjustmentByStatus(
+    inspectionId: string,
+    nextStatus: InspectionStatus,
+    userId: string,
+  ): Promise<void> {
+    if (
+      nextStatus !== InspectionStatus.PENDENTE_AJUSTE &&
+      nextStatus !== InspectionStatus.FINALIZADA
+    ) {
+      return;
+    }
+
+    let pending = await this.pendingAdjustmentsRepository.findOne({
+      where: { inspectionId },
+    });
+
+    if (!pending) {
+      pending = this.pendingAdjustmentsRepository.create({ inspectionId });
+    }
+
+    if (nextStatus === InspectionStatus.PENDENTE_AJUSTE) {
+      pending.status = PendingStatus.PENDENTE;
+      pending.resolvedAt = null;
+      pending.resolvedByUserId = null;
+      pending.resolutionNotes = null;
+      pending.resolutionEvidencePath = null;
+    } else {
+      pending.status = PendingStatus.RESOLVIDA;
+      pending.resolvedAt = new Date();
+      pending.resolvedByUserId = userId;
+    }
+
+    await this.pendingAdjustmentsRepository.save(pending);
+  }
+
   /**
    * Resolve a vistoria inteira. Só é permitido quando todos os itens não conformes
    * já foram resolvidos individualmente (resolvedAt preenchido).
@@ -911,10 +1015,9 @@ export class InspectionsService {
       );
     }
 
-    const resolutionEvidencePath =
-      await this.resolutionEvidenceToPath(
-        resolutionData.resolutionEvidence ?? '',
-      );
+    const resolutionEvidencePath = await this.resolutionEvidenceToPath(
+      resolutionData.resolutionEvidence ?? '',
+    );
 
     const inspectionId = inspection.id;
 

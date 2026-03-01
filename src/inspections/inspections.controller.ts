@@ -89,7 +89,7 @@ export class InspectionsController {
     @Body() items: any[],
     @CurrentUser() user: any,
   ) {
-    return this.inspectionsService.updateItems(id, items, user.role);
+    return this.inspectionsService.updateItems(id, items, user.id, user.role);
   }
 
   @Post(':id/evidences')

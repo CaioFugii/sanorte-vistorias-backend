@@ -1,5 +1,108 @@
 # API Documentation - Sanorte Vistorias Backend
 
+## Guia rápido para Agent (Frontend)
+
+Esta seção foi criada para acelerar implementação de novas funcionalidades no frontend e reduzir dúvida sobre regra de negócio.
+
+### Como usar este documento com eficiência
+
+- Leia primeiro esta seção (`Guia rápido para Agent`).
+- Depois vá direto para o módulo de endpoint necessário (`Auth`, `Inspections`, `Checklists`, etc.).
+- Use `Permissões por role` para checar visibilidade e ações em tela.
+- Use `Erros comuns` para mapear mensagens que já devem ser tratadas na UI.
+
+### Bootstrapping de autenticação
+
+1. Faça login em `POST /auth/login`.
+2. Salve `accessToken`.
+3. Envie em todas as rotas autenticadas:
+
+```text
+Authorization: Bearer <token>
+```
+
+### Mapa rápido de telas -> endpoints
+
+- Login / sessão: `POST /auth/login`, `GET /auth/me`
+- Usuários: `GET/POST/PUT/DELETE /users`
+- Equipes: `GET/POST/PUT/DELETE /teams`
+- Setores: `GET/POST/PUT/DELETE /sectors`
+- Colaboradores: `GET/POST/PUT/DELETE /collaborators`
+- Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections` e `items`
+- Vistorias:
+  - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/mine`, `GET /inspections/:id`
+  - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
+  - anexos e assinatura: `POST /inspections/:id/evidences`, `POST /inspections/:id/signature`
+  - transições: `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
+  - PDF: `GET /inspections/:id/pdf`
+- Sync offline: `POST /sync/inspections`
+- Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
+- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`
+
+### Regras críticas que impactam UI
+
+- `GET /inspections` (GESTOR/ADMIN) não retorna `RASCUNHO`.
+- `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
+- `PUT /inspections/:id`:
+  - FISCAL só edita em `RASCUNHO`.
+  - GESTOR/ADMIN editam em qualquer status.
+- `PUT /inspections/:id/items`:
+  - FISCAL só em `RASCUNHO`.
+  - GESTOR/ADMIN em qualquer status.
+  - Sempre recalcula `scorePercent`.
+  - Para GESTOR/ADMIN, reavalia status automaticamente (`FINALIZADA` <-> `PENDENTE_AJUSTE`) quando aplicável.
+- `POST /inspections/:id/evidences`:
+  - FISCAL só em `RASCUNHO`.
+  - GESTOR/ADMIN em qualquer status.
+- `POST /inspections/:id/finalize` exige assinatura e, para itens não conformes com obrigatoriedade, evidência.
+
+### Máquina de status da vistoria (visão frontend)
+
+- `RASCUNHO`
+  - estado de edição principal do FISCAL.
+  - transição via `finalize` para:
+    - `FINALIZADA` (sem não conformidade), ou
+    - `PENDENTE_AJUSTE` (com não conformidade).
+- `PENDENTE_AJUSTE`
+  - pode avançar para `RESOLVIDA` quando pendências são resolvidas.
+- `FINALIZADA`
+  - pode voltar para `PENDENTE_AJUSTE` se GESTOR/ADMIN alterarem itens e surgirem não conformidades.
+- `RESOLVIDA`
+  - status final após resolução de pendências.
+
+### Filtros disponíveis para listagens (essencial para telas)
+
+- Paginação padrão em listas: `page`, `limit`.
+- `GET /collaborators`: filtro por `sectorId`.
+- `GET /checklists`: filtros por `module`, `active`, `sectorId`.
+- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status` (com regra de ocultar rascunho para GESTOR/ADMIN).
+
+### Contratos e padrões de resposta
+
+- Listas retornam:
+  - `data` (array)
+  - `meta` (`page`, `limit`, `total`, `totalPages`, `hasNext`, `hasPrev`)
+- Erros seguem:
+  - `statusCode`
+  - `message`
+  - `error`
+
+### Integração offline (resumo operacional)
+
+- Use `externalId` para idempotência no `POST /sync/inspections`.
+- Não enviar `dataUrl` em evidências no sync (assets devem ser enviados antes).
+- `GET /inspections/:id` aceita `id` do servidor **ou** `externalId`, o que simplifica reconciliação de dados locais.
+
+### Checklist para novas funcionalidades no frontend
+
+- Confirmar role do usuário e esconder ações não permitidas.
+- Aplicar filtros corretos por contexto de tela (ex.: `sectorId`).
+- Considerar transições de status automáticas após `PUT /inspections/:id/items`.
+- Recarregar detalhe da vistoria após operações críticas (`updateItems`, `finalize`, `resolve`, `resolveItem`).
+- Tratar mensagens de domínio conhecidas em toasts/feedback de formulário.
+
+---
+
 ## Informações gerais
 
 - Base URL (dev): `http://localhost:3000`
@@ -797,6 +900,8 @@ Response 200: `Inspection` atualizado
 - Regra:
   - FISCAL só atualiza itens se `status = RASCUNHO`
   - GESTOR/ADMIN podem atualizar itens em qualquer status
+  - A nota (`scorePercent`) é recalculada automaticamente a cada atualização de itens
+  - Para GESTOR/ADMIN, se a vistoria estiver em `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA ↔ PENDENTE_AJUSTE`) com base nos itens
 
 Request JSON:
 
