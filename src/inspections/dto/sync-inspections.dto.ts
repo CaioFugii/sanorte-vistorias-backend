@@ -39,6 +39,10 @@ export type SyncSignatureDto = {
   signedAt?: string;
 };
 
+export type SyncParalyzeDto = {
+  reason: string;
+};
+
 export type SyncInspectionDto = {
   externalId: string;
   module: ModuleType;
@@ -50,6 +54,7 @@ export type SyncInspectionDto = {
   createdOffline?: boolean;
   syncedAt?: string;
   finalize?: boolean;
+  paralyze?: SyncParalyzeDto;
   items?: SyncInspectionItemDto[];
   evidences?: SyncEvidenceDto[];
   signature?: SyncSignatureDto;

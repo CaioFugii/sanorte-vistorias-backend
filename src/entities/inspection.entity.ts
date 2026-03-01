@@ -76,6 +76,22 @@ export class Inspection {
   })
   scorePercent: number;
 
+  @Column({ name: 'has_paralysis_penalty', default: false })
+  hasParalysisPenalty: boolean;
+
+  @Column({ name: 'paralyzed_reason', type: 'text', nullable: true })
+  paralyzedReason: string | null;
+
+  @Column({ name: 'paralyzed_at', nullable: true })
+  paralyzedAt: Date | null;
+
+  @Column({ name: 'paralyzed_by_user_id', nullable: true })
+  paralyzedByUserId: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'paralyzed_by_user_id' })
+  paralyzedBy: User | null;
+
   @Column({ name: 'created_by_user_id' })
   createdByUserId: string;
 

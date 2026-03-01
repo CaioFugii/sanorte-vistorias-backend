@@ -33,7 +33,7 @@ Authorization: Bearer <token>
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
   - anexos e assinatura: `POST /inspections/:id/evidences`, `POST /inspections/:id/signature`
-  - transições: `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
+  - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
   - PDF: `GET /inspections/:id/pdf`
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
@@ -54,6 +54,12 @@ Authorization: Bearer <token>
 - `POST /inspections/:id/evidences`:
   - FISCAL só em `RASCUNHO`.
   - GESTOR/ADMIN em qualquer status.
+- `POST /inspections/:id/paralyze`:
+  - disponível para FISCAL/GESTOR/ADMIN.
+  - ativa penalidade persistente de 25% na nota.
+- `POST /inspections/:id/unparalyze`:
+  - disponível apenas para GESTOR/ADMIN.
+  - remove penalidade e recalcula nota (correção de erro).
 - `POST /inspections/:id/finalize` exige assinatura e, para itens não conformes com obrigatoriedade, evidência.
 
 ### Máquina de status da vistoria (visão frontend)
@@ -69,6 +75,8 @@ Authorization: Bearer <token>
   - pode voltar para `PENDENTE_AJUSTE` se GESTOR/ADMIN alterarem itens e surgirem não conformidades.
 - `RESOLVIDA`
   - status final após resolução de pendências.
+- Paralisação é um estado paralelo:
+  - `hasParalysisPenalty = true` indica que a penalidade de 25% deve ser aplicada na nota.
 
 ### Filtros disponíveis para listagens (essencial para telas)
 
@@ -91,6 +99,7 @@ Authorization: Bearer <token>
 
 - Use `externalId` para idempotência no `POST /sync/inspections`.
 - Não enviar `dataUrl` em evidências no sync (assets devem ser enviados antes).
+- Se precisar aplicar penalidade de paralisação no sync, envie `paralyze.reason`.
 - `GET /inspections/:id` aceita `id` do servidor **ou** `externalId`, o que simplifica reconciliação de dados locais.
 
 ### Checklist para novas funcionalidades no frontend
@@ -98,6 +107,7 @@ Authorization: Bearer <token>
 - Confirmar role do usuário e esconder ações não permitidas.
 - Aplicar filtros corretos por contexto de tela (ex.: `sectorId`).
 - Considerar transições de status automáticas após `PUT /inspections/:id/items`.
+- Considerar impacto da paralisação na nota (`scorePercent`).
 - Recarregar detalhe da vistoria após operações críticas (`updateItems`, `finalize`, `resolve`, `resolveItem`).
 - Tratar mensagens de domínio conhecidas em toasts/feedback de formulário.
 
@@ -289,6 +299,10 @@ Resposta paginada:
   "locationDescription": "string",
   "status": "RASCUNHO",
   "scorePercent": 95.5,
+  "hasParalysisPenalty": true,
+  "paralyzedReason": "Chuva intensa",
+  "paralyzedAt": "2026-02-19T12:00:00.000Z",
+  "paralyzedByUserId": "uuid",
   "createdByUserId": "uuid",
   "createdOffline": false,
   "syncedAt": "2026-02-19T12:00:00.000Z",
@@ -901,6 +915,7 @@ Response 200: `Inspection` atualizado
   - FISCAL só atualiza itens se `status = RASCUNHO`
   - GESTOR/ADMIN podem atualizar itens em qualquer status
   - A nota (`scorePercent`) é recalculada automaticamente a cada atualização de itens
+  - Se `hasParalysisPenalty = true`, a nota final recebe penalidade persistente de 25%
   - Para GESTOR/ADMIN, se a vistoria estiver em `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA ↔ PENDENTE_AJUSTE`) com base nos itens
 
 Request JSON:
@@ -1006,9 +1021,41 @@ Regras:
 
 - Exige assinatura do líder/encarregado.
 - Item `NAO_CONFORME` com `requiresPhotoOnNonConformity = true` exige evidência.
-- Calcula `scorePercent`.
+- Calcula `scorePercent` (com penalidade de 25% quando `hasParalysisPenalty = true`).
 - Se houver `NAO_CONFORME`: status `PENDENTE_AJUSTE` e pendência `PENDENTE`.
 - Se não houver `NAO_CONFORME`: status `FINALIZADA`.
+
+### POST /inspections/:id/paralyze
+
+- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Regra:
+  - `reason` é obrigatório.
+  - Define `hasParalysisPenalty = true` (persistente).
+  - Recalcula `scorePercent` com penalidade de 25%.
+  - Chamada é idempotente: se já tiver penalidade ativa, retorna sem alterar estado.
+
+Request JSON:
+
+```json
+{
+  "reason": "Chuva intensa e risco operacional"
+}
+```
+
+Response 200: `Inspection` atualizado
+
+### POST /inspections/:id/unparalyze
+
+- Auth: JWT + GESTOR ou ADMIN
+- Regra:
+  - Remove penalidade de paralisação (`hasParalysisPenalty = false`).
+  - Limpa `paralyzedReason`, `paralyzedAt`, `paralyzedByUserId`.
+  - Recalcula `scorePercent` sem penalidade.
+  - Chamada é idempotente: se não tiver penalidade ativa, retorna sem alterar estado.
+
+Request JSON: sem body
+
+Response 200: `Inspection` atualizado
 
 ### POST /inspections/:id/items/:itemId/resolve
 
@@ -1091,6 +1138,9 @@ Request JSON:
       "collaboratorIds": ["uuid-1"],
       "createdOffline": true,
       "syncedAt": "2026-02-19T12:00:00.000Z",
+      "paralyze": {
+        "reason": "Paralisada por chuva intensa"
+      },
       "finalize": true,
       "items": [
         {
@@ -1149,6 +1199,7 @@ Regras importantes:
 - `externalId` é obrigatório.
 - Não aceita assets em `dataUrl`/`imageBase64` no sync.
 - Para evidências e assinatura, use `url` e/ou `cloudinaryPublicId`.
+- `paralyze.reason` (quando enviado) marca penalidade persistente de paralisação na vistoria.
 - Se `finalize = true`, aplica as regras de finalização.
 
 ## Uploads
@@ -1241,6 +1292,7 @@ Response 200:
 
 - Criar vistoria
 - Editar vistoria apenas em `RASCUNHO`
+- Paralisar vistoria
 - Finalizar vistoria
 - Resolver itens não conformes e pendências
 - Listar apenas as próprias vistorias (`/inspections/mine`)
@@ -1248,6 +1300,7 @@ Response 200:
 ### GESTOR
 
 - Criar/editar/finalizar vistorias
+- Paralisar e remover penalidade de paralisação (unparalyze)
 - Resolver itens não conformes e pendências
 - Acessar listagem geral de vistorias
 
@@ -1272,6 +1325,7 @@ Mensagens relevantes do domínio:
 
 - `Vistoria não encontrada`
 - `Fiscal não pode editar vistoria após finalização`
+- `reason should not be empty`
 - `Não é possível adicionar assinatura em vistoria finalizada`
 - `Vistoria já foi finalizada`
 - `Assinatura do líder/encarregado é obrigatória para finalizar`

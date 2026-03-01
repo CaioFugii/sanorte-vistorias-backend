@@ -17,7 +17,17 @@ export class InspectionDomainService {
       (item) => item.answer === ChecklistAnswer.CONFORME,
     ).length;
 
-    return (conformeCount / evaluatedItems.length) * 100;
+    const baseScore = (conformeCount / evaluatedItems.length) * 100;
+    return this.roundPercent(baseScore);
+  }
+
+  applyParalysisPenalty(baseScorePercent: number, hasParalysisPenalty: boolean): number {
+    if (!hasParalysisPenalty) {
+      return this.roundPercent(baseScorePercent);
+    }
+
+    // Penalidade persistente de 25% sobre a nota calculada.
+    return this.roundPercent(baseScorePercent * 0.75);
   }
 
   hasNonConformity(items: InspectionItem[]): boolean {
@@ -28,5 +38,9 @@ export class InspectionDomainService {
     return this.hasNonConformity(items)
       ? InspectionStatus.PENDENTE_AJUSTE
       : InspectionStatus.FINALIZADA;
+  }
+
+  private roundPercent(value: number): number {
+    return Math.round(value * 100) / 100;
   }
 }

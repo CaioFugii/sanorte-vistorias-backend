@@ -137,6 +137,8 @@ Authorization: Bearer <token>
 - `PUT /inspections/:id/items` (autenticado)
 - `POST /inspections/:id/evidences` (multipart)
 - `POST /inspections/:id/signature` (JSON)
+- `POST /inspections/:id/paralyze` (FISCAL/GESTOR/ADMIN)
+- `POST /inspections/:id/unparalyze` (GESTOR/ADMIN)
 - `POST /inspections/:id/finalize` (FISCAL/GESTOR)
 - `POST /inspections/:id/items/:itemId/resolve` (FISCAL/GESTOR/ADMIN)
 - `POST /inspections/:id/resolve` (FISCAL/GESTOR/ADMIN)
@@ -164,6 +166,9 @@ Authorization: Bearer <token>
 - Não é permitido deletar setor vinculado a colaboradores ou checklists.
 - FISCAL só edita vistoria em `RASCUNHO`.
 - Atualização de itens recalcula automaticamente a nota da vistoria (`scorePercent`).
+- Vistoria pode ser paralisada por FISCAL/GESTOR/ADMIN com motivo obrigatório.
+- Ao paralisar, a vistoria recebe penalidade persistente de 25% na nota (`scorePercent`).
+- GESTOR/ADMIN podem remover a penalidade via `POST /inspections/:id/unparalyze` (correção de erro).
 - Para GESTOR/ADMIN, ao atualizar itens em vistoria `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA` ↔ `PENDENTE_AJUSTE`).
 - `POST /inspections/:id/finalize` exige:
   - assinatura do líder/encarregado;

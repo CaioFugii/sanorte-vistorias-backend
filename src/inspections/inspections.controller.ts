@@ -22,6 +22,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import { FilterInspectionsDto } from './dto/filter-inspections.dto';
 import { ResolveItemDto } from './dto/resolve-item.dto';
+import { ParalyzeInspectionDto } from './dto/paralyze-inspection.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @Controller('inspections')
@@ -138,6 +139,28 @@ export class InspectionsController {
   @Roles(UserRole.FISCAL, UserRole.GESTOR)
   finalize(@Param('id') id: string, @CurrentUser() user: any) {
     return this.inspectionsService.finalize(id, user.id, user.role);
+  }
+
+  @Post(':id/paralyze')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  paralyze(
+    @Param('id') id: string,
+    @Body() paralyzeInspectionDto: ParalyzeInspectionDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.inspectionsService.paralyze(
+      id,
+      paralyzeInspectionDto.reason,
+      user.id,
+    );
+  }
+
+  @Post(':id/unparalyze')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  unparalyze(@Param('id') id: string) {
+    return this.inspectionsService.unparalyze(id);
   }
 
   @Post(':id/items/:itemId/resolve')

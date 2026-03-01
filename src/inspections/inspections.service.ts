@@ -324,7 +324,11 @@ export class InspectionsService {
     const refreshedItems = await this.inspectionItemsRepository.find({
       where: { inspectionId: inspection.id },
     });
-    const scorePercent = this.inspectionDomainService.calculateScorePercent(refreshedItems);
+    const baseScorePercent = this.inspectionDomainService.calculateScorePercent(refreshedItems);
+    const scorePercent = this.inspectionDomainService.applyParalysisPenalty(
+      baseScorePercent,
+      inspection.hasParalysisPenalty === true,
+    );
 
     const inspectionUpdates: Partial<Inspection> = { scorePercent };
 
@@ -341,6 +345,52 @@ export class InspectionsService {
     await this.inspectionsRepository.update(inspection.id, inspectionUpdates);
 
     return updatedItems;
+  }
+
+  async paralyze(id: string, reason: string, userId: string): Promise<Inspection> {
+    const inspection = await this.findOne(id);
+
+    if (inspection.hasParalysisPenalty) {
+      return inspection;
+    }
+
+    const scorePercent = await this.calculateFinalScorePercent(
+      inspection.id,
+      true,
+    );
+
+    await this.inspectionsRepository.update(inspection.id, {
+      paralyzedReason: reason.trim(),
+      paralyzedAt: new Date(),
+      paralyzedByUserId: userId,
+      hasParalysisPenalty: true,
+      scorePercent,
+    });
+
+    return this.findOne(inspection.id);
+  }
+
+  async unparalyze(id: string): Promise<Inspection> {
+    const inspection = await this.findOne(id);
+
+    if (!inspection.hasParalysisPenalty) {
+      return inspection;
+    }
+
+    const scorePercent = await this.calculateFinalScorePercent(
+      inspection.id,
+      false,
+    );
+
+    await this.inspectionsRepository.update(inspection.id, {
+      hasParalysisPenalty: false,
+      paralyzedReason: null,
+      paralyzedAt: null,
+      paralyzedByUserId: null,
+      scorePercent,
+    });
+
+    return this.findOne(inspection.id);
   }
 
   async addEvidence(
@@ -470,8 +520,10 @@ export class InspectionsService {
       }
     }
 
-    // Calcular percentual
-    const scorePercent = await this.calculateScorePercent(inspectionId);
+    const scorePercent = await this.calculateFinalScorePercent(
+      inspectionId,
+      inspection.hasParalysisPenalty === true,
+    );
 
     const status = this.inspectionDomainService.resolveFinalStatus(items);
     if (status === InspectionStatus.PENDENTE_AJUSTE) {
@@ -746,6 +798,16 @@ export class InspectionsService {
       await this.upsertSignatureFromSync(inspection.id, payload.signature);
     }
 
+    if (payload.paralyze?.reason !== undefined) {
+      const reason = payload.paralyze.reason.trim();
+      if (!reason) {
+        throw new BadRequestException(
+          'Paralisação no sync inválida: reason é obrigatório',
+        );
+      }
+      await this.paralyze(inspection.id, reason, userId);
+    }
+
     if (payload.finalize) {
       await this.finalize(inspection.id, userId, userRole);
     } else {
@@ -984,6 +1046,17 @@ export class InspectionsService {
     }
 
     await this.pendingAdjustmentsRepository.save(pending);
+  }
+
+  private async calculateFinalScorePercent(
+    inspectionId: string,
+    hasParalysisPenalty: boolean,
+  ): Promise<number> {
+    const baseScorePercent = await this.calculateScorePercent(inspectionId);
+    return this.inspectionDomainService.applyParalysisPenalty(
+      baseScorePercent,
+      hasParalysisPenalty,
+    );
   }
 
   /**

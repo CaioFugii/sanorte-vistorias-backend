@@ -28,6 +28,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     id: 'test-id',
     status: InspectionStatus.RASCUNHO,
     createdByUserId: 'user-id',
+    hasParalysisPenalty: false,
   };
 
   beforeEach(async () => {
@@ -145,5 +146,180 @@ describe('InspectionsService - Regras de Negócio', () => {
     await expect(
       service.finalize('test-id', 'user-id', UserRole.FISCAL),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('deve aplicar penalidade persistente no score ao atualizar itens', async () => {
+    const inspection = {
+      ...mockInspection,
+      status: InspectionStatus.FINALIZADA,
+      hasParalysisPenalty: true,
+    } as Inspection;
+
+    jest
+      .spyOn(service, 'findOne')
+      .mockResolvedValue(inspection);
+    inspectionItemsRepository.findOne.mockResolvedValue({
+      id: 'item-1',
+      inspectionId: 'test-id',
+    } as InspectionItem);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.CONFORME },
+      { answer: ChecklistAnswer.NAO_CONFORME },
+    ] as InspectionItem[]);
+    pendingAdjustmentsRepository.findOne.mockResolvedValue({
+      inspectionId: 'test-id',
+      status: PendingStatus.PENDENTE,
+    } as PendingAdjustment);
+
+    await service.updateItems(
+      'test-id',
+      [{ inspectionItemId: 'item-1', answer: ChecklistAnswer.CONFORME }],
+      'gestor-id',
+      UserRole.GESTOR,
+    );
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        scorePercent: 37.5,
+        status: InspectionStatus.PENDENTE_AJUSTE,
+      }),
+    );
+  });
+
+  it('deve reavaliar status para FINALIZADA ao remover não conformidades (GESTOR/ADMIN)', async () => {
+    const inspection = {
+      ...mockInspection,
+      status: InspectionStatus.PENDENTE_AJUSTE,
+      hasParalysisPenalty: false,
+    } as Inspection;
+
+    jest
+      .spyOn(service, 'findOne')
+      .mockResolvedValue(inspection);
+    inspectionItemsRepository.findOne.mockResolvedValue({
+      id: 'item-1',
+      inspectionId: 'test-id',
+    } as InspectionItem);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.CONFORME },
+      { answer: ChecklistAnswer.CONFORME },
+    ] as InspectionItem[]);
+    pendingAdjustmentsRepository.findOne.mockResolvedValue({
+      inspectionId: 'test-id',
+      status: PendingStatus.PENDENTE,
+    } as PendingAdjustment);
+
+    await service.updateItems(
+      'test-id',
+      [{ inspectionItemId: 'item-1', answer: ChecklistAnswer.CONFORME }],
+      'admin-id',
+      UserRole.ADMIN,
+    );
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        scorePercent: 100,
+        status: InspectionStatus.FINALIZADA,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: PendingStatus.RESOLVIDA,
+        resolvedByUserId: 'admin-id',
+      }),
+    );
+  });
+
+  it('deve marcar paralisação e habilitar penalidade persistente', async () => {
+    const activeInspection = {
+      ...mockInspection,
+      hasParalysisPenalty: false,
+    } as Inspection;
+    const paralyzedInspection = {
+      ...activeInspection,
+      hasParalysisPenalty: true,
+    } as Inspection;
+
+    jest
+      .spyOn(service, 'findOne')
+      .mockResolvedValueOnce(activeInspection)
+      .mockResolvedValueOnce(paralyzedInspection);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.CONFORME },
+      { answer: ChecklistAnswer.NAO_CONFORME },
+    ] as InspectionItem[]);
+
+    await service.paralyze('test-id', '  Chuva intensa  ', 'gestor-id');
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        hasParalysisPenalty: true,
+        paralyzedReason: 'Chuva intensa',
+        paralyzedByUserId: 'gestor-id',
+        scorePercent: 37.5,
+      }),
+    );
+  });
+
+  it('não deve atualizar quando tentar paralisar vistoria já paralisada (idempotência)', async () => {
+    const alreadyParalyzed = {
+      ...mockInspection,
+      hasParalysisPenalty: true,
+    } as Inspection;
+
+    jest.spyOn(service, 'findOne').mockResolvedValue(alreadyParalyzed);
+
+    await service.paralyze('test-id', 'Motivo', 'gestor-id');
+
+    expect(inspectionsRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('unparalyze remove penalidade e recalcula nota', async () => {
+    const paralyzedInspection = {
+      ...mockInspection,
+      hasParalysisPenalty: true,
+    } as Inspection;
+    const unparalyzedInspection = {
+      ...mockInspection,
+      hasParalysisPenalty: false,
+    } as Inspection;
+
+    jest
+      .spyOn(service, 'findOne')
+      .mockResolvedValueOnce(paralyzedInspection)
+      .mockResolvedValueOnce(unparalyzedInspection);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.CONFORME },
+      { answer: ChecklistAnswer.CONFORME },
+    ] as InspectionItem[]);
+
+    await service.unparalyze('test-id');
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        hasParalysisPenalty: false,
+        paralyzedReason: null,
+        paralyzedAt: null,
+        paralyzedByUserId: null,
+        scorePercent: 100,
+      }),
+    );
+  });
+
+  it('unparalyze é idempotente quando vistoria não tem penalidade', async () => {
+    const activeInspection = {
+      ...mockInspection,
+      hasParalysisPenalty: false,
+    } as Inspection;
+
+    jest.spyOn(service, 'findOne').mockResolvedValue(activeInspection);
+
+    await service.unparalyze('test-id');
+
+    expect(inspectionsRepository.update).not.toHaveBeenCalled();
   });
 });

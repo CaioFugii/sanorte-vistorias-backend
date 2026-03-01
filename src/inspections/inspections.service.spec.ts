@@ -190,4 +190,53 @@ describe('InspectionsService', () => {
       message: 'Assets must be uploaded before sync',
     });
   });
+
+  it('deve aplicar paralisação quando payload de sync informar paralyze.reason', async () => {
+    const createdInspection = {
+      id: 'server-id-3',
+      status: 'RASCUNHO',
+      module: ModuleType.QUALIDADE,
+      checklistId: 'checklist-id',
+      teamId: 'team-id',
+      serviceDescription: 'Vistoria offline',
+      locationDescription: null,
+      createdOffline: true,
+      hasParalysisPenalty: false,
+    } as unknown as Inspection;
+
+    jest.spyOn(service, 'create').mockResolvedValue(createdInspection);
+    const paralyzeSpy = jest
+      .spyOn(service, 'paralyze')
+      .mockResolvedValue(createdInspection);
+
+    inspectionsRepository.findOne.mockResolvedValueOnce(null);
+
+    const result = await service.syncInspections(
+      [
+        {
+          externalId: '31a9e29b-1ca9-4d69-a6cf-e6367471743a',
+          module: ModuleType.QUALIDADE,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceDescription: 'Vistoria offline',
+          paralyze: {
+            reason: 'Paralisada por chuva em campo',
+          },
+        },
+      ] as any,
+      'user-id',
+      UserRole.FISCAL,
+    );
+
+    expect(paralyzeSpy).toHaveBeenCalledWith(
+      'server-id-3',
+      'Paralisada por chuva em campo',
+      'user-id',
+    );
+    expect(result.results[0]).toMatchObject({
+      externalId: '31a9e29b-1ca9-4d69-a6cf-e6367471743a',
+      serverId: 'server-id-3',
+      status: 'CREATED',
+    });
+  });
 });
