@@ -3,5 +3,5 @@ export enum ModuleType {
   CAMPO = 'CAMPO',
   SEGURANCA_TRABALHO = 'SEGURANCA_TRABALHO',
   REMOTO = 'REMOTO',
-  PÓS_OBRA = 'PÓS_OBRA',
+  POS_OBRA = 'POS_OBRA',
 }
