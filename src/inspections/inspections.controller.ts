@@ -21,6 +21,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import { FilterInspectionsDto } from './dto/filter-inspections.dto';
+import { CreateInspectionDto } from './dto/create-inspection.dto';
 import { ResolveItemDto } from './dto/resolve-item.dto';
 import { ParalyzeInspectionDto } from './dto/paralyze-inspection.dto';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
@@ -33,7 +34,10 @@ export class InspectionsController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.FISCAL, UserRole.GESTOR)
-  create(@Body() createInspectionDto: any, @CurrentUser() user: any) {
+  create(
+    @Body() createInspectionDto: CreateInspectionDto,
+    @CurrentUser() user: any,
+  ) {
     return this.inspectionsService.create(createInspectionDto, user.id);
   }
 
@@ -48,6 +52,7 @@ export class InspectionsController {
         module: filterDto.module,
         teamId: filterDto.teamId,
         status: filterDto.status,
+        osNumber: filterDto.osNumber,
       },
       filterDto.page || 1,
       filterDto.limit || 10,
@@ -59,12 +64,13 @@ export class InspectionsController {
   @Roles(UserRole.FISCAL)
   findMine(
     @CurrentUser() user: any,
-    @Query() pagination?: PaginationQueryDto,
+    @Query() filterDto: FilterInspectionsDto,
   ) {
     return this.inspectionsService.findMine(
       user.id,
-      pagination?.page || 1,
-      pagination?.limit || 10,
+      filterDto.page || 1,
+      filterDto.limit || 10,
+      filterDto.osNumber,
     );
   }
 
@@ -138,7 +144,7 @@ export class InspectionsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.FISCAL, UserRole.GESTOR)
   finalize(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.inspectionsService.finalize(id, user.id, user.role);
+    return this.inspectionsService.finalize(id);
   }
 
   @Post(':id/paralyze')

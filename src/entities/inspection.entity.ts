@@ -19,6 +19,7 @@ import { InspectionItem } from './inspection-item.entity';
 import { Evidence } from './evidence.entity';
 import { Signature } from './signature.entity';
 import { PendingAdjustment } from './pending-adjustment.entity';
+import { ServiceOrder } from './service-order.entity';
 
 @Entity('inspections')
 export class Inspection {
@@ -47,6 +48,13 @@ export class Inspection {
 
   @Column({ name: 'service_description', type: 'text' })
   serviceDescription: string;
+
+  @Column({ name: 'service_order_id', nullable: true })
+  serviceOrderId: string | null;
+
+  @ManyToOne(() => ServiceOrder, { nullable: true })
+  @JoinColumn({ name: 'service_order_id' })
+  serviceOrder: ServiceOrder | null;
 
   @Column({ name: 'external_id', type: 'uuid', nullable: true, unique: true })
   externalId: string | null;

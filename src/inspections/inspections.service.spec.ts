@@ -55,6 +55,10 @@ describe('InspectionsService', () => {
       findOne: jest.fn(),
     };
 
+    const serviceOrderRepository = {
+      findOne: jest.fn(),
+    };
+
     const cloudinaryService = {
       uploadImage: jest.fn(),
     };
@@ -70,6 +74,7 @@ describe('InspectionsService', () => {
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
+      serviceOrderRepository as any,
       cloudinaryService as any,
       dataSource as any,
       new InspectionDomainService(),
@@ -112,6 +117,7 @@ describe('InspectionsService', () => {
       module: ModuleType.QUALIDADE,
       checklistId: 'checklist-id',
       teamId: 'team-id',
+      serviceOrderId: 'service-order-id',
       serviceDescription: 'Vistoria offline',
       createdOffline: true,
     };
@@ -177,6 +183,7 @@ describe('InspectionsService', () => {
           module: ModuleType.QUALIDADE,
           checklistId: 'checklist-id',
           teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
           serviceDescription: 'Vistoria offline',
           evidences: [{ dataUrl: 'data:image/png;base64,AAAA' }],
         },
@@ -218,6 +225,7 @@ describe('InspectionsService', () => {
           module: ModuleType.QUALIDADE,
           checklistId: 'checklist-id',
           teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
           serviceDescription: 'Vistoria offline',
           paralyze: {
             reason: 'Paralisada por chuva em campo',

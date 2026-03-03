@@ -29,6 +29,7 @@ Authorization: Bearer <token>
 - Setores: `GET/POST/PUT/DELETE /sectors`
 - Colaboradores: `GET/POST/PUT/DELETE /collaborators`
 - Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections` e `items`
+- Ordens de Serviço (OS): `GET /service-orders`, `POST /service-orders/import`
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
@@ -41,6 +42,7 @@ Authorization: Bearer <token>
 
 ### Regras críticas que impactam UI
 
+- Nova vistoria (`POST /inspections` e sync) exige `serviceOrderId` vinculado a uma OS cadastrada via `POST /service-orders/import`.
 - `GET /inspections` (GESTOR/ADMIN) não retorna `RASCUNHO`.
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
 - `PUT /inspections/:id`:
@@ -83,7 +85,8 @@ Authorization: Bearer <token>
 - Paginação padrão em listas: `page`, `limit`.
 - `GET /collaborators`: filtro por `sectorId`.
 - `GET /checklists`: filtros por `module`, `active`, `sectorId`.
-- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status` (com regra de ocultar rascunho para GESTOR/ADMIN).
+- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status`, `osNumber` (busca parcial por número da OS; regra de ocultar rascunho para GESTOR/ADMIN).
+- `GET /inspections/mine`: filtro por `osNumber` (busca parcial por número da OS).
 
 ### Contratos e padrões de resposta
 
@@ -98,12 +101,14 @@ Authorization: Bearer <token>
 ### Integração offline (resumo operacional)
 
 - Use `externalId` para idempotência no `POST /sync/inspections`.
+- `serviceOrderId` é obrigatório para criar nova vistoria no sync (OS deve estar cadastrada previamente).
 - Não enviar `dataUrl` em evidências no sync (assets devem ser enviados antes).
 - Se precisar aplicar penalidade de paralisação no sync, envie `paralyze.reason`.
 - `GET /inspections/:id` aceita `id` do servidor **ou** `externalId`, o que simplifica reconciliação de dados locais.
 
 ### Checklist para novas funcionalidades no frontend
 
+- Ao criar vistoria: buscar lista de OS em `GET /service-orders` e permitir seleção (campo obrigatório).
 - Confirmar role do usuário e esconder ações não permitidas.
 - Aplicar filtros corretos por contexto de tela (ex.: `sectorId`).
 - Considerar transições de status automáticas após `PUT /inspections/:id/items`.
@@ -286,6 +291,21 @@ Resposta paginada:
 }
 ```
 
+### ServiceOrder
+
+```json
+{
+  "id": "uuid",
+  "osNumber": "OS-001",
+  "address": "Rua Exemplo, 123",
+  "field": false,
+  "remote": false,
+  "postWork": false,
+  "createdAt": "2026-02-19T12:00:00.000Z",
+  "updatedAt": "2026-02-19T12:00:00.000Z"
+}
+```
+
 ### Inspection
 
 ```json
@@ -295,6 +315,12 @@ Resposta paginada:
   "module": "QUALIDADE",
   "checklistId": "uuid",
   "teamId": "uuid",
+  "serviceOrderId": "uuid",
+  "serviceOrder": {
+    "id": "uuid",
+    "osNumber": "OS-001",
+    "address": "Rua Exemplo, 123"
+  },
   "serviceDescription": "string",
   "locationDescription": "string",
   "status": "RASCUNHO",
@@ -840,11 +866,38 @@ Response 200: `ChecklistItem` atualizado
 - Auth: JWT + ADMIN
 - Response 200: vazio
 
+## Service Orders (Ordens de Serviço)
+
+### GET /service-orders
+
+- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Response 200: array de `ServiceOrder` ordenados por `osNumber`
+- Uso: listar OS disponíveis para vincular a novas vistorias
+
+### POST /service-orders/import
+
+- Auth: JWT + ADMIN ou GESTOR
+- Body: multipart/form-data com campo `file` (arquivo Excel `.xlsx` ou `.xls`, até 5MB)
+- Estrutura do Excel: colunas "Numero da OS" e "Endereço"
+- Regra: `osNumber` é único; duplicatas são ignoradas (não trava o processamento)
+- Campos adicionais em cada registro: `field`, `remote`, `postWork` (boolean, default `false`)
+
+Response 200:
+
+```json
+{
+  "inserted": 10,
+  "skipped": 2,
+  "errors": []
+}
+```
+
 ## Inspections
 
 ### POST /inspections
 
 - Auth: JWT + FISCAL ou GESTOR
+- Regra: `serviceOrderId` é obrigatório (OS deve existir em `service_orders`)
 
 Request JSON:
 
@@ -853,6 +906,7 @@ Request JSON:
   "module": "SEGURANCA_TRABALHO",
   "checklistId": "uuid",
   "teamId": "uuid",
+  "serviceOrderId": "uuid",
   "serviceDescription": "Inspeção semanal",
   "locationDescription": "Canteiro principal",
   "collaboratorIds": ["uuid-1", "uuid-2"],
@@ -873,16 +927,17 @@ Response 201: `Inspection` completo (já com `items` baseados no checklist)
   - `module`
   - `teamId`
   - `status`
+  - `osNumber` (busca parcial por número da OS; ex.: `?osNumber=OS-001`)
   - `page`, `limit`
-- Response: paginação de `Inspection`
+- Response: paginação de `Inspection` com relação `serviceOrder`
 - Regra: esta listagem não retorna vistorias com status `RASCUNHO`
 - Regra: se `status=RASCUNHO` for informado, o retorno é vazio (`data: []`)
 
 ### GET /inspections/mine
 
 - Auth: JWT + FISCAL
-- Query: `page`, `limit`
-- Response: paginação de `Inspection` do usuário logado
+- Query: `page`, `limit`, `osNumber` (busca parcial por número da OS)
+- Response: paginação de `Inspection` do usuário logado com relação `serviceOrder`
 
 ### GET /inspections/:id
 
@@ -1133,6 +1188,7 @@ Request JSON:
       "module": "QUALIDADE",
       "checklistId": "uuid",
       "teamId": "uuid",
+      "serviceOrderId": "uuid",
       "serviceDescription": "Vistoria offline",
       "locationDescription": "Frente A",
       "collaboratorIds": ["uuid-1"],
@@ -1197,6 +1253,7 @@ Response 200:
 Regras importantes:
 
 - `externalId` é obrigatório.
+- `serviceOrderId` é obrigatório para criar nova vistoria (OS deve estar cadastrada via `POST /service-orders/import`).
 - Não aceita assets em `dataUrl`/`imageBase64` no sync.
 - Para evidências e assinatura, use `url` e/ou `cloudinaryPublicId`.
 - `paralyze.reason` (quando enviado) marca penalidade persistente de paralisação na vistoria.
@@ -1290,7 +1347,7 @@ Response 200:
 
 ### FISCAL
 
-- Criar vistoria
+- Criar vistoria (exige `serviceOrderId` de OS cadastrada)
 - Editar vistoria apenas em `RASCUNHO`
 - Paralisar vistoria
 - Finalizar vistoria
@@ -1299,7 +1356,8 @@ Response 200:
 
 ### GESTOR
 
-- Criar/editar/finalizar vistorias
+- Criar/editar/finalizar vistorias (exige `serviceOrderId` ao criar)
+- Importar OS via Excel (`POST /service-orders/import`)
 - Paralisar e remover penalidade de paralisação (unparalyze)
 - Resolver itens não conformes e pendências
 - Acessar listagem geral de vistorias
@@ -1307,6 +1365,7 @@ Response 200:
 ### ADMIN
 
 - Todas as permissões operacionais do GESTOR
+- Importar OS via Excel (`POST /service-orders/import`)
 - CRUD de usuários, equipes, colaboradores e checklists
 
 ## Erros comuns
@@ -1323,6 +1382,9 @@ Formato padrão:
 
 Mensagens relevantes do domínio:
 
+- `serviceOrderId é obrigatório. Informe o ID de uma OS cadastrada na tabela de ordens de serviço.`
+- `Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.`
+- `serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.`
 - `Vistoria não encontrada`
 - `Fiscal não pode editar vistoria após finalização`
 - `reason should not be empty`

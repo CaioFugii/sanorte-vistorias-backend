@@ -62,6 +62,8 @@ describe('InspectionsService - Regras de Negócio', () => {
       findOne: jest.fn(),
     };
 
+    const serviceOrderRepository = { findOne: jest.fn() };
+
     service = new InspectionsService(
       inspectionsRepository as any,
       inspectionItemsRepository as any,
@@ -69,6 +71,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
+      serviceOrderRepository as any,
       { uploadImage: jest.fn() } as any,
       { getRepository: jest.fn() } as any,
       new InspectionDomainService(),
@@ -128,7 +131,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       status: PendingStatus.PENDENTE,
     } as PendingAdjustment);
 
-    await service.finalize('test-id', 'user-id', UserRole.FISCAL);
+    await service.finalize('test-id');
 
     expect(inspectionsRepository.update).toHaveBeenCalledWith(
       'test-id',
@@ -144,7 +147,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     signaturesRepository.findOne.mockResolvedValue(null);
 
     await expect(
-      service.finalize('test-id', 'user-id', UserRole.FISCAL),
+      service.finalize('test-id'),
     ).rejects.toThrow(BadRequestException);
   });
 

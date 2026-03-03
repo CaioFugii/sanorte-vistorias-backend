@@ -27,4 +27,8 @@ export class FilterInspectionsDto extends PaginationQueryDto {
     message: `status must be one of: ${Object.values(InspectionStatus).join(', ')}`,
   })
   status?: InspectionStatus;
+
+  @IsOptional()
+  @IsString()
+  osNumber?: string;
 }

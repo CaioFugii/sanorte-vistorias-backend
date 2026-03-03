@@ -15,6 +15,7 @@ import {
   ChecklistItem,
   Checklist,
   Collaborator,
+  ServiceOrder,
 } from '../entities';
 import {
   InspectionStatus,
@@ -46,6 +47,8 @@ export class InspectionsService {
     private pendingAdjustmentsRepository: Repository<PendingAdjustment>,
     @InjectRepository(ChecklistItem)
     private checklistItemsRepository: Repository<ChecklistItem>,
+    @InjectRepository(ServiceOrder)
+    private serviceOrderRepository: Repository<ServiceOrder>,
     private cloudinaryService: CloudinaryService,
     private dataSource: DataSource,
     private inspectionDomainService: InspectionDomainService,
@@ -56,6 +59,7 @@ export class InspectionsService {
       module: ModuleType;
       checklistId: string;
       teamId: string;
+      serviceOrderId: string;
       serviceDescription: string;
       locationDescription?: string;
       collaboratorIds?: string[];
@@ -65,6 +69,21 @@ export class InspectionsService {
     },
     userId: string,
   ): Promise<Inspection> {
+    if (!inspectionData.serviceOrderId) {
+      throw new BadRequestException(
+        'serviceOrderId é obrigatório. Informe uma OS válida cadastrada na tabela de ordens de serviço.',
+      );
+    }
+
+    const serviceOrder = await this.serviceOrderRepository.findOne({
+      where: { id: inspectionData.serviceOrderId },
+    });
+    if (!serviceOrder) {
+      throw new BadRequestException(
+        'Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.',
+      );
+    }
+
     const inspection = this.inspectionsRepository.create({
       ...inspectionData,
       createdByUserId: userId,
@@ -124,6 +143,7 @@ export class InspectionsService {
       module?: ModuleType;
       teamId?: string;
       status?: InspectionStatus;
+      osNumber?: string;
     },
     page: number = 1,
     limit: number = 10,
@@ -149,6 +169,7 @@ export class InspectionsService {
       .createQueryBuilder('inspection')
       .leftJoinAndSelect('inspection.checklist', 'checklist')
       .leftJoinAndSelect('inspection.team', 'team')
+      .leftJoinAndSelect('inspection.serviceOrder', 'serviceOrder')
       .leftJoinAndSelect('inspection.createdBy', 'createdBy')
       .leftJoinAndSelect('inspection.items', 'items')
       .leftJoinAndSelect('items.checklistItem', 'checklistItem')
@@ -177,6 +198,11 @@ export class InspectionsService {
     if (filters.status) {
       query.andWhere('inspection.status = :status', { status: filters.status });
     }
+    if (filters.osNumber?.trim()) {
+      query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
+        osNumber: `%${filters.osNumber.trim()}%`,
+      });
+    }
 
     query.skip(skip).take(limit).orderBy('inspection.createdAt', 'DESC');
 
@@ -201,25 +227,34 @@ export class InspectionsService {
     userId: string,
     page: number = 1,
     limit: number = 10,
+    osNumber?: string,
   ): Promise<PaginatedResponseDto<Inspection>> {
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.inspectionsRepository.findAndCount({
-      where: { createdByUserId: userId },
-      relations: [
-        'checklist',
-        'checklist.sections',
-        'checklist.items',
-        'checklist.items.section',
-        'team',
-        'items',
-        'items.checklistItem',
-        'items.checklistItem.section',
-      ],
-      skip,
-      take: limit,
-      order: { createdAt: 'DESC' },
-    });
+    const query = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .leftJoinAndSelect('inspection.checklist', 'checklist')
+      .leftJoinAndSelect('checklist.sections', 'checklistSections')
+      .leftJoinAndSelect('checklist.items', 'checklistItems')
+      .leftJoinAndSelect('checklistItems.section', 'checklistItemSection')
+      .leftJoinAndSelect('inspection.team', 'team')
+      .leftJoinAndSelect('inspection.serviceOrder', 'serviceOrder')
+      .leftJoinAndSelect('inspection.items', 'items')
+      .leftJoinAndSelect('items.checklistItem', 'itemsChecklistItem')
+      .leftJoinAndSelect('itemsChecklistItem.section', 'itemsChecklistItemSection')
+      .where('inspection.createdByUserId = :userId', { userId })
+      .orderBy('inspection.createdAt', 'DESC');
+
+    if (osNumber?.trim()) {
+      query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
+        osNumber: `%${osNumber.trim()}%`,
+      });
+    }
+
+    const [data, total] = await query
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
 
     const totalPages = Math.ceil(total / limit);
 
@@ -246,6 +281,7 @@ export class InspectionsService {
         'checklist.sections',
         'team',
         'team.collaborators',
+        'serviceOrder',
         'createdBy',
         'items',
         'items.checklistItem',
@@ -324,7 +360,8 @@ export class InspectionsService {
     const refreshedItems = await this.inspectionItemsRepository.find({
       where: { inspectionId: inspection.id },
     });
-    const baseScorePercent = this.inspectionDomainService.calculateScorePercent(refreshedItems);
+    const baseScorePercent =
+      this.inspectionDomainService.calculateScorePercent(refreshedItems);
     const scorePercent = this.inspectionDomainService.applyParalysisPenalty(
       baseScorePercent,
       inspection.hasParalysisPenalty === true,
@@ -337,9 +374,14 @@ export class InspectionsService {
       (inspection.status === InspectionStatus.FINALIZADA ||
         inspection.status === InspectionStatus.PENDENTE_AJUSTE)
     ) {
-      const nextStatus = this.inspectionDomainService.resolveFinalStatus(refreshedItems);
+      const nextStatus =
+        this.inspectionDomainService.resolveFinalStatus(refreshedItems);
       inspectionUpdates.status = nextStatus;
-      await this.syncPendingAdjustmentByStatus(inspection.id, nextStatus, userId);
+      await this.syncPendingAdjustmentByStatus(
+        inspection.id,
+        nextStatus,
+        userId,
+      );
     }
 
     await this.inspectionsRepository.update(inspection.id, inspectionUpdates);
@@ -347,7 +389,11 @@ export class InspectionsService {
     return updatedItems;
   }
 
-  async paralyze(id: string, reason: string, userId: string): Promise<Inspection> {
+  async paralyze(
+    id: string,
+    reason: string,
+    userId: string,
+  ): Promise<Inspection> {
     const inspection = await this.findOne(id);
 
     if (inspection.hasParalysisPenalty) {
@@ -472,11 +518,7 @@ export class InspectionsService {
     return this.inspectionDomainService.calculateScorePercent(items);
   }
 
-  async finalize(
-    id: string,
-    userId: string,
-    userRole: string,
-  ): Promise<Inspection> {
+  async finalize(id: string): Promise<Inspection> {
     const inspection = await this.findOne(id);
 
     if (inspection.status !== InspectionStatus.RASCUNHO) {
@@ -620,11 +662,17 @@ export class InspectionsService {
     let status: 'CREATED' | 'UPDATED' = 'UPDATED';
 
     if (!inspection) {
+      if (!payload.serviceOrderId) {
+        throw new BadRequestException(
+          'serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.',
+        );
+      }
       inspection = await this.create(
         {
           module: payload.module,
           checklistId: payload.checklistId,
           teamId: payload.teamId,
+          serviceOrderId: payload.serviceOrderId,
           serviceDescription: payload.serviceDescription,
           locationDescription: payload.locationDescription,
           collaboratorIds: payload.collaboratorIds || [],
@@ -809,7 +857,7 @@ export class InspectionsService {
     }
 
     if (payload.finalize) {
-      await this.finalize(inspection.id, userId, userRole);
+      await this.finalize(inspection.id);
     } else {
       await this.inspectionsRepository.update(inspection.id, {
         syncedAt: payload.syncedAt ? new Date(payload.syncedAt) : new Date(),

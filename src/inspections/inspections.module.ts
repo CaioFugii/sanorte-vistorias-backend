@@ -12,6 +12,7 @@ import {
   Checklist,
   Collaborator,
   ChecklistSection,
+  ServiceOrder,
 } from '../entities';
 import { InspectionDomainService } from './inspection-domain.service';
 import { SyncController } from './sync.controller';
@@ -29,6 +30,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
       Checklist,
       Collaborator,
       ChecklistSection,
+      ServiceOrder,
     ]),
     CloudinaryModule,
   ],

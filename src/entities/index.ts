@@ -10,3 +10,4 @@ export * from './inspection-item.entity';
 export * from './evidence.entity';
 export * from './signature.entity';
 export * from './pending-adjustment.entity';
+export * from './service-order.entity';
