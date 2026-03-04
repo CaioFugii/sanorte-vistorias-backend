@@ -241,7 +241,10 @@ export class InspectionsService {
       .leftJoinAndSelect('inspection.serviceOrder', 'serviceOrder')
       .leftJoinAndSelect('inspection.items', 'items')
       .leftJoinAndSelect('items.checklistItem', 'itemsChecklistItem')
-      .leftJoinAndSelect('itemsChecklistItem.section', 'itemsChecklistItemSection')
+      .leftJoinAndSelect(
+        'itemsChecklistItem.section',
+        'itemsChecklistItemSection',
+      )
       .where('inspection.createdByUserId = :userId', { userId })
       .orderBy('inspection.createdAt', 'DESC');
 
@@ -251,10 +254,7 @@ export class InspectionsService {
       });
     }
 
-    const [data, total] = await query
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+    const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
 
     const totalPages = Math.ceil(total / limit);
 
