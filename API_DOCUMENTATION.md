@@ -62,7 +62,7 @@ Authorization: Bearer <token>
 - `POST /inspections/:id/unparalyze`:
   - disponível apenas para GESTOR/ADMIN.
   - remove penalidade e recalcula nota (correção de erro).
-- `POST /inspections/:id/finalize` exige assinatura e, para itens não conformes com obrigatoriedade, evidência.
+- `POST /inspections/:id/finalize`: assinatura é opcional; para itens não conformes com obrigatoriedade, evidência é exigida.
 
 ### Máquina de status da vistoria (visão frontend)
 
@@ -1074,7 +1074,7 @@ Response 200: `Inspection` finalizada
 
 Regras:
 
-- Exige assinatura do líder/encarregado.
+- Assinatura do líder/encarregado é opcional.
 - Item `NAO_CONFORME` com `requiresPhotoOnNonConformity = true` exige evidência.
 - Calcula `scorePercent` (com penalidade de 25% quando `hasParalysisPenalty = true`).
 - Se houver `NAO_CONFORME`: status `PENDENTE_AJUSTE` e pendência `PENDENTE`.
@@ -1390,7 +1390,6 @@ Mensagens relevantes do domínio:
 - `reason should not be empty`
 - `Não é possível adicionar assinatura em vistoria finalizada`
 - `Vistoria já foi finalizada`
-- `Assinatura do líder/encarregado é obrigatória para finalizar`
 - `Item "<titulo>" requer foto de evidência quando não conforme`
 - `Vistoria não está pendente de ajuste`
 - `Apenas itens em não conformidade podem ser resolvidos`

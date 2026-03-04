@@ -142,13 +142,16 @@ describe('InspectionsService - Regras de Negócio', () => {
     expect(pendingAdjustmentsRepository.save).toHaveBeenCalled();
   });
 
-  it('deve exigir assinatura para finalizar', async () => {
+  it('deve permitir finalizar sem assinatura (assinatura é opcional)', async () => {
     jest.spyOn(service, 'findOne').mockResolvedValue(mockInspection as Inspection);
     signaturesRepository.findOne.mockResolvedValue(null);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.CONFORME },
+    ] as InspectionItem[]);
 
-    await expect(
-      service.finalize('test-id'),
-    ).rejects.toThrow(BadRequestException);
+    await service.finalize('test-id');
+
+    expect(inspectionsRepository.update).toHaveBeenCalled();
   });
 
   it('deve aplicar penalidade persistente no score ao atualizar itens', async () => {

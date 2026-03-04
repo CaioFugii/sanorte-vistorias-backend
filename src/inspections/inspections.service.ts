@@ -527,17 +527,6 @@ export class InspectionsService {
 
     const inspectionId = inspection.id;
 
-    // Validar assinatura obrigatória
-    const signature = await this.signaturesRepository.findOne({
-      where: { inspectionId },
-    });
-
-    if (!signature) {
-      throw new BadRequestException(
-        'Assinatura do líder/encarregado é obrigatória para finalizar',
-      );
-    }
-
     // Validar evidências para itens NAO_CONFORME
     const items = await this.inspectionItemsRepository.find({
       where: { inspectionId },
