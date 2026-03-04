@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Collaborator } from './collaborator.entity';
 import { Checklist } from './checklist.entity';
+import { ServiceOrder } from './service-order.entity';
 
 @Entity('sectors')
 export class Sector {
@@ -31,4 +32,7 @@ export class Sector {
 
   @OneToMany(() => Checklist, (checklist) => checklist.sector)
   checklists: Checklist[];
+
+  @OneToMany(() => ServiceOrder, (serviceOrder) => serviceOrder.sector)
+  serviceOrders: ServiceOrder[];
 }
