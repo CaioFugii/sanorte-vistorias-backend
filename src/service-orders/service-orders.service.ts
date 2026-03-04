@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Like, FindOperator } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { ServiceOrder, Sector } from '../entities';
+import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 export interface ImportResult {
   inserted: number;
@@ -19,11 +20,46 @@ export class ServiceOrdersService {
     private readonly sectorsRepository: Repository<Sector>,
   ) {}
 
-  async findAll(): Promise<ServiceOrder[]> {
-    return this.serviceOrderRepository.find({
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+    osNumber?: string,
+    sectorId?: string,
+  ): Promise<PaginatedResponseDto<ServiceOrder>> {
+    const skip = (page - 1) * limit;
+    const where: {
+      osNumber?: string | FindOperator<string>;
+      sectorId?: string;
+    } = {};
+
+    if (osNumber?.trim()) {
+      where.osNumber = Like(`%${osNumber.trim()}%`) as FindOperator<string>;
+    }
+    if (sectorId) {
+      where.sectorId = sectorId;
+    }
+
+    const [data, total] = await this.serviceOrderRepository.findAndCount({
+      where,
       relations: ['sector'],
+      skip,
+      take: limit,
       order: { osNumber: 'ASC' },
     });
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 
   async importFromExcel(file: Express.Multer.File): Promise<ImportResult> {
@@ -177,6 +213,7 @@ export class ServiceOrdersService {
       'TROCA DE RAMAL DE ESGOTO': 'ESGOTO',
       'OUTROS SERVIÇOS DE ESGOTO': 'ESGOTO',
       'DESOBSTRUÇÃO': 'ESGOTO',
+      'CONSERTO DE ESGOTO': 'ESGOTO',
 
       'OUTROS SERVIÇOS DE REPOSIÇÃO': 'REPOSICAO',
       REPOSIÇÃO: 'REPOSICAO',

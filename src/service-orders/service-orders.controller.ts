@@ -9,6 +9,7 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ServiceOrdersService } from './service-orders.service';
@@ -16,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
+import { FilterServiceOrdersDto } from './dto/filter-service-orders.dto';
 
 @Controller('service-orders')
 @UseGuards(JwtAuthGuard)
@@ -25,8 +27,13 @@ export class ServiceOrdersController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.FISCAL)
-  findAll() {
-    return this.serviceOrdersService.findAll();
+  findAll(@Query() query: FilterServiceOrdersDto) {
+    return this.serviceOrdersService.findAll(
+      query.page || 1,
+      query.limit || 10,
+      query.osNumber,
+      query.sectorId,
+    );
   }
 
   @Post('import')
