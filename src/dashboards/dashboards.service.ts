@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Inspection, Team } from '../entities';
 import { ModuleType, InspectionStatus } from '../common/enums';
+
+const MAX_DATE_RANGE_YEARS = 2;
 
 @Injectable()
 export class DashboardsService {
@@ -13,137 +19,144 @@ export class DashboardsService {
     private teamRepository: Repository<Team>,
   ) {}
 
+  private validateDateRange(from: string, to: string): void {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    if (fromDate > toDate) {
+      throw new BadRequestException(
+        'A data inicial (from) não pode ser posterior à data final (to).',
+      );
+    }
+    const maxEnd = new Date(fromDate);
+    maxEnd.setFullYear(maxEnd.getFullYear() + MAX_DATE_RANGE_YEARS);
+    if (toDate > maxEnd) {
+      throw new BadRequestException(
+        `O intervalo de datas não pode ser maior que ${MAX_DATE_RANGE_YEARS} anos.`,
+      );
+    }
+  }
+
   async getSummary(filters: {
-    from?: string;
-    to?: string;
+    from: string;
+    to: string;
     module?: ModuleType;
     teamId?: string;
   }) {
-    const query = this.inspectionsRepository
+    this.validateDateRange(filters.from, filters.to);
+    const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
-      .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO });
+      .select('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect(
+        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        'pendingCount',
+      )
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO })
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: filters.to });
 
-    if (filters.from) {
-      query.andWhere('inspection.createdAt >= :from', { from: filters.from });
-    }
-    if (filters.to) {
-      query.andWhere('inspection.createdAt <= :to', { to: filters.to });
-    }
     if (filters.module) {
-      query.andWhere('inspection.module = :module', { module: filters.module });
+      qb.andWhere('inspection.module = :module', { module: filters.module });
     }
     if (filters.teamId) {
-      query.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
+      qb.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
     }
 
-    const inspections = await query.getMany();
+    const row = await qb.getRawOne<{
+      inspectionsCount: string;
+      pendingCount: string;
+      averagePercent: string | null;
+    }>();
 
-    const totalInspections = inspections.length;
-    const pendingCount = inspections.filter(
-      (i) => i.status === InspectionStatus.PENDENTE_AJUSTE,
-    ).length;
-
-    const scores = inspections
-      .map((i) => i.scorePercent)
-      .filter((s) => s !== null && s !== undefined) as number[];
-
+    const inspectionsCount = parseInt(row?.inspectionsCount ?? '0', 10);
+    const pendingCount = parseInt(row?.pendingCount ?? '0', 10);
+    const averagePercentRaw = row?.averagePercent;
     const averagePercent =
-      scores.length > 0
-        ? scores.reduce((sum, score) => sum + Number(score), 0) / scores.length
+      averagePercentRaw != null
+        ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
         : 0;
 
     return {
-      averagePercent: Math.round(averagePercent * 100) / 100,
-      inspectionsCount: totalInspections,
+      averagePercent,
+      inspectionsCount,
       pendingCount,
     };
   }
 
   async getTeamsRanking(filters: {
-    from?: string;
-    to?: string;
+    from: string;
+    to: string;
     module?: ModuleType;
   }) {
-    const query = this.inspectionsRepository
+    this.validateDateRange(filters.from, filters.to);
+    const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
-      .leftJoinAndSelect('inspection.team', 'team')
-      .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO });
+      .leftJoin('inspection.team', 'team')
+      .select('inspection.teamId', 'teamId')
+      .addSelect('COALESCE(team.name, :noTeam)', 'teamName')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect(
+        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        'pendingCount',
+      )
+      .addSelect(
+        `SUM(CASE WHEN inspection.hasParalysisPenalty = true THEN 1 ELSE 0 END)`,
+        'paralyzedCount',
+      )
+      .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO })
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .setParameter('noTeam', 'Sem equipe')
+      .groupBy('inspection.teamId')
+      .addGroupBy('team.name')
+      .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: filters.to });
 
-    if (filters.from) {
-      query.andWhere('inspection.createdAt >= :from', { from: filters.from });
-    }
-    if (filters.to) {
-      query.andWhere('inspection.createdAt <= :to', { to: filters.to });
-    }
     if (filters.module) {
-      query.andWhere('inspection.module = :module', { module: filters.module });
+      qb.andWhere('inspection.module = :module', { module: filters.module });
     }
 
-    const inspections = await query.getMany();
+    const rows = await qb.getRawMany<{
+      teamId: string;
+      teamName: string;
+      inspectionsCount: string;
+      averagePercent: string | null;
+      pendingCount: string;
+      paralyzedCount: string;
+    }>();
 
-    // Agrupar por equipe
-    const teamMap = new Map<string, any>();
-
-    inspections.forEach((inspection) => {
-      const teamId = inspection.teamId;
-      if (!teamMap.has(teamId)) {
-        teamMap.set(teamId, {
-          teamId,
-          teamName: inspection.team?.name || 'Sem equipe',
-          scores: [],
-          inspections: [],
-        });
-      }
-
-      const teamData = teamMap.get(teamId);
-      teamData.inspections.push(inspection);
-      if (inspection.scorePercent !== null && inspection.scorePercent !== undefined) {
-        teamData.scores.push(Number(inspection.scorePercent));
-      }
-    });
-
-    // Calcular médias e contagens
-    const ranking = Array.from(teamMap.values()).map((team) => {
+    return rows.map((row) => {
+      const inspectionsCount = parseInt(row.inspectionsCount, 10);
+      const paralyzedCount = parseInt(row.paralyzedCount, 10);
+      const averagePercentRaw = row.averagePercent;
       const averagePercent =
-        team.scores.length > 0
-          ? team.scores.reduce((sum: number, score: number) => sum + score, 0) /
-            team.scores.length
+        averagePercentRaw != null
+          ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
           : 0;
-
-      const pendingCount = team.inspections.filter(
-        (i) => i.status === InspectionStatus.PENDENTE_AJUSTE,
-      ).length;
-
-      const paralyzedCount = team.inspections.filter(
-        (i) => i.hasParalysisPenalty === true,
-      ).length;
       const paralysisRatePercent =
-        team.inspections.length > 0
-          ? Math.round((paralyzedCount / team.inspections.length) * 10000) / 100
+        inspectionsCount > 0
+          ? Math.round((paralyzedCount / inspectionsCount) * 10000) / 100
           : 0;
 
       return {
-        teamId: team.teamId,
-        teamName: team.teamName,
-        averagePercent: Math.round(averagePercent * 100) / 100,
-        inspectionsCount: team.inspections.length,
-        pendingCount,
+        teamId: row.teamId,
+        teamName: row.teamName,
+        averagePercent,
+        inspectionsCount,
+        pendingCount: parseInt(row.pendingCount, 10),
         paralyzedCount,
         paralysisRatePercent,
       };
     });
-
-    // Ordenar por média decrescente
-    ranking.sort((a, b) => b.averagePercent - a.averagePercent);
-
-    return ranking;
   }
 
   async getTeamPerformance(
     teamId: string,
     filters: {
-      from?: string;
-      to?: string;
+      from: string;
+      to: string;
       module?: ModuleType;
     },
   ) {
@@ -152,49 +165,54 @@ export class DashboardsService {
       throw new NotFoundException('Equipe não encontrada');
     }
 
-    const query = this.inspectionsRepository
+    this.validateDateRange(filters.from, filters.to);
+    const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
+      .select('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect(
+        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        'pendingCount',
+      )
+      .addSelect(
+        `SUM(CASE WHEN inspection.hasParalysisPenalty = true THEN 1 ELSE 0 END)`,
+        'paralyzedCount',
+      )
       .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO })
-      .andWhere('inspection.teamId = :teamId', { teamId });
+      .andWhere('inspection.teamId = :teamId', { teamId })
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: filters.to });
 
-    if (filters.from) {
-      query.andWhere('inspection.createdAt >= :from', { from: filters.from });
-    }
-    if (filters.to) {
-      query.andWhere('inspection.createdAt <= :to', { to: filters.to });
-    }
     if (filters.module) {
-      query.andWhere('inspection.module = :module', { module: filters.module });
+      qb.andWhere('inspection.module = :module', { module: filters.module });
     }
 
-    const inspections = await query.getMany();
+    const row = await qb.getRawOne<{
+      inspectionsCount: string;
+      averagePercent: string | null;
+      pendingCount: string;
+      paralyzedCount: string;
+    }>();
 
-    const pendingCount = inspections.filter(
-      (i) => i.status === InspectionStatus.PENDENTE_AJUSTE,
-    ).length;
-
-    const scores = inspections
-      .map((i) => i.scorePercent)
-      .filter((s) => s !== null && s !== undefined) as number[];
+    const inspectionsCount = parseInt(row?.inspectionsCount ?? '0', 10);
+    const paralyzedCount = parseInt(row?.paralyzedCount ?? '0', 10);
+    const averagePercentRaw = row?.averagePercent;
     const averagePercent =
-      scores.length > 0
-        ? scores.reduce((sum, score) => sum + Number(score), 0) / scores.length
+      averagePercentRaw != null
+        ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
         : 0;
-
-    const paralyzedCount = inspections.filter(
-      (i) => i.hasParalysisPenalty === true,
-    ).length;
     const paralysisRatePercent =
-      inspections.length > 0
-        ? Math.round((paralyzedCount / inspections.length) * 10000) / 100
+      inspectionsCount > 0
+        ? Math.round((paralyzedCount / inspectionsCount) * 10000) / 100
         : 0;
 
     return {
       teamId: team.id,
       teamName: team.name,
-      averagePercent: Math.round(averagePercent * 100) / 100,
-      inspectionsCount: inspections.length,
-      pendingCount,
+      averagePercent,
+      inspectionsCount,
+      pendingCount: parseInt(row?.pendingCount ?? '0', 10),
       paralyzedCount,
       paralysisRatePercent,
     };

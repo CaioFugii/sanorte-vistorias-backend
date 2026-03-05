@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { DashboardsService } from './dashboards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ModuleType } from '../common/enums';
+import { DashboardQueryDto } from './dto/dashboard-query.dto';
 
 @Controller('dashboards')
 @UseGuards(JwtAuthGuard)
@@ -9,35 +9,33 @@ export class DashboardsController {
   constructor(private readonly dashboardsService: DashboardsService) {}
 
   @Get('summary')
-  getSummary(
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('module') module?: ModuleType,
-    @Query('teamId') teamId?: string,
-  ) {
-    return this.dashboardsService.getSummary({ from, to, module, teamId });
+  getSummary(@Query() query: DashboardQueryDto) {
+    return this.dashboardsService.getSummary({
+      from: query.from,
+      to: query.to,
+      module: query.module,
+      teamId: query.teamId,
+    });
   }
 
   @Get('ranking/teams')
-  getTeamsRanking(
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('module') module?: ModuleType,
-  ) {
-    return this.dashboardsService.getTeamsRanking({ from, to, module });
+  getTeamsRanking(@Query() query: DashboardQueryDto) {
+    return this.dashboardsService.getTeamsRanking({
+      from: query.from,
+      to: query.to,
+      module: query.module,
+    });
   }
 
   @Get('teams/:teamId')
   getTeamPerformance(
     @Param('teamId') teamId: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('module') module?: ModuleType,
+    @Query() query: DashboardQueryDto,
   ) {
     return this.dashboardsService.getTeamPerformance(teamId, {
-      from,
-      to,
-      module,
+      from: query.from,
+      to: query.to,
+      module: query.module,
     });
   }
 }

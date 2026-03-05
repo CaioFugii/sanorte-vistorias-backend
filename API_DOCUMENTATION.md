@@ -1307,10 +1307,11 @@ Response 200:
 
 - Auth: JWT
 - Query:
-  - `from` (`YYYY-MM-DD`)
-  - `to` (`YYYY-MM-DD`)
-  - `module` (`ModuleType`)
-  - `teamId` (`uuid`)
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `module` (`ModuleType`) opcional
+  - `teamId` (`uuid`) opcional
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 
 Response 200:
 
@@ -1326,9 +1327,10 @@ Response 200:
 
 - Auth: JWT
 - Query:
-  - `from` (`YYYY-MM-DD`)
-  - `to` (`YYYY-MM-DD`)
-  - `module` (`ModuleType`)
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `module` (`ModuleType`) opcional
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 
 Response 200:
 
@@ -1363,9 +1365,10 @@ Response 200:
 - Auth: JWT
 - Path: `teamId` (uuid da equipe).
 - Query:
-  - `from` (`YYYY-MM-DD`)
-  - `to` (`YYYY-MM-DD`)
-  - `module` (`ModuleType`)
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `module` (`ModuleType`) opcional
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 
 Retorna métricas de desempenho de uma equipe específica no período e módulo (mesmos filtros do summary/ranking). Útil para tela de detalhe da equipe ou relatório.
 
