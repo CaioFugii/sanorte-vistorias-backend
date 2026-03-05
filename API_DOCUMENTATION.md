@@ -38,7 +38,7 @@ Authorization: Bearer <token>
   - PDF: `GET /inspections/:id/pdf`
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`
+- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`
 
 ### Regras críticas que impactam UI
 
@@ -1339,16 +1339,58 @@ Response 200:
     "teamName": "Equipe Norte",
     "averagePercent": 95.1,
     "inspectionsCount": 12,
-    "pendingCount": 2
+    "pendingCount": 2,
+    "paralyzedCount": 1,
+    "paralysisRatePercent": 8.33
   },
   {
     "teamId": "uuid-2",
     "teamName": "Equipe Sul",
     "averagePercent": 90.2,
     "inspectionsCount": 10,
-    "pendingCount": 1
+    "pendingCount": 1,
+    "paralyzedCount": 0,
+    "paralysisRatePercent": 0
   }
 ]
+```
+
+- `paralyzedCount`: quantidade de vistorias com penalidade de paralisação no período.
+- `paralysisRatePercent`: percentual de vistorias paralisadas (paralyzedCount / inspectionsCount).
+
+### GET /dashboards/teams/:teamId
+
+- Auth: JWT
+- Path: `teamId` (uuid da equipe).
+- Query:
+  - `from` (`YYYY-MM-DD`)
+  - `to` (`YYYY-MM-DD`)
+  - `module` (`ModuleType`)
+
+Retorna métricas de desempenho de uma equipe específica no período e módulo (mesmos filtros do summary/ranking). Útil para tela de detalhe da equipe ou relatório.
+
+Response 200:
+
+```json
+{
+  "teamId": "uuid",
+  "teamName": "Equipe Norte",
+  "averagePercent": 95.1,
+  "inspectionsCount": 12,
+  "pendingCount": 2,
+  "paralyzedCount": 1,
+  "paralysisRatePercent": 8.33
+}
+```
+
+Response 404 quando a equipe não existe:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Equipe não encontrada",
+  "error": "Not Found"
+}
 ```
 
 ## Permissões por role

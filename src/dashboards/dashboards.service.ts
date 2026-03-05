@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Inspection } from '../entities';
+import { Inspection, Team } from '../entities';
 import { ModuleType, InspectionStatus } from '../common/enums';
 
 @Injectable()
@@ -9,6 +9,8 @@ export class DashboardsService {
   constructor(
     @InjectRepository(Inspection)
     private inspectionsRepository: Repository<Inspection>,
+    @InjectRepository(Team)
+    private teamRepository: Repository<Team>,
   ) {}
 
   async getSummary(filters: {
@@ -112,12 +114,22 @@ export class DashboardsService {
         (i) => i.status === InspectionStatus.PENDENTE_AJUSTE,
       ).length;
 
+      const paralyzedCount = team.inspections.filter(
+        (i) => i.hasParalysisPenalty === true,
+      ).length;
+      const paralysisRatePercent =
+        team.inspections.length > 0
+          ? Math.round((paralyzedCount / team.inspections.length) * 10000) / 100
+          : 0;
+
       return {
         teamId: team.teamId,
         teamName: team.teamName,
         averagePercent: Math.round(averagePercent * 100) / 100,
         inspectionsCount: team.inspections.length,
         pendingCount,
+        paralyzedCount,
+        paralysisRatePercent,
       };
     });
 
@@ -125,5 +137,66 @@ export class DashboardsService {
     ranking.sort((a, b) => b.averagePercent - a.averagePercent);
 
     return ranking;
+  }
+
+  async getTeamPerformance(
+    teamId: string,
+    filters: {
+      from?: string;
+      to?: string;
+      module?: ModuleType;
+    },
+  ) {
+    const team = await this.teamRepository.findOne({ where: { id: teamId } });
+    if (!team) {
+      throw new NotFoundException('Equipe não encontrada');
+    }
+
+    const query = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO })
+      .andWhere('inspection.teamId = :teamId', { teamId });
+
+    if (filters.from) {
+      query.andWhere('inspection.createdAt >= :from', { from: filters.from });
+    }
+    if (filters.to) {
+      query.andWhere('inspection.createdAt <= :to', { to: filters.to });
+    }
+    if (filters.module) {
+      query.andWhere('inspection.module = :module', { module: filters.module });
+    }
+
+    const inspections = await query.getMany();
+
+    const pendingCount = inspections.filter(
+      (i) => i.status === InspectionStatus.PENDENTE_AJUSTE,
+    ).length;
+
+    const scores = inspections
+      .map((i) => i.scorePercent)
+      .filter((s) => s !== null && s !== undefined) as number[];
+    const averagePercent =
+      scores.length > 0
+        ? scores.reduce((sum, score) => sum + Number(score), 0) / scores.length
+        : 0;
+
+    const paralyzedCount = inspections.filter(
+      (i) => i.hasParalysisPenalty === true,
+    ).length;
+    const paralysisRatePercent =
+      inspections.length > 0
+        ? Math.round((paralyzedCount / inspections.length) * 10000) / 100
+        : 0;
+
+    return {
+      teamId: team.id,
+      teamName: team.name,
+      averagePercent: Math.round(averagePercent * 100) / 100,
+      inspectionsCount: inspections.length,
+      pendingCount,
+      paralyzedCount,
+      paralysisRatePercent,
+    };
   }
 }

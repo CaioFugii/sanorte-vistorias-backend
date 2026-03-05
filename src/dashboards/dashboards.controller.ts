@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { DashboardsService } from './dashboards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ModuleType } from '../common/enums';
@@ -25,5 +25,19 @@ export class DashboardsController {
     @Query('module') module?: ModuleType,
   ) {
     return this.dashboardsService.getTeamsRanking({ from, to, module });
+  }
+
+  @Get('teams/:teamId')
+  getTeamPerformance(
+    @Param('teamId') teamId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('module') module?: ModuleType,
+  ) {
+    return this.dashboardsService.getTeamPerformance(teamId, {
+      from,
+      to,
+      module,
+    });
   }
 }
