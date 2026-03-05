@@ -25,11 +25,17 @@ export class ServiceOrdersService {
     limit: number = 10,
     osNumber?: string,
     sectorId?: string,
+    field?: boolean,
+    remote?: boolean,
+    postWork?: boolean,
   ): Promise<PaginatedResponseDto<ServiceOrder>> {
     const skip = (page - 1) * limit;
     const where: {
       osNumber?: string | FindOperator<string>;
       sectorId?: string;
+      field?: boolean;
+      remote?: boolean;
+      postWork?: boolean;
     } = {};
 
     if (osNumber?.trim()) {
@@ -37,6 +43,15 @@ export class ServiceOrdersService {
     }
     if (sectorId) {
       where.sectorId = sectorId;
+    }
+    if (field !== undefined) {
+      where.field = field;
+    }
+    if (remote !== undefined) {
+      where.remote = remote;
+    }
+    if (postWork !== undefined) {
+      where.postWork = postWork;
     }
 
     const [data, total] = await this.serviceOrderRepository.findAndCount({

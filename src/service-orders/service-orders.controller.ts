@@ -33,6 +33,9 @@ export class ServiceOrdersController {
       query.limit || 10,
       query.osNumber,
       query.sectorId,
+      query.field,
+      query.remote,
+      query.postWork,
     );
   }
 

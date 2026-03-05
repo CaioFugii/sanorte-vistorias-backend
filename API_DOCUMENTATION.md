@@ -83,6 +83,7 @@ Authorization: Bearer <token>
 ### Filtros disponíveis para listagens (essencial para telas)
 
 - Paginação padrão em listas: `page`, `limit`.
+- `GET /service-orders`: filtros por `osNumber` (busca parcial), `sectorId`, `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA).
 - `GET /collaborators`: filtro por `sectorId`.
 - `GET /checklists`: filtros por `module`, `active`, `sectorId`.
 - `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status`, `osNumber` (busca parcial por número da OS; regra de ocultar rascunho para GESTOR/ADMIN).
@@ -871,8 +872,15 @@ Response 200: `ChecklistItem` atualizado
 ### GET /service-orders
 
 - Auth: JWT + FISCAL ou GESTOR ou ADMIN
-- Response 200: array de `ServiceOrder` ordenados por `osNumber`
-- Uso: listar OS disponíveis para vincular a novas vistorias
+- Query:
+  - `page`, `limit` (paginação padrão)
+  - `osNumber` (opcional; busca parcial por número da OS)
+  - `sectorId` (opcional; UUID do setor)
+  - `field` (opcional; `true` ou `false` — filtra OS já usadas em vistoria CAMPO)
+  - `remote` (opcional; `true` ou `false` — filtra OS já usadas em vistoria REMOTO)
+  - `postWork` (opcional; `true` ou `false` — filtra OS já usadas em vistoria POS_OBRA)
+- Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`
+- Uso: listar OS disponíveis para vincular a novas vistorias; filtrar por uso por módulo (field/remote/postWork)
 
 ### POST /service-orders/import
 
