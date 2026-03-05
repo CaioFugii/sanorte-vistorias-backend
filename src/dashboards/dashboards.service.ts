@@ -10,6 +10,13 @@ import { ModuleType, InspectionStatus } from '../common/enums';
 
 const MAX_DATE_RANGE_YEARS = 2;
 
+/** Converte uma data YYYY-MM-DD para o fim do dia (23:59:59.999) em UTC. */
+function toEndOfDay(dateStr: string): Date {
+  const d = new Date(dateStr + 'T00:00:00.000Z');
+  d.setUTCHours(23, 59, 59, 999);
+  return d;
+}
+
 @Injectable()
 export class DashboardsService {
   constructor(
@@ -43,6 +50,7 @@ export class DashboardsService {
     teamId?: string;
   }) {
     this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .select('COUNT(inspection.id)', 'inspectionsCount')
@@ -54,7 +62,7 @@ export class DashboardsService {
       .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO })
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
       .andWhere('inspection.createdAt >= :from', { from: filters.from })
-      .andWhere('inspection.createdAt <= :to', { to: filters.to });
+      .andWhere('inspection.createdAt <= :to', { to: toLimit });
 
     if (filters.module) {
       qb.andWhere('inspection.module = :module', { module: filters.module });
@@ -90,6 +98,7 @@ export class DashboardsService {
     module?: ModuleType;
   }) {
     this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .leftJoin('inspection.team', 'team')
@@ -112,7 +121,7 @@ export class DashboardsService {
       .addGroupBy('team.name')
       .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
       .andWhere('inspection.createdAt >= :from', { from: filters.from })
-      .andWhere('inspection.createdAt <= :to', { to: filters.to });
+      .andWhere('inspection.createdAt <= :to', { to: toLimit });
 
     if (filters.module) {
       qb.andWhere('inspection.module = :module', { module: filters.module });
@@ -166,6 +175,7 @@ export class DashboardsService {
     }
 
     this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .select('COUNT(inspection.id)', 'inspectionsCount')
@@ -182,7 +192,7 @@ export class DashboardsService {
       .andWhere('inspection.teamId = :teamId', { teamId })
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
       .andWhere('inspection.createdAt >= :from', { from: filters.from })
-      .andWhere('inspection.createdAt <= :to', { to: filters.to });
+      .andWhere('inspection.createdAt <= :to', { to: toLimit });
 
     if (filters.module) {
       qb.andWhere('inspection.module = :module', { module: filters.module });
