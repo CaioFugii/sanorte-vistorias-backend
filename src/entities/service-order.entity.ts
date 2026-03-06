@@ -6,15 +6,17 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { Sector } from './sector.entity';
 
 @Entity('service_orders')
+@Unique('UQ_os_number_sector_id', ['osNumber', 'sectorId'])
 export class ServiceOrder {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'os_number', unique: true })
+  @Column({ name: 'os_number' })
   osNumber: string;
 
   @Column({ name: 'sector_id' })
