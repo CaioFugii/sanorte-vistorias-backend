@@ -96,7 +96,10 @@ export class ServiceOrdersService {
       errors: [],
     };
 
-    const cancelledPairs = new Map<string, { osNumber: string; sectorId: string }>();
+    const cancelledPairs = new Map<
+      string,
+      { osNumber: string; sectorId: string }
+    >();
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -124,7 +127,10 @@ export class ServiceOrdersService {
     if (cancelledPairs.size > 0) {
       const pairs = [...cancelledPairs.values()];
       const toDelete = await this.serviceOrderRepository.find({
-        where: pairs.map((p) => ({ osNumber: p.osNumber, sectorId: p.sectorId })),
+        where: pairs.map((p) => ({
+          osNumber: p.osNumber,
+          sectorId: p.sectorId,
+        })),
         select: ['id'],
       });
       if (toDelete.length > 0) {
@@ -134,6 +140,7 @@ export class ServiceOrdersService {
     }
 
     const seenOsNumbers = new Set<string>();
+    const ignoredFamilies = new Set<string>(['VISTORIA']);
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -144,6 +151,11 @@ export class ServiceOrdersService {
       const enderecoRaw = row['Endereço'] ?? row['Endereco'];
       const numeroRaw = row['Número'] ?? row['Numero'];
       const bairroRaw = row['Bairro'];
+
+      if (ignoredFamilies.has(familyRaw)) {
+        result.skipped++;
+        continue;
+      }
 
       const osNumber = this.normalizeOsNumber(osNumberRaw);
       const sectorName = this.mapSectorFromFamily(familyRaw);
@@ -168,7 +180,7 @@ export class ServiceOrdersService {
         result.errors.push(`Linha ${i + 2}: Status vazio ou inválido`);
         continue;
       }
-      
+
       if (status.toUpperCase() === 'CANCELADA') continue;
 
       const sector = sectorsByName.get(sectorName);

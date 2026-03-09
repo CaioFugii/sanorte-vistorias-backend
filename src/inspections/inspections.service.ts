@@ -163,7 +163,6 @@ export class InspectionsService {
     page: number = 1,
     limit: number = 10,
   ): Promise<PaginatedResponseDto<Inspection>> {
-    // Listagem de ADMIN/GESTOR não deve retornar vistorias em rascunho.
     if (filters.status === InspectionStatus.RASCUNHO) {
       return {
         data: [],
