@@ -18,6 +18,10 @@ export class SyncController {
     @Body() body: SyncInspectionsRequestDto,
     @CurrentUser() user: { id: string; role: UserRole },
   ) {
-    return this.inspectionsService.syncInspections(body?.inspections || [], user.id, user.role);
+    return this.inspectionsService.syncInspections(
+      body?.inspections || [],
+      user.id,
+      user.role,
+    );
   }
 }

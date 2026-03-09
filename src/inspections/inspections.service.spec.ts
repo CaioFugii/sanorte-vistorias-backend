@@ -1,12 +1,5 @@
 import { InspectionsService } from './inspections.service';
-import {
-  Inspection,
-  InspectionItem,
-  Evidence,
-  Signature,
-  PendingAdjustment,
-  ChecklistItem,
-} from '../entities';
+import { Inspection } from '../entities';
 import { ChecklistAnswer, ModuleType, UserRole } from '../common/enums';
 import { InspectionDomainService } from './inspection-domain.service';
 

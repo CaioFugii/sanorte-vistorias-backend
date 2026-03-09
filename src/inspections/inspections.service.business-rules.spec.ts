@@ -1,9 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { InspectionsService } from './inspections.service';
 import {
   Inspection,
   InspectionItem,
-  Evidence,
   Signature,
   PendingAdjustment,
   ChecklistItem,
@@ -84,7 +83,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       status: InspectionStatus.FINALIZADA,
     };
 
-    jest.spyOn(inspectionsRepository, 'findOne').mockResolvedValue(finalizedInspection as Inspection);
+    jest
+      .spyOn(inspectionsRepository, 'findOne')
+      .mockResolvedValue(finalizedInspection as Inspection);
 
     await expect(
       service.update('test-id', {}, 'user-id', UserRole.FISCAL),
@@ -97,7 +98,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       status: InspectionStatus.FINALIZADA,
     };
 
-    jest.spyOn(inspectionsRepository, 'findOne').mockResolvedValue(finalizedInspection as Inspection);
+    jest
+      .spyOn(inspectionsRepository, 'findOne')
+      .mockResolvedValue(finalizedInspection as Inspection);
     jest.spyOn(inspectionsRepository, 'update').mockResolvedValue(undefined);
 
     await expect(
@@ -106,7 +109,9 @@ describe('InspectionsService - Regras de Negócio', () => {
   });
 
   it('deve marcar vistoria como PENDENTE_AJUSTE quando houver NAO_CONFORME ao finalizar', async () => {
-    jest.spyOn(service, 'findOne').mockResolvedValue(mockInspection as Inspection);
+    jest
+      .spyOn(service, 'findOne')
+      .mockResolvedValue(mockInspection as Inspection);
     signaturesRepository.findOne.mockResolvedValue({
       id: 'sig-id',
       inspectionId: 'test-id',
@@ -143,7 +148,9 @@ describe('InspectionsService - Regras de Negócio', () => {
   });
 
   it('deve permitir finalizar sem assinatura (assinatura é opcional)', async () => {
-    jest.spyOn(service, 'findOne').mockResolvedValue(mockInspection as Inspection);
+    jest
+      .spyOn(service, 'findOne')
+      .mockResolvedValue(mockInspection as Inspection);
     signaturesRepository.findOne.mockResolvedValue(null);
     inspectionItemsRepository.find.mockResolvedValue([
       { answer: ChecklistAnswer.CONFORME },
@@ -161,9 +168,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: true,
     } as Inspection;
 
-    jest
-      .spyOn(service, 'findOne')
-      .mockResolvedValue(inspection);
+    jest.spyOn(service, 'findOne').mockResolvedValue(inspection);
     inspectionItemsRepository.findOne.mockResolvedValue({
       id: 'item-1',
       inspectionId: 'test-id',
@@ -200,9 +205,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: false,
     } as Inspection;
 
-    jest
-      .spyOn(service, 'findOne')
-      .mockResolvedValue(inspection);
+    jest.spyOn(service, 'findOne').mockResolvedValue(inspection);
     inspectionItemsRepository.findOne.mockResolvedValue({
       id: 'item-1',
       inspectionId: 'test-id',

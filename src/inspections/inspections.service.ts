@@ -98,11 +98,17 @@ export class InspectionsService {
 
     // Marcar a ordem de serviço como usada no módulo correspondente
     const serviceOrderUpdate: Partial<ServiceOrder> = {};
-    if (inspectionData.module === ModuleType.CAMPO) serviceOrderUpdate.field = true;
-    if (inspectionData.module === ModuleType.REMOTO) serviceOrderUpdate.remote = true;
-    if (inspectionData.module === ModuleType.POS_OBRA) serviceOrderUpdate.postWork = true;
+    if (inspectionData.module === ModuleType.CAMPO)
+      serviceOrderUpdate.field = true;
+    if (inspectionData.module === ModuleType.REMOTO)
+      serviceOrderUpdate.remote = true;
+    if (inspectionData.module === ModuleType.POS_OBRA)
+      serviceOrderUpdate.postWork = true;
     if (Object.keys(serviceOrderUpdate).length > 0) {
-      await this.serviceOrderRepository.update(inspectionData.serviceOrderId, serviceOrderUpdate);
+      await this.serviceOrderRepository.update(
+        inspectionData.serviceOrderId,
+        serviceOrderUpdate,
+      );
     }
 
     // Criar inspection items baseados no checklist

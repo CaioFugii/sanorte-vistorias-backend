@@ -21,7 +21,10 @@ export class InspectionDomainService {
     return this.roundPercent(baseScore);
   }
 
-  applyParalysisPenalty(baseScorePercent: number, hasParalysisPenalty: boolean): number {
+  applyParalysisPenalty(
+    baseScorePercent: number,
+    hasParalysisPenalty: boolean,
+  ): number {
     if (!hasParalysisPenalty) {
       return this.roundPercent(baseScorePercent);
     }

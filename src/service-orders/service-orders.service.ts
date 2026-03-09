@@ -8,6 +8,7 @@ import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 export interface ImportResult {
   inserted: number;
   skipped: number;
+  deleted: number;
   errors: string[];
 }
 
@@ -91,64 +92,84 @@ export class ServiceOrdersService {
     const result: ImportResult = {
       inserted: 0,
       skipped: 0,
+      deleted: 0,
       errors: [],
     };
+
+    const cancelledPairs = new Map<string, { osNumber: string; sectorId: string }>();
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const osNumberRaw = row['Número OS'];
+      const familyRaw = row['Família'] ?? row['Familia'];
+      const statusRaw = row['Status da OS'] ?? row['Status'];
+
+      const osNumber = this.normalizeOsNumber(osNumberRaw);
+      const sectorName = this.mapSectorFromFamily(familyRaw);
+      const status = this.normalizeString(statusRaw);
+
+      if (!osNumber || !sectorName || !status) continue;
+
+      const sector = sectorsByName.get(sectorName);
+      if (!sector) continue;
+
+      if (status.toUpperCase() !== 'CANCELADA') continue;
+
+      const key = `${osNumber}-${sectorName}`;
+      if (!cancelledPairs.has(key)) {
+        cancelledPairs.set(key, { osNumber, sectorId: sector.id });
+      }
+    }
+
+    if (cancelledPairs.size > 0) {
+      const pairs = [...cancelledPairs.values()];
+      const toDelete = await this.serviceOrderRepository.find({
+        where: pairs.map((p) => ({ osNumber: p.osNumber, sectorId: p.sectorId })),
+        select: ['id'],
+      });
+      if (toDelete.length > 0) {
+        await this.serviceOrderRepository.delete(toDelete.map((e) => e.id));
+        result.deleted = toDelete.length;
+      }
+    }
 
     const seenOsNumbers = new Set<string>();
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
 
-      // === CAPTURA DAS COLUNAS ===
       const osNumberRaw = row['Número OS'];
-
-      const familyRaw =
-        row['Família'] ?? // (no arquivo está "Família")
-        row['Familia']; // fallback caso venha sem acento
-
+      const familyRaw = row['Família'] ?? row['Familia'];
+      const statusRaw = row['Status da OS'] ?? row['Status'];
       const enderecoRaw = row['Endereço'] ?? row['Endereco'];
-
       const numeroRaw = row['Número'] ?? row['Numero'];
-
       const bairroRaw = row['Bairro'];
 
-      // === NORMALIZA ===
       const osNumber = this.normalizeOsNumber(osNumberRaw);
       const sectorName = this.mapSectorFromFamily(familyRaw);
-
+      const status = this.normalizeString(statusRaw);
       const endereco = this.normalizeString(enderecoRaw);
       const numero = this.normalizeString(numeroRaw);
       const bairro = this.normalizeString(bairroRaw);
 
-      // Endereço composto: Endereço + Número + Bairro
       const address = this.normalizeString(
         [endereco, numero, bairro].filter(Boolean).join(' - '),
       );
 
-      // === VALIDAÇÕES ===
       if (!osNumber) {
         result.errors.push(`Linha ${i + 2}: Número da OS vazio ou inválido`);
         continue;
       }
-
       if (!sectorName) {
         result.errors.push(`Linha ${i + 2}: Família vazia ou inválida`);
         continue;
       }
-
-      if (!address) {
-        result.errors.push(
-          `Linha ${i + 2}: Endereço composto vazio ou inválido (Endereço + Número + Bairro)`,
-        );
+      if (!status) {
+        result.errors.push(`Linha ${i + 2}: Status vazio ou inválido`);
         continue;
       }
-
-      if (seenOsNumbers.has(osNumber)) {
-        result.skipped++;
-        continue;
-      }
-
-      seenOsNumbers.add(osNumber);
+      
+      if (status.toUpperCase() === 'CANCELADA') continue;
 
       const sector = sectorsByName.get(sectorName);
       if (!sector) {
@@ -157,6 +178,17 @@ export class ServiceOrdersService {
         );
         continue;
       }
+      if (!address) {
+        result.errors.push(
+          `Linha ${i + 2}: Endereço composto vazio ou inválido (Endereço + Número + Bairro)`,
+        );
+        continue;
+      }
+      if (seenOsNumbers.has(`${osNumber}-${sectorName}`)) {
+        result.skipped++;
+        continue;
+      }
+      seenOsNumbers.add(`${osNumber}-${sectorName}`);
 
       try {
         await this.serviceOrderRepository.save({
@@ -167,7 +199,6 @@ export class ServiceOrdersService {
           remote: false,
           postWork: false,
         });
-
         result.inserted++;
       } catch (error: any) {
         if (error?.code === '23505') {
@@ -227,7 +258,7 @@ export class ServiceOrdersService {
       'SUBSTITUIDA LIGAÇÃO DE ESGOTO': 'ESGOTO',
       'TROCA DE RAMAL DE ESGOTO': 'ESGOTO',
       'OUTROS SERVIÇOS DE ESGOTO': 'ESGOTO',
-      'DESOBSTRUÇÃO': 'ESGOTO',
+      DESOBSTRUÇÃO: 'ESGOTO',
       'CONSERTO DE ESGOTO': 'ESGOTO',
 
       'OUTROS SERVIÇOS DE REPOSIÇÃO': 'REPOSICAO',

@@ -24,7 +24,6 @@ import { FilterInspectionsDto } from './dto/filter-inspections.dto';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
 import { ResolveItemDto } from './dto/resolve-item.dto';
 import { ParalyzeInspectionDto } from './dto/paralyze-inspection.dto';
-import { PaginationQueryDto } from '../common/dto/pagination.dto';
 
 @Controller('inspections')
 @UseGuards(JwtAuthGuard)
@@ -62,10 +61,7 @@ export class InspectionsController {
   @Get('mine')
   @UseGuards(RolesGuard)
   @Roles(UserRole.FISCAL)
-  findMine(
-    @CurrentUser() user: any,
-    @Query() filterDto: FilterInspectionsDto,
-  ) {
+  findMine(@CurrentUser() user: any, @Query() filterDto: FilterInspectionsDto) {
     return this.inspectionsService.findMine(
       user.id,
       filterDto.page || 1,
@@ -85,7 +81,12 @@ export class InspectionsController {
     @Body() updateInspectionDto: any,
     @CurrentUser() user: any,
   ) {
-    return this.inspectionsService.update(id, updateInspectionDto, user.id, user.role);
+    return this.inspectionsService.update(
+      id,
+      updateInspectionDto,
+      user.id,
+      user.role,
+    );
   }
 
   @Put(':id/items')
@@ -143,7 +144,7 @@ export class InspectionsController {
   @Post(':id/finalize')
   @UseGuards(RolesGuard)
   @Roles(UserRole.FISCAL, UserRole.GESTOR)
-  finalize(@Param('id') id: string, @CurrentUser() user: any) {
+  finalize(@Param('id') id: string) {
     return this.inspectionsService.finalize(id);
   }
 
@@ -191,7 +192,8 @@ export class InspectionsController {
   @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
   resolve(
     @Param('id') id: string,
-    @Body() resolveDto: { resolutionNotes: string; resolutionEvidence?: string },
+    @Body()
+    resolveDto: { resolutionNotes: string; resolutionEvidence?: string },
     @CurrentUser() user: any,
   ) {
     return this.inspectionsService.resolve(id, resolveDto, user.id);

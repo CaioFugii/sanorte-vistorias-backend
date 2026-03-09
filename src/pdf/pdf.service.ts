@@ -56,12 +56,18 @@ export class PdfService {
     doc.text(`Checklist: ${inspection.checklist?.name || 'N/A'}`);
     doc.text(`Equipe: ${inspection.team?.name || 'N/A'}`);
     doc.text(`Criado por: ${inspection.createdBy?.name || 'N/A'}`);
-    doc.text(`Data de criação: ${inspection.createdAt.toLocaleDateString('pt-BR')}`);
+    doc.text(
+      `Data de criação: ${inspection.createdAt.toLocaleDateString('pt-BR')}`,
+    );
     if (inspection.finalizedAt) {
-      doc.text(`Data de finalização: ${inspection.finalizedAt.toLocaleDateString('pt-BR')}`);
+      doc.text(
+        `Data de finalização: ${inspection.finalizedAt.toLocaleDateString('pt-BR')}`,
+      );
     }
     doc.text(`Status: ${inspection.status}`);
-    doc.text(`Percentual de Conformidade: ${inspection.scorePercent?.toFixed(2) || '0.00'}%`);
+    doc.text(
+      `Percentual de Conformidade: ${inspection.scorePercent?.toFixed(2) || '0.00'}%`,
+    );
     doc.moveDown();
 
     if (inspection.serviceDescription) {
@@ -95,7 +101,8 @@ export class PdfService {
     // Itens
     const sortedItems = inspection.items
       ? [...inspection.items].sort(
-          (a, b) => (a.checklistItem?.order || 0) - (b.checklistItem?.order || 0),
+          (a, b) =>
+            (a.checklistItem?.order || 0) - (b.checklistItem?.order || 0),
         )
       : [];
 
@@ -145,7 +152,9 @@ export class PdfService {
       doc.moveDown();
 
       try {
-        const signatureImage = await this.filesService.getFile(signature.imagePath);
+        const signatureImage = await this.filesService.getFile(
+          signature.imagePath,
+        );
         doc.image(signatureImage, {
           fit: [200, 100],
           align: 'left',
@@ -166,7 +175,9 @@ export class PdfService {
         doc.moveDown();
         doc.fontSize(10);
         generalEvidences.forEach((evidence) => {
-          doc.text(`- ${evidence.fileName} (${(evidence.size / 1024).toFixed(2)} KB)`);
+          doc.text(
+            `- ${evidence.fileName} (${(evidence.size / 1024).toFixed(2)} KB)`,
+          );
         });
       }
     }
