@@ -14,7 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
-import { PaginationQueryDto } from '../common/dto/pagination.dto';
+import { FilterTeamsDto } from './dto/filter-teams.dto';
 
 @Controller('teams')
 @UseGuards(JwtAuthGuard)
@@ -22,14 +22,11 @@ export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
   @Get()
-  findAll(
-    @Query() pagination: PaginationQueryDto,
-    @Query('name') name?: string,
-  ) {
+  findAll(@Query() filters: FilterTeamsDto) {
     return this.teamsService.findAll(
-      pagination.page || 1,
-      pagination.limit || 10,
-      name,
+      filters.page || 1,
+      filters.limit || 10,
+      filters.name,
     );
   }
 
