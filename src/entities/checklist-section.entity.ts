@@ -19,7 +19,9 @@ export class ChecklistSection {
   @Column({ name: 'checklist_id' })
   checklistId: string;
 
-  @ManyToOne(() => Checklist, (checklist) => checklist.sections, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Checklist, (checklist) => checklist.sections, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'checklist_id' })
   checklist: Checklist;
 

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class ChecklistSectionsAndOfflineSyncColumns1700000001000
-  implements MigrationInterface
-{
+export class ChecklistSectionsAndOfflineSyncColumns1700000001000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TYPE "module_type_enum" ADD VALUE IF NOT EXISTS 'QUALIDADE'
@@ -101,7 +99,9 @@ export class ChecklistSectionsAndOfflineSyncColumns1700000001000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_inspections_external_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_inspections_external_id"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "inspections"
@@ -110,7 +110,9 @@ export class ChecklistSectionsAndOfflineSyncColumns1700000001000
       DROP COLUMN IF EXISTS "external_id"
     `);
 
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_checklist_items_section"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_checklist_items_section"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "checklist_items"
@@ -122,7 +124,11 @@ export class ChecklistSectionsAndOfflineSyncColumns1700000001000
       DROP COLUMN IF EXISTS "section_id"
     `);
 
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_checklist_sections_checklist_order"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "checklist_sections" CASCADE`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_checklist_sections_checklist_order"`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "checklist_sections" CASCADE`,
+    );
   }
 }

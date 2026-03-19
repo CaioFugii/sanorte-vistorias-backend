@@ -1,5 +1,9 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { v2 as cloudinary, UploadApiOptions, UploadApiResponse } from 'cloudinary';
+import {
+  v2 as cloudinary,
+  UploadApiOptions,
+  UploadApiResponse,
+} from 'cloudinary';
 
 @Injectable()
 export class CloudinaryService {
@@ -42,7 +46,9 @@ export class CloudinaryService {
 
   private assertConfigured(): void {
     if (!this.hasCloudinaryUrl) {
-      throw new InternalServerErrorException('CLOUDINARY_URL is not configured');
+      throw new InternalServerErrorException(
+        'CLOUDINARY_URL is not configured',
+      );
     }
   }
 }

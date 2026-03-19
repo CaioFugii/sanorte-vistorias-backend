@@ -22,10 +22,14 @@ export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
   @Get()
-  findAll(@Query() pagination: PaginationQueryDto) {
+  findAll(
+    @Query() pagination: PaginationQueryDto,
+    @Query('name') name?: string,
+  ) {
     return this.teamsService.findAll(
       pagination.page || 1,
       pagination.limit || 10,
+      name,
     );
   }
 

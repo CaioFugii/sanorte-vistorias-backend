@@ -70,7 +70,9 @@ export class SectorsAndRelations1700000004000 implements MigrationInterface {
     `);
 
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_checklists_sector_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_collaborators_sector_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_collaborators_sector_id"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "checklists"

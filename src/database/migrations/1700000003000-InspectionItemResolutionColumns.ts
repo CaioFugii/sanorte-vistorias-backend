@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class InspectionItemResolutionColumns1700000003000
-  implements MigrationInterface
-{
+export class InspectionItemResolutionColumns1700000003000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "inspection_items"

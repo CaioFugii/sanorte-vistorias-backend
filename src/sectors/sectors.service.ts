@@ -52,7 +52,10 @@ export class SectorsService {
     return this.sectorsRepository.findOne({ where: { id } });
   }
 
-  async create(sectorData: { name: string; active?: boolean }): Promise<Sector> {
+  async create(sectorData: {
+    name: string;
+    active?: boolean;
+  }): Promise<Sector> {
     await this.ensureUniqueName(sectorData.name);
     const sector = this.sectorsRepository.create(sectorData);
     return this.sectorsRepository.save(sector);
@@ -98,7 +101,10 @@ export class SectorsService {
     await this.sectorsRepository.delete(id);
   }
 
-  private async ensureUniqueName(name: string, ignoreId?: string): Promise<void> {
+  private async ensureUniqueName(
+    name: string,
+    ignoreId?: string,
+  ): Promise<void> {
     const existing = await this.sectorsRepository.findOne({ where: { name } });
     if (existing && existing.id !== ignoreId) {
       throw new BadRequestException('Já existe um setor com este nome');

@@ -59,7 +59,9 @@ export class DashboardsService {
         'pendingCount',
       )
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
-      .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO })
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
       .andWhere('inspection.createdAt >= :from', { from: filters.from })
       .andWhere('inspection.createdAt <= :to', { to: toLimit });
@@ -114,7 +116,9 @@ export class DashboardsService {
         `SUM(CASE WHEN inspection.hasParalysisPenalty = true THEN 1 ELSE 0 END)`,
         'paralyzedCount',
       )
-      .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO })
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
       .setParameter('noTeam', 'Sem equipe')
       .groupBy('inspection.teamId')
@@ -188,7 +192,9 @@ export class DashboardsService {
         `SUM(CASE WHEN inspection.hasParalysisPenalty = true THEN 1 ELSE 0 END)`,
         'paralyzedCount',
       )
-      .where('inspection.status != :draft', { draft: InspectionStatus.RASCUNHO })
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
       .andWhere('inspection.teamId = :teamId', { teamId })
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
       .andWhere('inspection.createdAt >= :from', { from: filters.from })

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddHydrometryAndUncloggingSectors1700000012000
-  implements MigrationInterface
-{
+export class AddHydrometryAndUncloggingSectors1700000012000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       INSERT INTO "sectors" ("name", "active", "created_at", "updated_at")

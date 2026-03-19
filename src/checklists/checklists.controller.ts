@@ -80,7 +80,11 @@ export class ChecklistsController {
     @Param('sectionId') sectionId: string,
     @Body() updateSectionDto: any,
   ) {
-    return this.checklistsService.updateSection(id, sectionId, updateSectionDto);
+    return this.checklistsService.updateSection(
+      id,
+      sectionId,
+      updateSectionDto,
+    );
   }
 
   @Put(':id/items/:itemId')

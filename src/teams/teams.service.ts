@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, ILike } from 'typeorm';
 import { Team, Collaborator } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
@@ -16,11 +16,16 @@ export class TeamsService {
   async findAll(
     page: number = 1,
     limit: number = 10,
+    name?: string,
   ): Promise<PaginatedResponseDto<Team>> {
     const skip = (page - 1) * limit;
+    const trimmedName = name?.trim();
 
     const [data, total] = await this.teamsRepository.findAndCount({
-      where: { active: true },
+      where: {
+        active: true,
+        ...(trimmedName ? { name: ILike(`%${trimmedName}%`) } : {}),
+      },
       relations: ['collaborators'],
       skip,
       take: limit,
@@ -92,7 +97,9 @@ export class TeamsService {
     await this.teamsRepository.delete(id);
   }
 
-  private async resolveCollaborators(collaboratorIds: string[]): Promise<Collaborator[]> {
+  private async resolveCollaborators(
+    collaboratorIds: string[],
+  ): Promise<Collaborator[]> {
     const uniqueIds = [...new Set(collaboratorIds)];
     if (uniqueIds.length === 0) {
       return [];

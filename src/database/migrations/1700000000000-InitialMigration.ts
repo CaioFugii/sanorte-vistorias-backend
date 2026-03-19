@@ -205,15 +205,21 @@ export class InitialMigration1700000000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS "pending_adjustments" CASCADE`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "pending_adjustments" CASCADE`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "signatures" CASCADE`);
     await queryRunner.query(`DROP TABLE IF EXISTS "evidences" CASCADE`);
     await queryRunner.query(`DROP TABLE IF EXISTS "inspection_items" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "inspection_collaborators" CASCADE`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "inspection_collaborators" CASCADE`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "inspections" CASCADE`);
     await queryRunner.query(`DROP TABLE IF EXISTS "checklist_items" CASCADE`);
     await queryRunner.query(`DROP TABLE IF EXISTS "checklists" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "team_collaborators" CASCADE`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "team_collaborators" CASCADE`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "collaborators" CASCADE`);
     await queryRunner.query(`DROP TABLE IF EXISTS "teams" CASCADE`);
     await queryRunner.query(`DROP TABLE IF EXISTS "users" CASCADE`);

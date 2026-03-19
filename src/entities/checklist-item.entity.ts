@@ -47,6 +47,9 @@ export class ChecklistItem {
   @Column({ default: true })
   active: boolean;
 
-  @OneToMany(() => InspectionItem, (inspectionItem) => inspectionItem.checklistItem)
+  @OneToMany(
+    () => InspectionItem,
+    (inspectionItem) => inspectionItem.checklistItem,
+  )
   inspectionItems: InspectionItem[];
 }

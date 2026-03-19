@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddServiceOrderImportColumns1700000013000
-  implements MigrationInterface
-{
+export class AddServiceOrderImportColumns1700000013000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "service_orders"

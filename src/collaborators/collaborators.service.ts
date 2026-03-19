@@ -55,9 +55,11 @@ export class CollaboratorsService {
     });
   }
 
-  async create(
-    collaboratorData: { name: string; active?: boolean; sectorId?: string },
-  ): Promise<Collaborator> {
+  async create(collaboratorData: {
+    name: string;
+    active?: boolean;
+    sectorId?: string;
+  }): Promise<Collaborator> {
     await this.validateSector(collaboratorData.sectorId);
     const collaborator = this.collaboratorsRepository.create(collaboratorData);
     const saved = await this.collaboratorsRepository.save(collaborator);
@@ -85,7 +87,9 @@ export class CollaboratorsService {
       return;
     }
 
-    const sectorExists = await this.sectorsRepository.exist({ where: { id: sectorId } });
+    const sectorExists = await this.sectorsRepository.exist({
+      where: { id: sectorId },
+    });
     if (!sectorExists) {
       throw new BadRequestException('sectorId informado não existe');
     }

@@ -79,7 +79,9 @@ describe('UploadsController', () => {
 
     const result = await controller.delete('quality%2Fevidences%2Fasset-1');
 
-    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith('quality/evidences/asset-1');
+    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith(
+      'quality/evidences/asset-1',
+    );
     expect(result).toEqual({ ok: true });
   });
 });

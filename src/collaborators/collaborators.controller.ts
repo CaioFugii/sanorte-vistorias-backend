@@ -19,9 +19,7 @@ import { FilterCollaboratorsDto } from './dto/filter-collaborators.dto';
 @Controller('collaborators')
 @UseGuards(JwtAuthGuard)
 export class CollaboratorsController {
-  constructor(
-    private readonly collaboratorsService: CollaboratorsService,
-  ) {}
+  constructor(private readonly collaboratorsService: CollaboratorsService) {}
 
   @Get()
   findAll(@Query() query: FilterCollaboratorsDto) {

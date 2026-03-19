@@ -9,7 +9,10 @@ import { ModuleType } from '../../common/enums';
 
 export class DashboardQueryDto {
   @IsNotEmpty({ message: 'from é obrigatório' })
-  @IsDateString({}, { message: 'from deve ser uma data válida (ex: YYYY-MM-DD)' })
+  @IsDateString(
+    {},
+    { message: 'from deve ser uma data válida (ex: YYYY-MM-DD)' },
+  )
   from: string;
 
   @IsNotEmpty({ message: 'to é obrigatório' })

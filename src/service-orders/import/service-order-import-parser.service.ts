@@ -73,7 +73,9 @@ export class ServiceOrderImportParserService {
     const statusRaw = row['Status da OS'] ?? row['Status'];
 
     return {
-      osNumber: this.normalizeOsNumber(osNumberRaw as string | number | undefined),
+      osNumber: this.normalizeOsNumber(
+        osNumberRaw as string | number | undefined,
+      ),
       sectorName: this.mapSectorFromFamily(
         familyRaw as string | number | undefined,
       ),
@@ -93,9 +95,15 @@ export class ServiceOrderImportParserService {
     const equipeRaw = row['Equipe'] ?? 'N/A';
     const statusRaw = row['Status da OS'] ?? row['Status'];
 
-    const endereco = this.normalizeString(enderecoRaw as string | number | undefined);
-    const numero = this.normalizeString(numeroRaw as string | number | undefined);
-    const bairro = this.normalizeString(bairroRaw as string | number | undefined);
+    const endereco = this.normalizeString(
+      enderecoRaw as string | number | undefined,
+    );
+    const numero = this.normalizeString(
+      numeroRaw as string | number | undefined,
+    );
+    const bairro = this.normalizeString(
+      bairroRaw as string | number | undefined,
+    );
 
     const address = this.normalizeString(
       [endereco, numero, bairro].filter(Boolean).join(' - '),
@@ -106,20 +114,24 @@ export class ServiceOrderImportParserService {
     );
 
     return {
-      osNumber: this.normalizeOsNumber(osNumberRaw as string | number | undefined),
+      osNumber: this.normalizeOsNumber(
+        osNumberRaw as string | number | undefined,
+      ),
       sectorName: this.mapSectorFromFamily(
         familyRaw as string | number | undefined,
       ),
       status: this.normalizeString(statusRaw as string | number | undefined),
       address,
       resultado:
-        this.normalizeString(resultadoRaw as string | number | undefined) || null,
+        this.normalizeString(resultadoRaw as string | number | undefined) ||
+        null,
       fimExecucao: this.parseExcelDateTime(fimExecucaoRaw),
       tempoExecucaoEfetivo: tempoExecucaoEfetivo || null,
       tempoExecucaoEfetivoSegundos: this.parseDurationToSeconds(
         tempoExecucaoEfetivoRaw,
       ),
-      equipe: this.normalizeString(equipeRaw as string | number | undefined) || null,
+      equipe:
+        this.normalizeString(equipeRaw as string | number | undefined) || null,
     };
   }
 
@@ -139,7 +151,9 @@ export class ServiceOrderImportParserService {
     return String(value).trim();
   }
 
-  private mapSectorFromFamily(value: string | number | undefined): string | null {
+  private mapSectorFromFamily(
+    value: string | number | undefined,
+  ): string | null {
     const family = this.normalizeString(value).toUpperCase();
 
     const maps = [

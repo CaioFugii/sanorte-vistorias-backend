@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class ModuleTypeEnumPosObraSemAcento1700000009000
-  implements MigrationInterface
-{
+export class ModuleTypeEnumPosObraSemAcento1700000009000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Cria novo tipo com POS_OBRA (sem acento) no lugar de PÓS_OBRA
     await queryRunner.query(`

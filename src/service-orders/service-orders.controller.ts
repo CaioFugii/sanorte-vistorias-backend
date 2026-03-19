@@ -49,7 +49,8 @@ export class ServiceOrdersController {
         validators: [
           new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
           new FileTypeValidator({
-            fileType: /(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|vnd\.ms-excel)/,
+            fileType:
+              /(vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet|vnd\.ms-excel)/,
             skipMagicNumbersValidation: true,
           }),
         ],

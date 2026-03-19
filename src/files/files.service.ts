@@ -13,23 +13,31 @@ export class FilesService {
   private readonly signaturesPath: string;
 
   constructor(private configService: ConfigService) {
-    this.storagePath = this.configService.get<string>('app.storagePath') || './storage';
+    this.storagePath =
+      this.configService.get<string>('app.storagePath') || './storage';
     this.evidencesPath = path.join(this.storagePath, 'evidences');
     this.signaturesPath = path.join(this.storagePath, 'signatures');
 
     // Criar diretórios se não existirem
-    [this.storagePath, this.evidencesPath, this.signaturesPath].forEach((dir) => {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-    });
+    [this.storagePath, this.evidencesPath, this.signaturesPath].forEach(
+      (dir) => {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+      },
+    );
   }
 
   async saveEvidence(
     file: Express.Multer.File,
     inspectionId: string,
     inspectionItemId?: string,
-  ): Promise<{ filePath: string; fileName: string; mimeType: string; size: number }> {
+  ): Promise<{
+    filePath: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  }> {
     const timestamp = Date.now();
     const extension = path.extname(file.originalname);
     const fileName = `${inspectionId}_${inspectionItemId || 'general'}_${timestamp}${extension}`;

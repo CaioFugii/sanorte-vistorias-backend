@@ -23,7 +23,10 @@ export class SectorsController {
 
   @Get()
   findAll(@Query() pagination: PaginationQueryDto) {
-    return this.sectorsService.findAll(pagination.page || 1, pagination.limit || 10);
+    return this.sectorsService.findAll(
+      pagination.page || 1,
+      pagination.limit || 10,
+    );
   }
 
   @Get(':id')

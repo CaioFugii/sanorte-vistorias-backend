@@ -26,7 +26,9 @@ export class ServiceOrderSectorRelation1700000010000 implements MigrationInterfa
       DROP CONSTRAINT IF EXISTS "FK_service_orders_sector"
     `);
 
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_service_orders_sector_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_service_orders_sector_id"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "service_orders"

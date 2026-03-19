@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -89,7 +93,10 @@ export class ChecklistsService {
     return this.findOne(savedChecklist.id);
   }
 
-  async update(id: string, checklistData: Partial<Checklist>): Promise<Checklist> {
+  async update(
+    id: string,
+    checklistData: Partial<Checklist>,
+  ): Promise<Checklist> {
     if (Object.prototype.hasOwnProperty.call(checklistData, 'sectorId')) {
       await this.validateSector(checklistData.sectorId);
     }
@@ -165,7 +172,9 @@ export class ChecklistsService {
   }
 
   async removeChecklist(id: string): Promise<void> {
-    const checklist = await this.checklistsRepository.findOne({ where: { id } });
+    const checklist = await this.checklistsRepository.findOne({
+      where: { id },
+    });
     if (!checklist) {
       throw new NotFoundException('Checklist não encontrado');
     }
@@ -182,7 +191,9 @@ export class ChecklistsService {
     await this.checklistsRepository.delete(id);
   }
 
-  private async ensureDefaultSection(checklistId: string): Promise<ChecklistSection> {
+  private async ensureDefaultSection(
+    checklistId: string,
+  ): Promise<ChecklistSection> {
     let section = await this.checklistSectionsRepository.findOne({
       where: { checklistId, order: 1 },
     });
@@ -205,7 +216,9 @@ export class ChecklistsService {
       return;
     }
 
-    const sectorExists = await this.sectorsRepository.exist({ where: { id: sectorId } });
+    const sectorExists = await this.sectorsRepository.exist({
+      where: { id: sectorId },
+    });
     if (!sectorExists) {
       throw new BadRequestException('sectorId informado não existe');
     }
