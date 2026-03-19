@@ -35,7 +35,6 @@ Authorization: Bearer <token>
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
   - anexos e assinatura: `POST /inspections/:id/evidences`, `POST /inspections/:id/signature`
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
-  - PDF: `GET /inspections/:id/pdf`
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
 - Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`
@@ -123,7 +122,7 @@ Authorization: Bearer <token>
 
 - Base URL (dev): `http://localhost:3000`
 - Autenticação: JWT Bearer Token
-- Formato padrão: JSON (exceto upload de arquivo e download de PDF)
+- Formato padrão: JSON (exceto upload de arquivo)
 
 Header para rotas autenticadas:
 
@@ -1172,12 +1171,6 @@ Request JSON:
 ```
 
 Response 200: `Inspection` com `status = RESOLVIDA`
-
-### GET /inspections/:id/pdf
-
-- Auth: JWT
-- Request JSON: não se aplica
-- Response 200: arquivo PDF (`application/pdf`)
 
 ## Sync
 

@@ -13,7 +13,6 @@ import { ChecklistsModule } from './checklists/checklists.module';
 import { InspectionsModule } from './inspections/inspections.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
 import { FilesModule } from './files/files.module';
-import { PdfModule } from './pdf/pdf.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ServiceOrdersModule } from './service-orders/service-orders.module';
@@ -38,7 +37,6 @@ import { ServiceOrdersModule } from './service-orders/service-orders.module';
     InspectionsModule,
     DashboardsModule,
     FilesModule,
-    PdfModule,
     CloudinaryModule,
     UploadsModule,
     ServiceOrdersModule,

@@ -4,6 +4,7 @@ import { Repository, Like, FindOperator } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { ServiceOrder, Sector } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { ServiceOrderImportParserService } from './import/service-order-import-parser.service';
 
 export interface ImportResult {
   inserted: number;
@@ -19,6 +20,7 @@ export class ServiceOrdersService {
     private readonly serviceOrderRepository: Repository<ServiceOrder>,
     @InjectRepository(Sector)
     private readonly sectorsRepository: Repository<Sector>,
+    private readonly serviceOrderImportParser: ServiceOrderImportParserService,
   ) {}
 
   async findAll(
@@ -103,13 +105,8 @@ export class ServiceOrdersService {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const osNumberRaw = row['Número OS'];
-      const familyRaw = row['Família'] ?? row['Familia'];
-      const statusRaw = row['Status da OS'] ?? row['Status'];
-
-      const osNumber = this.normalizeOsNumber(osNumberRaw);
-      const sectorName = this.mapSectorFromFamily(familyRaw);
-      const status = this.normalizeString(statusRaw);
+      const { osNumber, sectorName, status } =
+        this.serviceOrderImportParser.parseForCancellation(row);
 
       if (!osNumber || !sectorName || !status) continue;
 
@@ -140,33 +137,28 @@ export class ServiceOrdersService {
     }
 
     const seenOsNumbers = new Set<string>();
-    const ignoredFamilies = new Set<string>(['VISTORIA']);
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-
-      const osNumberRaw = row['Número OS'];
       const familyRaw = row['Família'] ?? row['Familia'];
-      const statusRaw = row['Status da OS'] ?? row['Status'];
-      const enderecoRaw = row['Endereço'] ?? row['Endereco'];
-      const numeroRaw = row['Número'] ?? row['Numero'];
-      const bairroRaw = row['Bairro'];
 
-      if (ignoredFamilies.has(familyRaw)) {
+      if (this.serviceOrderImportParser.shouldIgnoreFamily(familyRaw)) {
         result.skipped++;
         continue;
       }
 
-      const osNumber = this.normalizeOsNumber(osNumberRaw);
-      const sectorName = this.mapSectorFromFamily(familyRaw);
-      const status = this.normalizeString(statusRaw);
-      const endereco = this.normalizeString(enderecoRaw);
-      const numero = this.normalizeString(numeroRaw);
-      const bairro = this.normalizeString(bairroRaw);
-
-      const address = this.normalizeString(
-        [endereco, numero, bairro].filter(Boolean).join(' - '),
-      );
+      const parsedRow = this.serviceOrderImportParser.parseRow(row);
+      const {
+        osNumber,
+        sectorName,
+        status,
+        address,
+        resultado,
+        fimExecucao,
+        tempoExecucaoEfetivo,
+        tempoExecucaoEfetivoSegundos,
+        equipe,
+      } = parsedRow;
 
       if (!osNumber) {
         result.errors.push(`Linha ${i + 2}: Número da OS vazio ou inválido`);
@@ -186,7 +178,7 @@ export class ServiceOrdersService {
       const sector = sectorsByName.get(sectorName);
       if (!sector) {
         result.errors.push(
-          `Linha ${i + 2}: Setor "${sectorName}" não encontrado no banco (AGUA, ESGOTO, REPOSICAO)`,
+          `Linha ${i + 2}: Setor "${sectorName}" não encontrado no banco (AGUA, ESGOTO, REPOSICAO, HIDROMETRIA, DESOBSTRUCAO)`,
         );
         continue;
       }
@@ -210,6 +202,12 @@ export class ServiceOrdersService {
           field: false,
           remote: false,
           postWork: false,
+          resultado,
+          fimExecucao,
+          tempoExecucaoEfetivo,
+          tempoExecucaoEfetivoSegundos,
+          equipe,
+          status,
         });
         result.inserted++;
       } catch (error: any) {
@@ -224,60 +222,5 @@ export class ServiceOrdersService {
     }
 
     return result;
-  }
-
-  private normalizeOsNumber(value: string | number | undefined): string {
-    if (value === undefined || value === null) return '';
-    const str = String(value).trim();
-    if (str === '') return '';
-    return str;
-  }
-
-  private normalizeString(value: string | number | undefined): string {
-    if (value === undefined || value === null) return '';
-    return String(value).trim();
-  }
-
-  private mapSectorFromFamily(value: string | number | undefined): string {
-    const family = this.normalizeString(value).toUpperCase();
-
-    const sectorMap: Record<string, string> = {
-      'CORTE SUPRESSÃO ADM': 'AGUA',
-      'REATIV/RELIG/RESTAB': 'AGUA',
-      'SUPRESSÃO À PEDIDO': 'AGUA',
-      HIDRÔMETRO: 'AGUA',
-      HIDROMETRO: 'AGUA',
-      'HIDRÔMETRO PREVENTIVO': 'AGUA',
-      'OUTROS SERVIÇOS DE CAVALETE': 'AGUA',
-      'LIGAÇÃO DE ÁGUA': 'AGUA',
-      'OUTROS SERVIÇOS DE ÁGUA': 'AGUA',
-      'RAMAL DE ÁGUA': 'AGUA',
-      'REDE DE ÁGUA': 'AGUA',
-      'VAZAMENTO DE ÁGUA': 'AGUA',
-      CAVALETE: 'AGUA',
-      ABASTECIMENTO: 'AGUA',
-      'SUPRESSÃO A PEDIDO': 'AGUA',
-
-      'DESOBSTRUÍDA REDE DE ESGOTO': 'ESGOTO',
-      'DESOBSTRUIDO RAMAL DE ESGOTO': 'ESGOTO',
-      'LAVAGEM DE REDE DE ESGOTO PREVENTIVA': 'ESGOTO',
-      'LAVAGEM DE REDE DE ESGOTO': 'ESGOTO',
-      'LIGAÇÃO DE ESGOTO': 'ESGOTO',
-      'LIGAÇÃO DE ESGOTO ADICIONAL': 'ESGOTO',
-      'LIGAÇÃO DE ESGOTO AVULSA S/V': 'ESGOTO',
-      'LIGAÇÃO DE ESGOTO S/V': 'ESGOTO',
-      'REMANEJADA REDE DE ESGOTO': 'ESGOTO',
-      'SUBSTITUIDA LIGAÇÃO DE ESGOTO': 'ESGOTO',
-      'TROCA DE RAMAL DE ESGOTO': 'ESGOTO',
-      'OUTROS SERVIÇOS DE ESGOTO': 'ESGOTO',
-      DESOBSTRUÇÃO: 'ESGOTO',
-      'CONSERTO DE ESGOTO': 'ESGOTO',
-
-      'OUTROS SERVIÇOS DE REPOSIÇÃO': 'REPOSICAO',
-      REPOSIÇÃO: 'REPOSICAO',
-      'PI, PV, TL': 'REPOSICAO',
-    };
-
-    return sectorMap[family] ?? null;
   }
 }

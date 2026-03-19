@@ -38,6 +38,28 @@ export class ServiceOrder {
   @Column({ name: 'post_work', type: 'boolean', default: false })
   postWork: boolean;
 
+  @Column({ type: 'text', nullable: true })
+  resultado: string | null;
+
+  @Column({ name: 'fim_execucao', type: 'timestamp', nullable: true })
+  fimExecucao: Date | null;
+
+  @Column({ name: 'tempo_execucao_efetivo', type: 'text', nullable: true })
+  tempoExecucaoEfetivo: string | null;
+
+  @Column({
+    name: 'tempo_execucao_efetivo_segundos',
+    type: 'integer',
+    nullable: true,
+  })
+  tempoExecucaoEfetivoSegundos: number | null;
+
+  @Column({ type: 'text', nullable: true })
+  equipe: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  status: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

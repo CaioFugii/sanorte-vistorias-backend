@@ -1,6 +1,6 @@
 # Sistema de Vistorias em Campo - Backend
 
-API REST em NestJS para gestão de vistorias de campo, com autenticação JWT, upload de imagens no Cloudinary, fluxo de pendências e geração de PDF.
+API REST em NestJS para gestão de vistorias de campo, com autenticação JWT, upload de imagens no Cloudinary e fluxo de pendências.
 
 ## Stack
 
@@ -9,7 +9,6 @@ API REST em NestJS para gestão de vistorias de campo, com autenticação JWT, u
 - PostgreSQL
 - JWT
 - Cloudinary
-- PDFKit
 
 ## Pré-requisitos
 
@@ -142,7 +141,6 @@ Authorization: Bearer <token>
 - `POST /inspections/:id/finalize` (FISCAL/GESTOR)
 - `POST /inspections/:id/items/:itemId/resolve` (FISCAL/GESTOR/ADMIN)
 - `POST /inspections/:id/resolve` (FISCAL/GESTOR/ADMIN)
-- `GET /inspections/:id/pdf` (download PDF)
 
 ### Sync
 

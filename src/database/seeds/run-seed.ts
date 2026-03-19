@@ -12,7 +12,13 @@ async function seed() {
   const sectorRepository = dataSource.getRepository(Sector);
 
   // Criar setores padrão
-  const defaultSectors = ['ESGOTO', 'AGUA', 'REPOSICAO'];
+  const defaultSectors = [
+    'ESGOTO',
+    'AGUA',
+    'REPOSICAO',
+    'HIDROMETRIA',
+    'DESOBSTRUCAO',
+  ];
   for (const sectorName of defaultSectors) {
     const existingSector = await sectorRepository.findOne({
       where: { name: sectorName },
