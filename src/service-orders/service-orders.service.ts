@@ -195,29 +195,40 @@ export class ServiceOrdersService {
       seenOsNumbers.add(`${osNumber}-${sectorName}`);
 
       try {
-        await this.serviceOrderRepository.save({
-          osNumber,
-          sectorId: sector.id,
-          address,
-          field: false,
-          remote: false,
-          postWork: false,
-          resultado,
-          fimExecucao,
-          tempoExecucaoEfetivo,
-          tempoExecucaoEfetivoSegundos,
-          equipe,
-          status,
-        });
+        await this.serviceOrderRepository
+          .createQueryBuilder()
+          .insert()
+          .into(ServiceOrder)
+          .values({
+            osNumber,
+            sectorId: sector.id,
+            address,
+            field: false,
+            remote: false,
+            postWork: false,
+            resultado,
+            fimExecucao,
+            tempoExecucaoEfetivo,
+            tempoExecucaoEfetivoSegundos,
+            equipe,
+            status,
+          })
+          .orUpdate(
+            [
+              'status',
+              'resultado',
+              'fim_execucao',
+              'tempo_execucao_efetivo',
+              'tempo_execucao_efetivo_segundos',
+            ],
+            ['os_number', 'sector_id'],
+          )
+          .execute();
         result.inserted++;
       } catch (error: any) {
-        if (error?.code === '23505') {
-          result.skipped++;
-        } else {
-          result.errors.push(
-            `Linha ${i + 2}: ${error?.message || String(error)}`,
-          );
-        }
+        result.errors.push(
+          `Linha ${i + 2}: ${error?.message || String(error)}`,
+        );
       }
     }
 
