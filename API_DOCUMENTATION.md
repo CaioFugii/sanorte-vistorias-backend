@@ -37,7 +37,7 @@ Authorization: Bearer <token>
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`
+- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`
 
 ### Regras críticas que impactam UI
 
@@ -1386,6 +1386,87 @@ Response 404 quando a equipe não existe:
   "statusCode": 404,
   "message": "Equipe não encontrada",
   "error": "Not Found"
+}
+```
+
+### GET /dashboards/quality-by-service
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `module` (`ModuleType`) opcional
+  - `teamId` (`uuid`) opcional
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Timezone da agregação mensal: `America/Sao_Paulo`.
+- Status considerados no cálculo de qualidade:
+  - `FINALIZADA`
+  - `PENDENTE_AJUSTE`
+  - `RESOLVIDA`
+- `qualityPercent` é `AVG(scorePercent)` no agrupamento mês + serviço.
+- `growthPercent` é a variação percentual do último mês do período versus o mês anterior.
+
+Response 200:
+
+```json
+{
+  "period": ["2025-08", "2025-09", "2025-10", "2025-11"],
+  "services": [
+    {
+      "serviceKey": "esgoto",
+      "serviceLabel": "ESGOTO",
+      "series": [
+        { "month": "2025-08", "qualityPercent": 20, "inspectionsCount": 120 },
+        { "month": "2025-09", "qualityPercent": 25.6, "inspectionsCount": 134 },
+        { "month": "2025-10", "qualityPercent": 34.9, "inspectionsCount": 141 },
+        { "month": "2025-11", "qualityPercent": 57.9, "inspectionsCount": 158 }
+      ],
+      "growth": {
+        "fromMonth": "2025-10",
+        "toMonth": "2025-11",
+        "growthPercent": 65.9,
+        "deltaPoints": 23
+      }
+    }
+  ]
+}
+```
+
+### GET /dashboards/current-month-by-service
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`
+- Query:
+  - `month` (`YYYY-MM`) opcional (default = mês atual em `America/Sao_Paulo`)
+  - `module` (`ModuleType`) opcional
+  - `teamId` (`uuid`) opcional
+- Status considerados no cálculo de qualidade:
+  - `FINALIZADA`
+  - `PENDENTE_AJUSTE`
+  - `RESOLVIDA`
+- `pendingAdjustmentsCount` contabiliza inspeções do mês com status `PENDENTE_AJUSTE`.
+- `qualityPercent` por serviço é `AVG(scorePercent)` no mês.
+
+Response 200:
+
+```json
+{
+  "month": "2025-12",
+  "summary": {
+    "averagePercent": 71.1,
+    "inspectionsCount": 1547,
+    "pendingAdjustmentsCount": 65
+  },
+  "services": [
+    {
+      "serviceKey": "cavalete_hm",
+      "serviceLabel": "CAVALETE / HM",
+      "ownerLabel": null,
+      "qualityPercent": 83.1,
+      "inspectionsCount": 328
+    }
+  ]
 }
 ```
 

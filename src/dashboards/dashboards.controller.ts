@@ -1,10 +1,16 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { DashboardsService } from './dashboards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
+import { QualityByServiceQueryDto } from './dto/quality-by-service-query.dto';
+import { CurrentMonthByServiceQueryDto } from './dto/current-month-by-service-query.dto';
 
 @Controller('dashboards')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.GESTOR)
 export class DashboardsController {
   constructor(private readonly dashboardsService: DashboardsService) {}
 
@@ -36,6 +42,25 @@ export class DashboardsController {
       from: query.from,
       to: query.to,
       module: query.module,
+    });
+  }
+
+  @Get('quality-by-service')
+  getQualityByService(@Query() query: QualityByServiceQueryDto) {
+    return this.dashboardsService.getQualityByService({
+      from: query.from,
+      to: query.to,
+      module: query.module,
+      teamId: query.teamId,
+    });
+  }
+
+  @Get('current-month-by-service')
+  getCurrentMonthByService(@Query() query: CurrentMonthByServiceQueryDto) {
+    return this.dashboardsService.getCurrentMonthByService({
+      month: query.month,
+      module: query.module,
+      teamId: query.teamId,
     });
   }
 }
