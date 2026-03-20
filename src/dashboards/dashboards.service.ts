@@ -449,7 +449,6 @@ export class DashboardsService {
       })
       .andWhere(`${monthExpr} = :month`, { month })
       .select(serviceLabelExpr, 'serviceLabel')
-      .addSelect('MAX(NULLIF(serviceOrder.equipe, \'\'))', 'ownerLabel')
       .addSelect('AVG(inspection.scorePercent)', 'qualityPercent')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .groupBy(serviceLabelExpr)
@@ -469,7 +468,6 @@ export class DashboardsService {
       }>(),
       rankingQb.getRawMany<{
         serviceLabel: string;
-        ownerLabel: string | null;
         qualityPercent: string | null;
         inspectionsCount: string;
       }>(),
@@ -488,7 +486,6 @@ export class DashboardsService {
       services: rankingRows.map((row) => ({
         serviceKey: serviceKeyFromLabel(row.serviceLabel),
         serviceLabel: row.serviceLabel,
-        ownerLabel: row.ownerLabel || null,
         qualityPercent: roundTo2(parseFloat(row.qualityPercent ?? '0')),
         inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
       })),

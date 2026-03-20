@@ -126,7 +126,6 @@ describe('DashboardsService', () => {
       rawMany: [
         {
           serviceLabel: 'CAVALETE / HM',
-          ownerLabel: '',
           qualityPercent: '83.1',
           inspectionsCount: '328',
         },
@@ -152,7 +151,6 @@ describe('DashboardsService', () => {
       {
         serviceKey: 'cavalete_hm',
         serviceLabel: 'CAVALETE / HM',
-        ownerLabel: null,
         qualityPercent: 83.1,
         inspectionsCount: 328,
       },

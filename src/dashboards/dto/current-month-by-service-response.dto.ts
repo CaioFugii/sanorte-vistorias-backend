@@ -7,7 +7,6 @@ export class CurrentMonthSummaryDto {
 export class CurrentMonthServiceItemDto {
   serviceKey: string;
   serviceLabel: string;
-  ownerLabel: string | null;
   qualityPercent: number;
   inspectionsCount: number;
 }
