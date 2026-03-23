@@ -12,6 +12,8 @@ import {
   ChecklistAnswer,
   UserRole,
   PendingStatus,
+  ModuleType,
+  InspectionScope,
 } from '../common/enums';
 import { InspectionDomainService } from './inspection-domain.service';
 
@@ -22,9 +24,14 @@ describe('InspectionsService - Regras de Negócio', () => {
   let signaturesRepository: any;
   let pendingAdjustmentsRepository: any;
   let checklistItemsRepository: any;
+  let teamsRepository: any;
+  let serviceOrderRepository: any;
+  let dataSource: any;
 
   const mockInspection: Partial<Inspection> = {
     id: 'test-id',
+    module: ModuleType.QUALIDADE,
+    serviceOrderId: 'service-order-id',
     status: InspectionStatus.RASCUNHO,
     createdByUserId: 'user-id',
     hasParalysisPenalty: false,
@@ -60,8 +67,15 @@ describe('InspectionsService - Regras de Negócio', () => {
     checklistItemsRepository = {
       findOne: jest.fn(),
     };
+    teamsRepository = {
+      findOne: jest.fn(),
+    };
 
-    const serviceOrderRepository = { findOne: jest.fn() };
+    serviceOrderRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: 'service-order-id' }),
+      update: jest.fn(),
+    };
+    dataSource = { getRepository: jest.fn() };
 
     service = new InspectionsService(
       inspectionsRepository as any,
@@ -70,9 +84,10 @@ describe('InspectionsService - Regras de Negócio', () => {
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
+      teamsRepository as any,
       serviceOrderRepository as any,
       { uploadImage: jest.fn() } as any,
-      { getRepository: jest.fn() } as any,
+      dataSource as any,
       new InspectionDomainService(),
     );
   });
@@ -330,5 +345,99 @@ describe('InspectionsService - Regras de Negócio', () => {
     await service.unparalyze('test-id');
 
     expect(inspectionsRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('deve permitir criar vistoria ST sem serviceOrderId', async () => {
+    inspectionsRepository.create.mockImplementation((payload: any) => payload);
+    inspectionsRepository.save.mockResolvedValue({ id: 'inspection-st-id' });
+    dataSource.getRepository.mockReturnValue({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      id: 'inspection-st-id',
+      module: ModuleType.SEGURANCA_TRABALHO,
+      inspectionScope: InspectionScope.TEAM,
+    } as Inspection);
+
+    await expect(
+      service.create(
+        {
+          module: ModuleType.SEGURANCA_TRABALHO,
+          inspectionScope: InspectionScope.TEAM,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceDescription: 'Vistoria ST sem OS',
+        },
+        'user-id',
+      ),
+    ).resolves.toMatchObject({
+      id: 'inspection-st-id',
+      module: ModuleType.SEGURANCA_TRABALHO,
+    });
+  });
+
+  it('deve rejeitar criar vistoria sem serviceOrderId quando módulo não é ST', async () => {
+    await expect(
+      service.create(
+        {
+          module: ModuleType.QUALIDADE,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceDescription: 'Vistoria sem OS',
+        },
+        'user-id',
+      ),
+    ).rejects.toThrow(
+      'serviceOrderId é obrigatório. Informe uma OS válida cadastrada na tabela de ordens de serviço.',
+    );
+  });
+
+  it('deve exigir exatamente 1 colaborador na vistoria ST por colaborador', async () => {
+    teamsRepository.findOne.mockResolvedValue({
+      id: 'team-id',
+      isContractor: false,
+    });
+
+    await expect(
+      service.create(
+        {
+          module: ModuleType.SEGURANCA_TRABALHO,
+          inspectionScope: InspectionScope.COLLABORATOR,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceDescription: 'Vistoria ST colaborador',
+          collaboratorIds: ['c-1', 'c-2'],
+        },
+        'user-id',
+      ),
+    ).rejects.toThrow(
+      'Vistoria de Segurança do Trabalho por colaborador exige exatamente 1 colaborador.',
+    );
+  });
+
+  it('deve validar que colaborador alvo existe na plataforma na vistoria ST por colaborador', async () => {
+    teamsRepository.findOne.mockResolvedValue({
+      id: 'team-id',
+      isContractor: false,
+    });
+    dataSource.getRepository.mockReturnValue({
+      findBy: jest.fn().mockResolvedValue([]),
+    });
+
+    await expect(
+      service.create(
+        {
+          module: ModuleType.SEGURANCA_TRABALHO,
+          inspectionScope: InspectionScope.COLLABORATOR,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceDescription: 'Vistoria ST colaborador',
+          collaboratorIds: ['c-outsider'],
+        },
+        'user-id',
+      ),
+    ).rejects.toThrow(
+      'Todos os colaboradores informados devem existir na plataforma.',
+    );
   });
 });

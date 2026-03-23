@@ -6,7 +6,7 @@ import {
   IsString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ModuleType, InspectionStatus } from '../../common/enums';
+import { ModuleType, InspectionStatus, InspectionScope } from '../../common/enums';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 export class FilterInspectionsDto extends PaginationQueryDto {
@@ -23,6 +23,12 @@ export class FilterInspectionsDto extends PaginationQueryDto {
     message: `module must be one of: ${Object.values(ModuleType).join(', ')}`,
   })
   module?: ModuleType;
+
+  @IsOptional()
+  @IsEnum(InspectionScope, {
+    message: `inspectionScope must be one of: ${Object.values(InspectionScope).join(', ')}`,
+  })
+  inspectionScope?: InspectionScope;
 
   @IsOptional()
   @IsUUID('4', { message: 'teamId must be a valid UUID' })

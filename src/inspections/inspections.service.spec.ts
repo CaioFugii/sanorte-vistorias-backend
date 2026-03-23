@@ -1,6 +1,11 @@
 import { InspectionsService } from './inspections.service';
 import { Inspection } from '../entities';
-import { ChecklistAnswer, ModuleType, UserRole } from '../common/enums';
+import {
+  ChecklistAnswer,
+  InspectionScope,
+  ModuleType,
+  UserRole,
+} from '../common/enums';
 import { InspectionDomainService } from './inspection-domain.service';
 
 describe('InspectionsService', () => {
@@ -11,6 +16,9 @@ describe('InspectionsService', () => {
   let signaturesRepository: any;
   let pendingAdjustmentsRepository: any;
   let checklistItemsRepository: any;
+  let teamsRepository: any;
+  let serviceOrderRepository: any;
+  let dataSource: any;
 
   beforeEach(async () => {
     inspectionsRepository = {
@@ -47,16 +55,20 @@ describe('InspectionsService', () => {
     checklistItemsRepository = {
       findOne: jest.fn(),
     };
-
-    const serviceOrderRepository = {
+    teamsRepository = {
       findOne: jest.fn(),
+    };
+
+    serviceOrderRepository = {
+      findOne: jest.fn(),
+      update: jest.fn(),
     };
 
     const cloudinaryService = {
       uploadImage: jest.fn(),
     };
 
-    const dataSource = {
+    dataSource = {
       getRepository: jest.fn(),
     };
 
@@ -67,6 +79,7 @@ describe('InspectionsService', () => {
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
+      teamsRepository as any,
       serviceOrderRepository as any,
       cloudinaryService as any,
       dataSource as any,
@@ -238,6 +251,68 @@ describe('InspectionsService', () => {
       externalId: '31a9e29b-1ca9-4d69-a6cf-e6367471743a',
       serverId: 'server-id-3',
       status: 'CREATED',
+    });
+  });
+
+  it('deve permitir criar no sync ST sem serviceOrderId', async () => {
+    const createdInspection = {
+      id: 'server-id-st',
+      status: 'RASCUNHO',
+      module: ModuleType.SEGURANCA_TRABALHO,
+      checklistId: 'checklist-id',
+      teamId: 'team-id',
+      serviceDescription: 'Vistoria ST',
+      createdOffline: true,
+      inspectionScope: InspectionScope.TEAM,
+    } as unknown as Inspection;
+
+    jest.spyOn(service, 'create').mockResolvedValue(createdInspection);
+    inspectionsRepository.findOne.mockResolvedValueOnce(null);
+
+    const result = await service.syncInspections(
+      [
+        {
+          externalId: 'st-uuid-1',
+          module: ModuleType.SEGURANCA_TRABALHO,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceDescription: 'Vistoria ST',
+          inspectionScope: InspectionScope.TEAM,
+        },
+      ] as any,
+      'user-id',
+      UserRole.FISCAL,
+    );
+
+    expect(result.results[0]).toMatchObject({
+      externalId: 'st-uuid-1',
+      serverId: 'server-id-st',
+      status: 'CREATED',
+    });
+  });
+
+  it('deve rejeitar criação no sync sem serviceOrderId quando módulo não é ST', async () => {
+    inspectionsRepository.findOne.mockResolvedValueOnce(null);
+
+    const result = await service.syncInspections(
+      [
+        {
+          externalId: 'quality-uuid-1',
+          module: ModuleType.QUALIDADE,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceDescription: 'Vistoria QLT',
+        },
+      ] as any,
+      'user-id',
+      UserRole.FISCAL,
+    );
+
+    expect(result.results[0]).toMatchObject({
+      externalId: 'quality-uuid-1',
+      status: 'ERROR',
+      message:
+        'serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.',
     });
   });
 });

@@ -1,4 +1,4 @@
-import { ChecklistAnswer, ModuleType } from '../../common/enums';
+import { ChecklistAnswer, InspectionScope, ModuleType } from '../../common/enums';
 
 export type SyncInspectionItemDto = {
   checklistItemId: string;
@@ -46,9 +46,10 @@ export type SyncParalyzeDto = {
 export type SyncInspectionDto = {
   externalId: string;
   module: ModuleType;
+  inspectionScope?: InspectionScope;
   checklistId: string;
   teamId: string;
-  serviceOrderId: string;
+  serviceOrderId?: string;
   serviceDescription: string;
   locationDescription?: string;
   collaboratorIds?: string[];

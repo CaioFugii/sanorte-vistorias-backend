@@ -41,7 +41,9 @@ Authorization: Bearer <token>
 
 ### Regras críticas que impactam UI
 
-- Nova vistoria (`POST /inspections` e sync) exige `serviceOrderId` vinculado a uma OS cadastrada via `POST /service-orders/import`.
+- Nova vistoria (`POST /inspections` e sync):
+  - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
+  - para `SEGURANCA_TRABALHO`, `serviceOrderId` é opcional.
 - `GET /inspections` (GESTOR/ADMIN) não retorna `RASCUNHO`.
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
 - `PUT /inspections/:id`:
@@ -101,7 +103,7 @@ Authorization: Bearer <token>
 ### Integração offline (resumo operacional)
 
 - Use `externalId` para idempotência no `POST /sync/inspections`.
-- `serviceOrderId` é obrigatório para criar nova vistoria no sync (OS deve estar cadastrada previamente).
+- No sync, `serviceOrderId` é obrigatório para criar nova vistoria quando o módulo não é `SEGURANCA_TRABALHO`.
 - Não enviar `dataUrl` em evidências no sync (assets devem ser enviados antes).
 - Se precisar aplicar penalidade de paralisação no sync, envie `paralyze.reason`.
 - `GET /inspections/:id` aceita `id` do servidor **ou** `externalId`, o que simplifica reconciliação de dados locais.
@@ -904,19 +906,23 @@ Response 200:
 ### POST /inspections
 
 - Auth: JWT + FISCAL ou GESTOR
-- Regra: `serviceOrderId` é obrigatório (OS deve existir em `service_orders`)
+- Regras:
+  - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
+  - para `SEGURANCA_TRABALHO`, `serviceOrderId` é opcional.
+  - `inspectionScope` aceita `TEAM` (padrão) e `COLLABORATOR`.
+  - quando `module = SEGURANCA_TRABALHO` e `inspectionScope = COLLABORATOR`, deve ser enviado exatamente 1 colaborador em `collaboratorIds`, com cadastro existente na plataforma.
 
 Request JSON:
 
 ```json
 {
   "module": "SEGURANCA_TRABALHO",
+  "inspectionScope": "COLLABORATOR",
   "checklistId": "uuid",
   "teamId": "uuid",
-  "serviceOrderId": "uuid",
   "serviceDescription": "Inspeção semanal",
   "locationDescription": "Canteiro principal",
-  "collaboratorIds": ["uuid-1", "uuid-2"],
+  "collaboratorIds": ["uuid-1"],
   "externalId": "uuid",
   "createdOffline": true,
   "syncedAt": "2026-02-19T12:00:00.000Z"
@@ -932,6 +938,7 @@ Response 201: `Inspection` completo (já com `items` baseados no checklist)
   - `periodFrom` (`YYYY-MM-DD`)
   - `periodTo` (`YYYY-MM-DD`)
   - `module`
+  - `inspectionScope` (`TEAM` | `COLLABORATOR`)
   - `teamId`
   - `status`
   - `osNumber` (busca parcial por número da OS; ex.: `?osNumber=OS-001`)
@@ -943,7 +950,7 @@ Response 201: `Inspection` completo (já com `items` baseados no checklist)
 ### GET /inspections/mine
 
 - Auth: JWT + FISCAL
-- Query: `page`, `limit`, `osNumber` (busca parcial por número da OS)
+- Query: `page`, `limit`, `osNumber` (busca parcial por número da OS), `inspectionScope`
 - Response: paginação de `Inspection` do usuário logado com relação `serviceOrder`
 
 ### GET /inspections/:id
@@ -1186,10 +1193,10 @@ Request JSON:
   "inspections": [
     {
       "externalId": "uuid",
-      "module": "QUALIDADE",
+      "module": "SEGURANCA_TRABALHO",
+      "inspectionScope": "COLLABORATOR",
       "checklistId": "uuid",
       "teamId": "uuid",
-      "serviceOrderId": "uuid",
       "serviceDescription": "Vistoria offline",
       "locationDescription": "Frente A",
       "collaboratorIds": ["uuid-1"],
@@ -1254,7 +1261,9 @@ Response 200:
 Regras importantes:
 
 - `externalId` é obrigatório.
-- `serviceOrderId` é obrigatório para criar nova vistoria (OS deve estar cadastrada via `POST /service-orders/import`).
+- `serviceOrderId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO` (OS deve estar cadastrada via `POST /service-orders/import`).
+- `inspectionScope` aceita `TEAM` (padrão) e `COLLABORATOR`.
+- Para `module = SEGURANCA_TRABALHO` e `inspectionScope = COLLABORATOR`, enviar exatamente 1 colaborador em `collaboratorIds`, com cadastro existente na plataforma.
 - Não aceita assets em `dataUrl`/`imageBase64` no sync.
 - Para evidências e assinatura, use `url` e/ou `cloudinaryPublicId`.
 - `paralyze.reason` (quando enviado) marca penalidade persistente de paralisação na vistoria.
@@ -1511,6 +1520,8 @@ Mensagens relevantes do domínio:
 - `serviceOrderId é obrigatório. Informe o ID de uma OS cadastrada na tabela de ordens de serviço.`
 - `Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.`
 - `serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.`
+- `Vistoria de Segurança do Trabalho por colaborador exige exatamente 1 colaborador.`
+- `Todos os colaboradores informados devem existir na plataforma.`
 - `Vistoria não encontrada`
 - `Fiscal não pode editar vistoria após finalização`
 - `reason should not be empty`

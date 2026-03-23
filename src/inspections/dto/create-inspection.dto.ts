@@ -6,8 +6,9 @@ import {
   IsUUID,
   IsArray,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
-import { ModuleType } from '../../common/enums';
+import { InspectionScope, ModuleType } from '../../common/enums';
 
 export class CreateInspectionDto {
   @IsEnum(ModuleType, { message: 'module deve ser um tipo válido' })
@@ -19,14 +20,22 @@ export class CreateInspectionDto {
   @IsUUID('4', { message: 'teamId deve ser um UUID válido' })
   teamId: string;
 
+  @IsOptional()
+  @IsEnum(InspectionScope, {
+    message: 'inspectionScope deve ser TEAM ou COLLABORATOR',
+  })
+  inspectionScope?: InspectionScope;
+
+  @ValidateIf((o: CreateInspectionDto) => !!o.serviceOrderId)
   @IsUUID('4', {
     message:
       'serviceOrderId é obrigatório. Informe o ID de uma OS cadastrada na tabela de ordens de serviço.',
   })
+  @ValidateIf((o: CreateInspectionDto) => o.module !== ModuleType.SEGURANCA_TRABALHO)
   @IsNotEmpty({
     message: 'serviceOrderId é obrigatório para criar uma nova vistoria.',
   })
-  serviceOrderId: string;
+  serviceOrderId?: string;
 
   @IsString()
   @IsNotEmpty({ message: 'serviceDescription é obrigatório' })

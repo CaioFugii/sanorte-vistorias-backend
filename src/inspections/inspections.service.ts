@@ -15,12 +15,14 @@ import {
   ChecklistItem,
   Checklist,
   Collaborator,
+  Team,
   ServiceOrder,
 } from '../entities';
 import {
   InspectionStatus,
   ChecklistAnswer,
   ModuleType,
+  InspectionScope,
   PendingStatus,
   UserRole,
 } from '../common/enums';
@@ -47,6 +49,8 @@ export class InspectionsService {
     private pendingAdjustmentsRepository: Repository<PendingAdjustment>,
     @InjectRepository(ChecklistItem)
     private checklistItemsRepository: Repository<ChecklistItem>,
+    @InjectRepository(Team)
+    private teamsRepository: Repository<Team>,
     @InjectRepository(ServiceOrder)
     private serviceOrderRepository: Repository<ServiceOrder>,
     private cloudinaryService: CloudinaryService,
@@ -57,9 +61,10 @@ export class InspectionsService {
   async create(
     inspectionData: {
       module: ModuleType;
+      inspectionScope?: InspectionScope;
       checklistId: string;
       teamId: string;
-      serviceOrderId: string;
+      serviceOrderId?: string;
       serviceDescription: string;
       locationDescription?: string;
       collaboratorIds?: string[];
@@ -69,23 +74,44 @@ export class InspectionsService {
     },
     userId: string,
   ): Promise<Inspection> {
-    if (!inspectionData.serviceOrderId) {
+    const inspectionScope = this.resolveInspectionScope(
+      inspectionData.module,
+      inspectionData.inspectionScope,
+    );
+
+    const serviceOrderId = inspectionData.serviceOrderId ?? null;
+
+    if (this.isServiceOrderRequired(inspectionData.module) && !serviceOrderId) {
       throw new BadRequestException(
         'serviceOrderId é obrigatório. Informe uma OS válida cadastrada na tabela de ordens de serviço.',
       );
     }
 
-    const serviceOrder = await this.serviceOrderRepository.findOne({
-      where: { id: inspectionData.serviceOrderId },
-    });
-    if (!serviceOrder) {
-      throw new BadRequestException(
-        'Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.',
-      );
+    if (serviceOrderId) {
+      const serviceOrder = await this.serviceOrderRepository.findOne({
+        where: { id: serviceOrderId },
+      });
+      if (!serviceOrder) {
+        throw new BadRequestException(
+          'Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.',
+        );
+      }
     }
+
+    await this.validateCollaboratorsForContractorTeam(
+      inspectionData.teamId,
+      inspectionData.collaboratorIds,
+    );
+    await this.validateInspectionScopeRules(
+      inspectionData.module,
+      inspectionScope,
+      inspectionData.collaboratorIds || [],
+    );
 
     const inspection = this.inspectionsRepository.create({
       ...inspectionData,
+      inspectionScope,
+      serviceOrderId,
       createdByUserId: userId,
       status: InspectionStatus.RASCUNHO,
       createdOffline: inspectionData.createdOffline || false,
@@ -104,9 +130,9 @@ export class InspectionsService {
       serviceOrderUpdate.remote = true;
     if (inspectionData.module === ModuleType.POS_OBRA)
       serviceOrderUpdate.postWork = true;
-    if (Object.keys(serviceOrderUpdate).length > 0) {
+    if (serviceOrderId && Object.keys(serviceOrderUpdate).length > 0) {
       await this.serviceOrderRepository.update(
-        inspectionData.serviceOrderId,
+        serviceOrderId,
         serviceOrderUpdate,
       );
     }
@@ -156,6 +182,7 @@ export class InspectionsService {
       periodFrom?: string;
       periodTo?: string;
       module?: ModuleType;
+      inspectionScope?: InspectionScope;
       teamId?: string;
       status?: InspectionStatus;
       osNumber?: string;
@@ -206,6 +233,11 @@ export class InspectionsService {
     if (filters.module) {
       query.andWhere('inspection.module = :module', { module: filters.module });
     }
+    if (filters.inspectionScope) {
+      query.andWhere('inspection.inspectionScope = :inspectionScope', {
+        inspectionScope: filters.inspectionScope,
+      });
+    }
     if (filters.teamId) {
       query.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
     }
@@ -242,6 +274,7 @@ export class InspectionsService {
     page: number = 1,
     limit: number = 10,
     osNumber?: string,
+    inspectionScope?: InspectionScope,
   ): Promise<PaginatedResponseDto<Inspection>> {
     const skip = (page - 1) * limit;
 
@@ -265,6 +298,11 @@ export class InspectionsService {
     if (osNumber?.trim()) {
       query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
         osNumber: `%${osNumber.trim()}%`,
+      });
+    }
+    if (inspectionScope) {
+      query.andWhere('inspection.inspectionScope = :inspectionScope', {
+        inspectionScope,
       });
     }
 
@@ -322,6 +360,24 @@ export class InspectionsService {
     userRole: string,
   ): Promise<Inspection> {
     const inspection = await this.findOne(id);
+    const hasServiceOrderChange = Object.prototype.hasOwnProperty.call(
+      inspectionData,
+      'serviceOrderId',
+    );
+    const nextModule = inspectionData.module ?? inspection.module;
+    const nextServiceOrderId = hasServiceOrderChange
+      ? inspectionData.serviceOrderId
+      : inspection.serviceOrderId;
+    const nextTeamId = inspectionData.teamId ?? inspection.teamId;
+    const nextInspectionScope = this.resolveInspectionScope(
+      nextModule,
+      inspectionData.inspectionScope ?? inspection.inspectionScope,
+    );
+    const nextCollaboratorIds = Array.isArray(inspectionData.collaborators)
+      ? inspectionData.collaborators
+          .map((collaborator) => collaborator?.id)
+          .filter(Boolean)
+      : (inspection.collaborators || []).map((collaborator) => collaborator.id);
 
     // FISCAL só pode editar se status = RASCUNHO
     if (
@@ -332,6 +388,35 @@ export class InspectionsService {
         'Fiscal não pode editar vistoria após finalização',
       );
     }
+
+    if (this.isServiceOrderRequired(nextModule) && !nextServiceOrderId) {
+      throw new BadRequestException(
+        'serviceOrderId é obrigatório. Informe uma OS válida cadastrada na tabela de ordens de serviço.',
+      );
+    }
+
+    if (nextServiceOrderId) {
+      const serviceOrder = await this.serviceOrderRepository.findOne({
+        where: { id: nextServiceOrderId },
+      });
+      if (!serviceOrder) {
+        throw new BadRequestException(
+          'Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.',
+        );
+      }
+    }
+
+    await this.validateCollaboratorsForContractorTeam(
+      nextTeamId,
+      nextCollaboratorIds,
+    );
+    await this.validateInspectionScopeRules(
+      nextModule,
+      nextInspectionScope,
+      nextCollaboratorIds,
+    );
+
+    inspectionData.inspectionScope = nextInspectionScope;
 
     // GESTOR e ADMIN podem editar sempre
     await this.inspectionsRepository.update(inspection.id, inspectionData);
@@ -665,7 +750,7 @@ export class InspectionsService {
     let status: 'CREATED' | 'UPDATED' = 'UPDATED';
 
     if (!inspection) {
-      if (!payload.serviceOrderId) {
+      if (this.isServiceOrderRequired(payload.module) && !payload.serviceOrderId) {
         throw new BadRequestException(
           'serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.',
         );
@@ -673,6 +758,7 @@ export class InspectionsService {
       inspection = await this.create(
         {
           module: payload.module,
+          inspectionScope: payload.inspectionScope,
           checklistId: payload.checklistId,
           teamId: payload.teamId,
           serviceOrderId: payload.serviceOrderId,
@@ -696,10 +782,32 @@ export class InspectionsService {
         );
       }
 
+      const nextModule = payload.module ?? inspection.module;
+      const nextTeamId = payload.teamId ?? inspection.teamId;
+      const nextInspectionScope = this.resolveInspectionScope(
+        nextModule,
+        payload.inspectionScope ?? inspection.inspectionScope,
+      );
+      const nextCollaboratorIds =
+        payload.collaboratorIds ??
+        inspection.collaborators?.map((collaborator) => collaborator.id) ??
+        [];
+
+      await this.validateCollaboratorsForContractorTeam(
+        nextTeamId,
+        nextCollaboratorIds,
+      );
+      await this.validateInspectionScopeRules(
+        nextModule,
+        nextInspectionScope,
+        nextCollaboratorIds,
+      );
+
       await this.inspectionsRepository.update(inspection.id, {
-        module: payload.module ?? inspection.module,
+        module: nextModule,
+        inspectionScope: nextInspectionScope,
         checklistId: payload.checklistId ?? inspection.checklistId,
-        teamId: payload.teamId ?? inspection.teamId,
+        teamId: nextTeamId,
         serviceDescription:
           payload.serviceDescription ?? inspection.serviceDescription,
         locationDescription:
@@ -709,6 +817,10 @@ export class InspectionsService {
       });
 
       if (payload.collaboratorIds) {
+        await this.validateCollaboratorsForContractorTeam(
+          payload.teamId ?? inspection.teamId,
+          payload.collaboratorIds,
+        );
         const inspectionWithRelations =
           await this.inspectionsRepository.findOne({
             where: { id: inspection.id },
@@ -872,6 +984,86 @@ export class InspectionsService {
       serverId: inspection.id,
       status,
     };
+  }
+
+  private async validateCollaboratorsForContractorTeam(
+    teamId: string,
+    collaboratorIds?: string[],
+  ): Promise<void> {
+    if (!collaboratorIds || collaboratorIds.length === 0) {
+      return;
+    }
+
+    const team = await this.teamsRepository.findOne({
+      where: { id: teamId },
+      select: ['id', 'isContractor'],
+    });
+
+    if (!team) {
+      throw new BadRequestException('Equipe não encontrada');
+    }
+
+    if (team.isContractor) {
+      throw new BadRequestException(
+        'Equipe empreiteira não permite vínculo de colaboradores',
+      );
+    }
+  }
+
+  private isServiceOrderRequired(module: ModuleType): boolean {
+    return module !== ModuleType.SEGURANCA_TRABALHO;
+  }
+
+  private resolveInspectionScope(
+    module: ModuleType,
+    inspectionScope?: InspectionScope,
+  ): InspectionScope {
+    if (module !== ModuleType.SEGURANCA_TRABALHO) {
+      return InspectionScope.TEAM;
+    }
+
+    return inspectionScope ?? InspectionScope.TEAM;
+  }
+
+  private async validateInspectionScopeRules(
+    module: ModuleType,
+    inspectionScope: InspectionScope,
+    collaboratorIds: string[],
+  ): Promise<void> {
+    if (module !== ModuleType.SEGURANCA_TRABALHO) {
+      return;
+    }
+
+    if (inspectionScope !== InspectionScope.COLLABORATOR) {
+      return;
+    }
+
+    if (collaboratorIds.length !== 1) {
+      throw new BadRequestException(
+        'Vistoria de Segurança do Trabalho por colaborador exige exatamente 1 colaborador.',
+      );
+    }
+
+    await this.validateCollaboratorsExist(collaboratorIds);
+  }
+
+  private async validateCollaboratorsExist(
+    collaboratorIds: string[],
+  ): Promise<void> {
+    if (!collaboratorIds.length) {
+      return;
+    }
+
+    const collaboratorRepository = this.dataSource.getRepository(Collaborator);
+    const uniqueCollaboratorIds = Array.from(new Set(collaboratorIds));
+    const existingCollaborators = await collaboratorRepository.findBy({
+      id: In(uniqueCollaboratorIds),
+    });
+    if (existingCollaborators.length !== uniqueCollaboratorIds.length) {
+      throw new BadRequestException(
+        'Todos os colaboradores informados devem existir na plataforma.',
+      );
+    }
   }
 
   private async upsertSignatureFromSync(

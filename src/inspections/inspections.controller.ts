@@ -49,6 +49,7 @@ export class InspectionsController {
         periodFrom: filterDto.periodFrom,
         periodTo: filterDto.periodTo,
         module: filterDto.module,
+        inspectionScope: filterDto.inspectionScope,
         teamId: filterDto.teamId,
         status: filterDto.status,
         osNumber: filterDto.osNumber,
@@ -67,6 +68,7 @@ export class InspectionsController {
       filterDto.page || 1,
       filterDto.limit || 10,
       filterDto.osNumber,
+      filterDto.inspectionScope,
     );
   }
 

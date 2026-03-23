@@ -57,11 +57,16 @@ export class TeamsService {
   async create(teamData: {
     name: string;
     active?: boolean;
+    isContractor?: boolean;
     collaboratorIds?: string[];
   }): Promise<Team> {
     const { collaboratorIds, ...baseData } = teamData;
     const normalizedName = this.normalizeTeamName(baseData.name);
     await this.ensureTeamNameIsAvailable(normalizedName);
+    this.validateCollaboratorsForContractorTeam(
+      baseData.isContractor,
+      collaboratorIds,
+    );
 
     const team = this.teamsRepository.create({
       ...baseData,
@@ -92,6 +97,7 @@ export class TeamsService {
   ): Promise<Team> {
     const { collaboratorIds, ...baseData } = teamData;
     const dataToUpdate = { ...baseData };
+    let nextIsContractor = teamData.isContractor;
 
     if (dataToUpdate.name !== undefined) {
       const normalizedName = this.normalizeTeamName(dataToUpdate.name);
@@ -111,12 +117,17 @@ export class TeamsService {
       }
     }
 
-    if (collaboratorIds !== undefined) {
-      const team = await this.findOne(id);
-      if (!team) {
-        return null;
-      }
+    const team = await this.findOne(id);
+    if (!team) {
+      return null;
+    }
 
+    if (nextIsContractor === undefined) {
+      nextIsContractor = team.isContractor;
+    }
+    this.validateCollaboratorsForContractorTeam(nextIsContractor, collaboratorIds);
+
+    if (collaboratorIds !== undefined) {
       team.collaborators = await this.resolveCollaborators(collaboratorIds);
       await this.teamsRepository.save(team);
     }
@@ -196,5 +207,20 @@ export class TeamsService {
 
   private throwTeamNameAlreadyExists(): never {
     throw new BadRequestException('Já existe uma equipe com este nome');
+  }
+
+  private validateCollaboratorsForContractorTeam(
+    isContractor?: boolean,
+    collaboratorIds?: string[],
+  ): void {
+    if (!isContractor) {
+      return;
+    }
+
+    if (collaboratorIds && collaboratorIds.length > 0) {
+      throw new BadRequestException(
+        'Equipe empreiteira não pode ter colaboradores vinculados',
+      );
+    }
   }
 }

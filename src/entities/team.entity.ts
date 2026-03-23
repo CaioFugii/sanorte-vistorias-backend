@@ -22,6 +22,9 @@ export class Team {
   @Column({ default: true })
   active: boolean;
 
+  @Column({ name: 'is_contractor', default: false })
+  isContractor: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
