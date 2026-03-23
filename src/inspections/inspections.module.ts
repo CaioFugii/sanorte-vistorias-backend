@@ -11,6 +11,7 @@ import {
   ChecklistItem,
   Checklist,
   Collaborator,
+  Team,
   ChecklistSection,
   ServiceOrder,
 } from '../entities';
@@ -29,6 +30,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
       ChecklistItem,
       Checklist,
       Collaborator,
+      Team,
       ChecklistSection,
       ServiceOrder,
     ]),
