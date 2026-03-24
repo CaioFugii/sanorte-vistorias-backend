@@ -535,6 +535,8 @@ export class DashboardsService {
       Math.max(filters.limit ?? DEFAULT_LOW_SCORE_LIMIT, 1),
       MAX_LOW_SCORE_LIMIT,
     );
+    const lowScoreCountExpr =
+      'SUM(CASE WHEN inspection.scorePercent < :lowScoreThreshold THEN 1 ELSE 0 END)';
 
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -542,10 +544,7 @@ export class DashboardsService {
       .select('collaborator.id', 'collaboratorId')
       .addSelect('collaborator.name', 'collaboratorName')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
-      .addSelect(
-        `SUM(CASE WHEN inspection.scorePercent < :lowScoreThreshold THEN 1 ELSE 0 END)`,
-        'badScoresCount',
-      )
+      .addSelect(lowScoreCountExpr, 'badScoresCount')
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect('MIN(inspection.scorePercent)', 'worstScorePercent')
       .addSelect('MAX(inspection.scorePercent)', 'bestScorePercent')
@@ -564,7 +563,7 @@ export class DashboardsService {
       .groupBy('collaborator.id')
       .addGroupBy('collaborator.name')
       .setParameter('lowScoreThreshold', lowScoreThreshold)
-      .orderBy('badScoresCount', 'DESC')
+      .orderBy(lowScoreCountExpr, 'DESC')
       .addOrderBy('AVG(inspection.scorePercent)', 'ASC', 'NULLS LAST')
       .addOrderBy('COUNT(inspection.id)', 'DESC')
       .limit(limit);
