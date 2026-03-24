@@ -44,6 +44,8 @@ Authorization: Bearer <token>
 - Nova vistoria (`POST /inspections` e sync):
   - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `serviceOrderId` é opcional.
+  - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
+  - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
 - `GET /inspections` (GESTOR/ADMIN) não retorna `RASCUNHO`.
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
 - `PUT /inspections/:id`:
@@ -914,6 +916,8 @@ Response 200:
 - Regras:
   - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `serviceOrderId` é opcional.
+  - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
+  - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
   - `inspectionScope` aceita `TEAM` (padrão) e `COLLABORATOR`.
   - quando `module = SEGURANCA_TRABALHO` e `inspectionScope = COLLABORATOR`, deve ser enviado exatamente 1 colaborador em `collaboratorIds`, com cadastro existente na plataforma.
 
@@ -924,7 +928,6 @@ Request JSON:
   "module": "SEGURANCA_TRABALHO",
   "inspectionScope": "COLLABORATOR",
   "checklistId": "uuid",
-  "teamId": "uuid",
   "serviceDescription": "Inspeção semanal",
   "locationDescription": "Canteiro principal",
   "collaboratorIds": ["uuid-1"],
@@ -1204,7 +1207,6 @@ Request JSON:
       "module": "SEGURANCA_TRABALHO",
       "inspectionScope": "COLLABORATOR",
       "checklistId": "uuid",
-      "teamId": "uuid",
       "serviceDescription": "Vistoria offline",
       "locationDescription": "Frente A",
       "collaboratorIds": ["uuid-1"],
@@ -1270,6 +1272,7 @@ Regras importantes:
 
 - `externalId` é obrigatório.
 - `serviceOrderId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO` (OS deve estar cadastrada via `POST /service-orders/import`).
+- `teamId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO`.
 - `inspectionScope` aceita `TEAM` (padrão) e `COLLABORATOR`.
 - Para `module = SEGURANCA_TRABALHO` e `inspectionScope = COLLABORATOR`, enviar exatamente 1 colaborador em `collaboratorIds`, com cadastro existente na plataforma.
 - Não aceita assets em `dataUrl`/`imageBase64` no sync.

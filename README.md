@@ -163,6 +163,7 @@ Authorization: Bearer <token>
 - Checklist pode ser criado com `inspectionScope` (`TEAM` ou `COLLABORATOR`), com padrão `TEAM` quando omitido.
 - Ao informar `sectorId` em criação/edição de colaborador ou checklist, o setor precisa existir.
 - Não é permitido deletar setor vinculado a colaboradores ou checklists.
+- Em `POST /inspections`, `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e opcional para `SEGURANCA_TRABALHO`.
 - FISCAL só edita vistoria em `RASCUNHO`.
 - Atualização de itens recalcula automaticamente a nota da vistoria (`scorePercent`).
 - Vistoria pode ser paralisada por FISCAL/GESTOR/ADMIN com motivo obrigatório.

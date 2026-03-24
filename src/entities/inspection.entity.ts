@@ -47,12 +47,12 @@ export class Inspection {
   @JoinColumn({ name: 'checklist_id' })
   checklist: Checklist;
 
-  @Column({ name: 'team_id' })
-  teamId: string;
+  @Column({ name: 'team_id', nullable: true })
+  teamId: string | null;
 
-  @ManyToOne(() => Team)
+  @ManyToOne(() => Team, { nullable: true })
   @JoinColumn({ name: 'team_id' })
-  team: Team;
+  team: Team | null;
 
   @Column({ name: 'service_description', type: 'text' })
   serviceDescription: string;

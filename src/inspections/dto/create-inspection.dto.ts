@@ -17,8 +17,13 @@ export class CreateInspectionDto {
   @IsUUID('4', { message: 'checklistId deve ser um UUID válido' })
   checklistId: string;
 
+  @ValidateIf((o: CreateInspectionDto) => !!o.teamId)
   @IsUUID('4', { message: 'teamId deve ser um UUID válido' })
-  teamId: string;
+  @ValidateIf((o: CreateInspectionDto) => o.module !== ModuleType.SEGURANCA_TRABALHO)
+  @IsNotEmpty({
+    message: 'teamId é obrigatório para criar uma nova vistoria.',
+  })
+  teamId?: string;
 
   @IsOptional()
   @IsEnum(InspectionScope, {

@@ -31,6 +31,7 @@ describe('InspectionsService - Regras de Negócio', () => {
   const mockInspection: Partial<Inspection> = {
     id: 'test-id',
     module: ModuleType.QUALIDADE,
+    teamId: 'team-id',
     serviceOrderId: 'service-order-id',
     status: InspectionStatus.RASCUNHO,
     createdByUserId: 'user-id',
@@ -400,7 +401,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     expect(inspectionsRepository.update).not.toHaveBeenCalled();
   });
 
-  it('deve permitir criar vistoria ST sem serviceOrderId', async () => {
+  it('deve permitir criar vistoria ST sem serviceOrderId e sem teamId', async () => {
     inspectionsRepository.create.mockImplementation((payload: any) => payload);
     inspectionsRepository.save.mockResolvedValue({ id: 'inspection-st-id' });
     dataSource.getRepository.mockReturnValue({
@@ -418,7 +419,6 @@ describe('InspectionsService - Regras de Negócio', () => {
           module: ModuleType.SEGURANCA_TRABALHO,
           inspectionScope: InspectionScope.TEAM,
           checklistId: 'checklist-id',
-          teamId: 'team-id',
           serviceDescription: 'Vistoria ST sem OS',
         },
         'user-id',
@@ -442,6 +442,22 @@ describe('InspectionsService - Regras de Negócio', () => {
       ),
     ).rejects.toThrow(
       'serviceOrderId é obrigatório. Informe uma OS válida cadastrada na tabela de ordens de serviço.',
+    );
+  });
+
+  it('deve rejeitar criar vistoria sem teamId quando módulo não é ST', async () => {
+    await expect(
+      service.create(
+        {
+          module: ModuleType.QUALIDADE,
+          checklistId: 'checklist-id',
+          serviceOrderId: 'service-order-id',
+          serviceDescription: 'Vistoria sem equipe',
+        },
+        'user-id',
+      ),
+    ).rejects.toThrow(
+      'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
     );
   });
 

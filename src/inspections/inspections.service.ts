@@ -63,7 +63,7 @@ export class InspectionsService {
       module: ModuleType;
       inspectionScope?: InspectionScope;
       checklistId: string;
-      teamId: string;
+      teamId?: string;
       serviceOrderId?: string;
       serviceDescription: string;
       locationDescription?: string;
@@ -78,8 +78,15 @@ export class InspectionsService {
       inspectionData.module,
       inspectionData.inspectionScope,
     );
+    const teamId = inspectionData.teamId ?? null;
 
     const serviceOrderId = inspectionData.serviceOrderId ?? null;
+
+    if (this.isTeamRequired(inspectionData.module) && !teamId) {
+      throw new BadRequestException(
+        'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
+      );
+    }
 
     if (this.isServiceOrderRequired(inspectionData.module) && !serviceOrderId) {
       throw new BadRequestException(
@@ -99,7 +106,7 @@ export class InspectionsService {
     }
 
     await this.validateCollaboratorsForContractorTeam(
-      inspectionData.teamId,
+      teamId,
       inspectionData.collaboratorIds,
     );
     await this.validateInspectionScopeRules(
@@ -111,6 +118,7 @@ export class InspectionsService {
     const inspection = this.inspectionsRepository.create({
       ...inspectionData,
       inspectionScope,
+      teamId,
       serviceOrderId,
       createdByUserId: userId,
       status: InspectionStatus.RASCUNHO,
@@ -404,6 +412,12 @@ export class InspectionsService {
     if (this.isServiceOrderRequired(nextModule) && !nextServiceOrderId) {
       throw new BadRequestException(
         'serviceOrderId é obrigatório. Informe uma OS válida cadastrada na tabela de ordens de serviço.',
+      );
+    }
+
+    if (this.isTeamRequired(nextModule) && !nextTeamId) {
+      throw new BadRequestException(
+        'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
       );
     }
 
@@ -812,6 +826,12 @@ export class InspectionsService {
         inspection.collaborators?.map((collaborator) => collaborator.id) ??
         [];
 
+      if (this.isTeamRequired(nextModule) && !nextTeamId) {
+        throw new BadRequestException(
+          'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
+        );
+      }
+
       await this.validateCollaboratorsForContractorTeam(
         nextTeamId,
         nextCollaboratorIds,
@@ -1006,10 +1026,14 @@ export class InspectionsService {
   }
 
   private async validateCollaboratorsForContractorTeam(
-    teamId: string,
+    teamId: string | null,
     collaboratorIds?: string[],
   ): Promise<void> {
     if (!collaboratorIds || collaboratorIds.length === 0) {
+      return;
+    }
+
+    if (!teamId) {
       return;
     }
 
@@ -1030,6 +1054,10 @@ export class InspectionsService {
   }
 
   private isServiceOrderRequired(module: ModuleType): boolean {
+    return module !== ModuleType.SEGURANCA_TRABALHO;
+  }
+
+  private isTeamRequired(module: ModuleType): boolean {
     return module !== ModuleType.SEGURANCA_TRABALHO;
   }
 

@@ -48,7 +48,7 @@ export type SyncInspectionDto = {
   module: ModuleType;
   inspectionScope?: InspectionScope;
   checklistId: string;
-  teamId: string;
+  teamId?: string;
   serviceOrderId?: string;
   serviceDescription: string;
   locationDescription?: string;
