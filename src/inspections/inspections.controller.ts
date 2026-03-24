@@ -4,8 +4,10 @@ import {
   Post,
   Body,
   Put,
+  Delete,
   Param,
   Query,
+  HttpCode,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -89,6 +91,14 @@ export class InspectionsController {
       user.id,
       user.role,
     );
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  async remove(@Param('id') id: string): Promise<void> {
+    await this.inspectionsService.remove(id);
   }
 
   @Put(':id/items')

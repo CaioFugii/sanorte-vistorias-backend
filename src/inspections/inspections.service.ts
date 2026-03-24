@@ -353,6 +353,18 @@ export class InspectionsService {
     return inspection;
   }
 
+  async remove(id: string): Promise<void> {
+    const inspection = await this.findOne(id);
+
+    if (inspection.status !== InspectionStatus.RASCUNHO) {
+      throw new BadRequestException(
+        'Só é possível excluir vistoria com status RASCUNHO',
+      );
+    }
+
+    await this.inspectionsRepository.delete(inspection.id);
+  }
+
   async update(
     id: string,
     inspectionData: Partial<Inspection>,

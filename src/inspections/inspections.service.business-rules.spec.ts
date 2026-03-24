@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InspectionsService } from './inspections.service';
 import {
   Inspection,
@@ -41,6 +41,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     inspectionsRepository = {
       findOne: jest.fn().mockResolvedValue(mockInspection),
       update: jest.fn(),
+      delete: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
       findAndCount: jest.fn(),
@@ -105,6 +106,27 @@ describe('InspectionsService - Regras de Negócio', () => {
     await expect(
       service.update('test-id', {}, 'user-id', UserRole.FISCAL),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('deve excluir vistoria em RASCUNHO', async () => {
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      status: InspectionStatus.RASCUNHO,
+    } as Inspection);
+
+    await expect(service.remove('test-id')).resolves.toBeUndefined();
+
+    expect(inspectionsRepository.delete).toHaveBeenCalledWith('test-id');
+  });
+
+  it('não deve excluir vistoria fora de RASCUNHO', async () => {
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      status: InspectionStatus.FINALIZADA,
+    } as Inspection);
+
+    await expect(service.remove('test-id')).rejects.toThrow(BadRequestException);
+    expect(inspectionsRepository.delete).not.toHaveBeenCalled();
   });
 
   it('GESTOR deve poder editar vistoria finalizada', async () => {
