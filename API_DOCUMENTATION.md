@@ -89,7 +89,7 @@ Authorization: Bearer <token>
 - Paginação padrão em listas: `page`, `limit`.
 - `GET /service-orders`: filtros por `osNumber` (busca parcial), `sectorId`, `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA).
 - `GET /collaborators`: filtro por `sectorId`.
-- `GET /checklists`: filtros por `module`, `active`, `sectorId`.
+- `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`.
 - `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status`, `osNumber` (busca parcial por número da OS; regra de ocultar rascunho para GESTOR/ADMIN).
 - `GET /inspections/mine`: filtro por `osNumber` (busca parcial por número da OS).
 
@@ -725,6 +725,7 @@ Response 200: `Collaborator` atualizado
 - Auth: JWT
 - Query:
   - `module` (enum `ModuleType`)
+  - `inspectionScope` (`TEAM` | `COLLABORATOR`)
   - `active` (`true`/`false`)
   - `sectorId` (UUID)
   - `page`, `limit`
@@ -744,6 +745,7 @@ Request JSON:
 ```json
 {
   "module": "QUALIDADE",
+  "inspectionScope": "TEAM",
   "name": "Checklist de Qualidade",
   "description": "Checklist padrão",
   "sectorId": "uuid",

@@ -12,7 +12,7 @@ import {
   Inspection,
   Sector,
 } from '../entities';
-import { ModuleType } from '../common/enums';
+import { InspectionScope, ModuleType } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
@@ -32,6 +32,7 @@ export class ChecklistsService {
 
   async findAll(
     module?: ModuleType,
+    inspectionScope?: InspectionScope,
     active?: boolean,
     sectorId?: string,
     page: number = 1,
@@ -41,6 +42,9 @@ export class ChecklistsService {
     const where: any = {};
     if (module) {
       where.module = module;
+    }
+    if (inspectionScope) {
+      where.inspectionScope = inspectionScope;
     }
     if (typeof active === 'boolean') {
       where.active = active;
@@ -81,6 +85,7 @@ export class ChecklistsService {
 
   async create(checklistData: {
     module: ModuleType;
+    inspectionScope?: InspectionScope;
     name: string;
     description?: string;
     active?: boolean;

@@ -115,7 +115,7 @@ Authorization: Bearer <token>
 ### Checklists
 
 - `GET /checklists` (autenticado)
-  - filtros opcionais: `module`, `active`, `sectorId`, `page`, `limit`
+  - filtros opcionais: `module`, `inspectionScope`, `active`, `sectorId`, `page`, `limit`
 - `GET /checklists/:id` (autenticado)
 - `POST /checklists` (ADMIN)
 - `PUT /checklists/:id` (ADMIN)
@@ -160,6 +160,7 @@ Authorization: Bearer <token>
 
 - O sistema possui setores padrão (`ESGOTO`, `AGUA`, `REPOSICAO`) e permite cadastrar novos via endpoint de `sectors`.
 - `Collaborator` e `Checklist` podem ser vinculados a um setor por `sectorId`.
+- Checklist pode ser criado com `inspectionScope` (`TEAM` ou `COLLABORATOR`), com padrão `TEAM` quando omitido.
 - Ao informar `sectorId` em criação/edição de colaborador ou checklist, o setor precisa existir.
 - Não é permitido deletar setor vinculado a colaboradores ou checklists.
 - FISCAL só edita vistoria em `RASCUNHO`.

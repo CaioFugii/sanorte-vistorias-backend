@@ -25,6 +25,7 @@ export class ChecklistsController {
   findAll(@Query() query: FilterChecklistsDto) {
     return this.checklistsService.findAll(
       query.module,
+      query.inspectionScope,
       query.active,
       query.sectorId,
       query.page || 1,

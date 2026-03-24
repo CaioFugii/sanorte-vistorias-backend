@@ -8,7 +8,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { ModuleType } from '../common/enums';
+import { InspectionScope, ModuleType } from '../common/enums';
 import { ChecklistItem } from './checklist-item.entity';
 import { Inspection } from './inspection.entity';
 import { ChecklistSection } from './checklist-section.entity';
@@ -24,6 +24,14 @@ export class Checklist {
     enum: ModuleType,
   })
   module: ModuleType;
+
+  @Column({
+    name: 'inspection_scope',
+    type: 'enum',
+    enum: InspectionScope,
+    default: InspectionScope.TEAM,
+  })
+  inspectionScope: InspectionScope;
 
   @Column()
   name: string;

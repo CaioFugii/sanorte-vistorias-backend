@@ -1,7 +1,7 @@
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
-import { ModuleType } from '../../common/enums';
+import { InspectionScope, ModuleType } from '../../common/enums';
 
 export class FilterChecklistsDto extends PaginationQueryDto {
   @IsOptional()
@@ -9,6 +9,12 @@ export class FilterChecklistsDto extends PaginationQueryDto {
     message: `module must be one of: ${Object.values(ModuleType).join(', ')}`,
   })
   module?: ModuleType;
+
+  @IsOptional()
+  @IsEnum(InspectionScope, {
+    message: `inspectionScope must be one of: ${Object.values(InspectionScope).join(', ')}`,
+  })
+  inspectionScope?: InspectionScope;
 
   @IsOptional()
   @Transform(({ value }) => {
