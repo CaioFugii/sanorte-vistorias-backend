@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ChecklistAnswer, InspectionStatus } from '../common/enums';
+import { ChecklistAnswer, InspectionStatus, ModuleType } from '../common/enums';
 import { InspectionItem } from '../entities';
 
 @Injectable()
@@ -37,7 +37,14 @@ export class InspectionDomainService {
     return items.some((item) => item.answer === ChecklistAnswer.NAO_CONFORME);
   }
 
-  resolveFinalStatus(items: InspectionItem[]): InspectionStatus {
+  resolveFinalStatus(
+    items: InspectionItem[],
+    module: ModuleType,
+  ): InspectionStatus {
+    if (module === ModuleType.SEGURANCA_TRABALHO) {
+      return InspectionStatus.FINALIZADA;
+    }
+
     return this.hasNonConformity(items)
       ? InspectionStatus.PENDENTE_AJUSTE
       : InspectionStatus.FINALIZADA;

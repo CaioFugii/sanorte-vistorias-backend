@@ -168,12 +168,14 @@ Authorization: Bearer <token>
 - Ao paralisar, a vistoria recebe penalidade persistente de 25% na nota (`scorePercent`).
 - GESTOR/ADMIN podem remover a penalidade via `POST /inspections/:id/unparalyze` (correção de erro).
 - Para GESTOR/ADMIN, ao atualizar itens em vistoria `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA` ↔ `PENDENTE_AJUSTE`).
+- Exceção: em `SEGURANCA_TRABALHO`, a vistoria não vai para `PENDENTE_AJUSTE` (mantém `FINALIZADA`).
 - `POST /inspections/:id/finalize` exige:
   - assinatura do líder/encarregado;
   - evidência para item `NAO_CONFORME` quando `requiresPhotoOnNonConformity = true`.
 - Ao finalizar:
-  - sem `NAO_CONFORME`: status `FINALIZADA`;
-  - com `NAO_CONFORME`: status `PENDENTE_AJUSTE` e cria/atualiza `PendingAdjustment`.
+  - em `SEGURANCA_TRABALHO`: status `FINALIZADA` (mesmo com `NAO_CONFORME`) e sem `PendingAdjustment`;
+  - nos demais módulos, sem `NAO_CONFORME`: status `FINALIZADA`;
+  - nos demais módulos, com `NAO_CONFORME`: status `PENDENTE_AJUSTE` e cria/atualiza `PendingAdjustment`.
 - Resolução de item não conforme (`/items/:itemId/resolve`):
   - só em vistoria `PENDENTE_AJUSTE`;
   - aceita `resolutionEvidence` como URL ou base64.

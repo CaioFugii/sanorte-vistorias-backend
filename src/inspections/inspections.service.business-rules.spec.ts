@@ -184,6 +184,37 @@ describe('InspectionsService - Regras de Negócio', () => {
     expect(pendingAdjustmentsRepository.save).toHaveBeenCalled();
   });
 
+  it('deve finalizar vistoria ST mesmo com NAO_CONFORME e sem criar pendência', async () => {
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.SEGURANCA_TRABALHO,
+    } as Inspection);
+    inspectionItemsRepository.find.mockResolvedValue([
+      {
+        id: 'item-1',
+        inspectionId: 'test-id',
+        checklistItemId: 'check-item-1',
+        answer: ChecklistAnswer.NAO_CONFORME,
+        evidences: [{ id: 'ev-1' }],
+      } as InspectionItem,
+    ]);
+    checklistItemsRepository.findOne.mockResolvedValue({
+      id: 'check-item-1',
+      title: 'Item de teste',
+      requiresPhotoOnNonConformity: true,
+    } as ChecklistItem);
+
+    await service.finalize('test-id');
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.FINALIZADA,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).not.toHaveBeenCalled();
+  });
+
   it('deve permitir finalizar sem assinatura (assinatura é opcional)', async () => {
     jest
       .spyOn(service, 'findOne')

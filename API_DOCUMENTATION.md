@@ -54,6 +54,7 @@ Authorization: Bearer <token>
   - GESTOR/ADMIN em qualquer status.
   - Sempre recalcula `scorePercent`.
   - Para GESTOR/ADMIN, reavalia status automaticamente (`FINALIZADA` <-> `PENDENTE_AJUSTE`) quando aplicável.
+  - Exceção: para módulo `SEGURANCA_TRABALHO`, o status não vai para `PENDENTE_AJUSTE` (permanece/retorna `FINALIZADA`).
 - `POST /inspections/:id/evidences`:
   - FISCAL só em `RASCUNHO`.
   - GESTOR/ADMIN em qualquer status.
@@ -70,12 +71,14 @@ Authorization: Bearer <token>
 - `RASCUNHO`
   - estado de edição principal do FISCAL.
   - transição via `finalize` para:
-    - `FINALIZADA` (sem não conformidade), ou
-    - `PENDENTE_AJUSTE` (com não conformidade).
+    - `FINALIZADA` (sempre para módulo `SEGURANCA_TRABALHO`);
+    - `FINALIZADA` (sem não conformidade nos demais módulos), ou
+    - `PENDENTE_AJUSTE` (com não conformidade nos demais módulos).
 - `PENDENTE_AJUSTE`
   - pode avançar para `RESOLVIDA` quando pendências são resolvidas.
 - `FINALIZADA`
   - pode voltar para `PENDENTE_AJUSTE` se GESTOR/ADMIN alterarem itens e surgirem não conformidades.
+  - Exceção: no módulo `SEGURANCA_TRABALHO`, não há transição para `PENDENTE_AJUSTE`.
 - `RESOLVIDA`
   - status final após resolução de pendências.
 - Paralisação é um estado paralelo:
@@ -986,6 +989,7 @@ Response 200: `Inspection` atualizado
   - A nota (`scorePercent`) é recalculada automaticamente a cada atualização de itens
   - Se `hasParalysisPenalty = true`, a nota final recebe penalidade persistente de 25%
   - Para GESTOR/ADMIN, se a vistoria estiver em `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA ↔ PENDENTE_AJUSTE`) com base nos itens
+  - Exceção: para `module = SEGURANCA_TRABALHO`, a reavaliação mantém `status = FINALIZADA` (sem `PENDENTE_AJUSTE`)
 
 Request JSON:
 
@@ -1091,8 +1095,10 @@ Regras:
 - Assinatura do líder/encarregado é opcional.
 - Item `NAO_CONFORME` com `requiresPhotoOnNonConformity = true` exige evidência.
 - Calcula `scorePercent` (com penalidade de 25% quando `hasParalysisPenalty = true`).
-- Se houver `NAO_CONFORME`: status `PENDENTE_AJUSTE` e pendência `PENDENTE`.
-- Se não houver `NAO_CONFORME`: status `FINALIZADA`.
+- Se `module = SEGURANCA_TRABALHO`: status `FINALIZADA` (mesmo com `NAO_CONFORME`) e sem criação de pendência de ajuste.
+- Nos demais módulos:
+  - Se houver `NAO_CONFORME`: status `PENDENTE_AJUSTE` e pendência `PENDENTE`.
+  - Se não houver `NAO_CONFORME`: status `FINALIZADA`.
 
 ### POST /inspections/:id/paralyze
 
@@ -1413,6 +1419,7 @@ Response 404 quando a equipe não existe:
   - `FINALIZADA`
   - `PENDENTE_AJUSTE`
   - `RESOLVIDA`
+- Observação: para `SEGURANCA_TRABALHO`, o fluxo não utiliza `PENDENTE_AJUSTE`.
 - `qualityPercent` é `AVG(scorePercent)` no agrupamento mês + serviço.
 - `growthPercent` é a variação percentual do último mês do período versus o mês anterior.
 
@@ -1455,6 +1462,7 @@ Response 200:
   - `PENDENTE_AJUSTE`
   - `RESOLVIDA`
 - `pendingAdjustmentsCount` contabiliza inspeções do mês com status `PENDENTE_AJUSTE`.
+- Observação: para `SEGURANCA_TRABALHO`, `pendingAdjustmentsCount` tende a 0, pois não há transição para `PENDENTE_AJUSTE`.
 - `qualityPercent` por serviço é `AVG(scorePercent)` no mês.
 
 Response 200:

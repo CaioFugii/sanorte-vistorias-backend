@@ -486,10 +486,14 @@ export class InspectionsService {
         inspection.status === InspectionStatus.PENDENTE_AJUSTE)
     ) {
       const nextStatus =
-        this.inspectionDomainService.resolveFinalStatus(refreshedItems);
+        this.inspectionDomainService.resolveFinalStatus(
+          refreshedItems,
+          inspection.module,
+        );
       inspectionUpdates.status = nextStatus;
       await this.syncPendingAdjustmentByStatus(
         inspection.id,
+        inspection.module,
         nextStatus,
         userId,
       );
@@ -667,7 +671,10 @@ export class InspectionsService {
       inspection.hasParalysisPenalty === true,
     );
 
-    const status = this.inspectionDomainService.resolveFinalStatus(items);
+    const status = this.inspectionDomainService.resolveFinalStatus(
+      items,
+      inspection.module,
+    );
     if (status === InspectionStatus.PENDENTE_AJUSTE) {
       // Criar ou atualizar PendingAdjustment
       let pending = await this.pendingAdjustmentsRepository.findOne({
@@ -1270,9 +1277,14 @@ export class InspectionsService {
 
   private async syncPendingAdjustmentByStatus(
     inspectionId: string,
+    module: ModuleType,
     nextStatus: InspectionStatus,
     userId: string,
   ): Promise<void> {
+    if (module === ModuleType.SEGURANCA_TRABALHO) {
+      return;
+    }
+
     if (
       nextStatus !== InspectionStatus.PENDENTE_AJUSTE &&
       nextStatus !== InspectionStatus.FINALIZADA
