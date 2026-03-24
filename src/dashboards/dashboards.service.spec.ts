@@ -1,5 +1,9 @@
 import { DashboardsService } from './dashboards.service';
-import { InspectionStatus, ModuleType } from '../common/enums';
+import {
+  InspectionScope,
+  InspectionStatus,
+  ModuleType,
+} from '../common/enums';
 
 function createMockQueryBuilder({
   rawOne,
@@ -10,12 +14,14 @@ function createMockQueryBuilder({
 }) {
   return {
     leftJoin: jest.fn().mockReturnThis(),
+    innerJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
     addGroupBy: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
     setParameter: jest.fn().mockReturnThis(),
@@ -190,5 +196,59 @@ describe('DashboardsService', () => {
         ],
       },
     );
+  });
+
+  it('deve retornar dados para gráfico de colaboradores com notas ruins em ST', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          collaboratorId: 'col-1',
+          collaboratorName: 'Joao Silva',
+          inspectionsCount: '5',
+          badScoresCount: '3',
+          averagePercent: '62.4',
+          worstScorePercent: '40',
+          bestScorePercent: '80',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getLowScoreCollaborators({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      lowScoreThreshold: 70,
+      limit: 20,
+    });
+
+    expect(result).toEqual({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      lowScoreThreshold: 70,
+      collaborators: [
+        {
+          collaboratorId: 'col-1',
+          collaboratorName: 'Joao Silva',
+          inspectionsCount: 5,
+          badScoresCount: 3,
+          badScoreRatePercent: 60,
+          averagePercent: 62.4,
+          worstScorePercent: 40,
+          bestScorePercent: 80,
+        },
+      ],
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
+      module: ModuleType.SEGURANCA_TRABALHO,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.inspectionScope = :inspectionScope',
+      {
+        inspectionScope: InspectionScope.COLLABORATOR,
+      },
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith('lowScoreThreshold', 70);
+    expect(qb.limit).toHaveBeenCalledWith(20);
   });
 });

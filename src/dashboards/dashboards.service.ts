@@ -6,9 +6,12 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Inspection, Team } from '../entities';
-import { ModuleType, InspectionStatus } from '../common/enums';
-import { QualityByServiceResponseDto } from './dto/quality-by-service-response.dto';
-import { CurrentMonthByServiceResponseDto } from './dto/current-month-by-service-response.dto';
+import { ModuleType, InspectionScope, InspectionStatus } from '../common/enums';
+import {
+  CurrentMonthByServiceResponseDto,
+  LowScoreCollaboratorsResponseDto,
+  QualityByServiceResponseDto,
+} from './dto';
 
 const MAX_DATE_RANGE_YEARS = 2;
 const DASHBOARD_TIMEZONE = 'America/Sao_Paulo';
@@ -24,6 +27,9 @@ const QUALITY_BY_SERVICE_ALLOWED_SECTORS = [
   'HIDROMETRIA',
   'REPOSICAO',
 ];
+const DEFAULT_LOW_SCORE_THRESHOLD = 70;
+const DEFAULT_LOW_SCORE_LIMIT = 15;
+const MAX_LOW_SCORE_LIMIT = 100;
 
 /** Converte uma data YYYY-MM-DD para o fim do dia (23:59:59.999) em UTC. */
 function toEndOfDay(dateStr: string): Date {
@@ -511,6 +517,89 @@ export class DashboardsService {
         qualityPercent: roundTo2(parseFloat(row.qualityPercent ?? '0')),
         inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
       })),
+    };
+  }
+
+  async getLowScoreCollaborators(filters: {
+    from: string;
+    to: string;
+    lowScoreThreshold?: number;
+    limit?: number;
+  }): Promise<LowScoreCollaboratorsResponseDto> {
+    this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
+    const lowScoreThreshold = roundTo2(
+      filters.lowScoreThreshold ?? DEFAULT_LOW_SCORE_THRESHOLD,
+    );
+    const limit = Math.min(
+      Math.max(filters.limit ?? DEFAULT_LOW_SCORE_LIMIT, 1),
+      MAX_LOW_SCORE_LIMIT,
+    );
+
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.collaborators', 'collaborator')
+      .select('collaborator.id', 'collaboratorId')
+      .addSelect('collaborator.name', 'collaboratorName')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect(
+        `SUM(CASE WHEN inspection.scorePercent < :lowScoreThreshold THEN 1 ELSE 0 END)`,
+        'badScoresCount',
+      )
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect('MIN(inspection.scorePercent)', 'worstScorePercent')
+      .addSelect('MAX(inspection.scorePercent)', 'bestScorePercent')
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .andWhere('inspection.module = :module', {
+        module: ModuleType.SEGURANCA_TRABALHO,
+      })
+      .andWhere('inspection.inspectionScope = :inspectionScope', {
+        inspectionScope: InspectionScope.COLLABORATOR,
+      })
+      .andWhere('inspection.scorePercent IS NOT NULL')
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: toLimit })
+      .groupBy('collaborator.id')
+      .addGroupBy('collaborator.name')
+      .setParameter('lowScoreThreshold', lowScoreThreshold)
+      .orderBy('badScoresCount', 'DESC')
+      .addOrderBy('AVG(inspection.scorePercent)', 'ASC', 'NULLS LAST')
+      .addOrderBy('COUNT(inspection.id)', 'DESC')
+      .limit(limit);
+
+    const rows = await qb.getRawMany<{
+      collaboratorId: string;
+      collaboratorName: string;
+      inspectionsCount: string;
+      badScoresCount: string;
+      averagePercent: string | null;
+      worstScorePercent: string | null;
+      bestScorePercent: string | null;
+    }>();
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      lowScoreThreshold,
+      collaborators: rows.map((row) => {
+        const inspectionsCount = parseInt(row.inspectionsCount ?? '0', 10);
+        const badScoresCount = parseInt(row.badScoresCount ?? '0', 10);
+        const badScoreRatePercent =
+          inspectionsCount > 0 ? roundTo2((badScoresCount / inspectionsCount) * 100) : 0;
+
+        return {
+          collaboratorId: row.collaboratorId,
+          collaboratorName: row.collaboratorName,
+          inspectionsCount,
+          badScoresCount,
+          badScoreRatePercent,
+          averagePercent: roundTo2(parseFloat(row.averagePercent ?? '0')),
+          worstScorePercent: roundTo2(parseFloat(row.worstScorePercent ?? '0')),
+          bestScorePercent: roundTo2(parseFloat(row.bestScorePercent ?? '0')),
+        };
+      }),
     };
   }
 }

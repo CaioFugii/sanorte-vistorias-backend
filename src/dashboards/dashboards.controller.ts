@@ -4,9 +4,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
-import { DashboardQueryDto } from './dto/dashboard-query.dto';
-import { QualityByServiceQueryDto } from './dto/quality-by-service-query.dto';
-import { CurrentMonthByServiceQueryDto } from './dto/current-month-by-service-query.dto';
+import {
+  CurrentMonthByServiceQueryDto,
+  DashboardQueryDto,
+  LowScoreCollaboratorsQueryDto,
+  QualityByServiceQueryDto,
+} from './dto';
 
 @Controller('dashboards')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -61,6 +64,16 @@ export class DashboardsController {
       month: query.month,
       module: query.module,
       teamId: query.teamId,
+    });
+  }
+
+  @Get('safety-work/low-score-collaborators')
+  getLowScoreCollaborators(@Query() query: LowScoreCollaboratorsQueryDto) {
+    return this.dashboardsService.getLowScoreCollaborators({
+      from: query.from,
+      to: query.to,
+      lowScoreThreshold: query.lowScoreThreshold,
+      limit: query.limit,
     });
   }
 }

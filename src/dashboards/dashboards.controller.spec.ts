@@ -46,6 +46,12 @@ describe('DashboardsController (integration)', () => {
       },
       services: [],
     }),
+    getLowScoreCollaborators: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      lowScoreThreshold: 70,
+      collaborators: [],
+    }),
   };
 
   beforeAll(async () => {
@@ -92,6 +98,14 @@ describe('DashboardsController (integration)', () => {
       .get('/dashboards/current-month-by-service')
       .query({ month: '2025-11' })
       .set('x-role', 'GESTOR')
+      .expect(200);
+  });
+
+  it('deve permitir ADMIN no endpoint de colaboradores com notas ruins', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/safety-work/low-score-collaborators')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'ADMIN')
       .expect(200);
   });
 });
