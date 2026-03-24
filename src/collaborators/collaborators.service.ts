@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { Collaborator, Sector } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
@@ -14,15 +14,19 @@ export class CollaboratorsService {
   ) {}
 
   async findAll(
+    name?: string,
     sectorId?: string,
     page: number = 1,
     limit: number = 10,
   ): Promise<PaginatedResponseDto<Collaborator>> {
     const skip = (page - 1) * limit;
-    const where: Partial<Collaborator> = {};
+    const where: any = {};
 
     if (sectorId) {
       where.sectorId = sectorId;
+    }
+    if (name?.trim()) {
+      where.name = ILike(`%${name.trim()}%`);
     }
 
     const [data, total] = await this.collaboratorsRepository.findAndCount({

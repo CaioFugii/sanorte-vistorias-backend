@@ -24,6 +24,7 @@ export class CollaboratorsController {
   @Get()
   findAll(@Query() query: FilterCollaboratorsDto) {
     return this.collaboratorsService.findAll(
+      query.name,
       query.sectorId,
       query.page || 1,
       query.limit || 10,

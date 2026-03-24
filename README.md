@@ -107,7 +107,7 @@ Authorization: Bearer <token>
 ### Collaborators
 
 - `GET /collaborators` (autenticado)
-  - filtros opcionais: `sectorId`, `page`, `limit`
+  - filtros opcionais: `name`, `sectorId`, `page`, `limit`
 - `POST /collaborators` (ADMIN)
 - `PUT /collaborators/:id` (ADMIN)
 - `DELETE /collaborators/:id` (ADMIN)
