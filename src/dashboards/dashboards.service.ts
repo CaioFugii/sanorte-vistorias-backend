@@ -17,6 +17,13 @@ const QUALITY_RELEVANT_STATUSES = [
   InspectionStatus.PENDENTE_AJUSTE,
   InspectionStatus.RESOLVIDA,
 ];
+const QUALITY_BY_SERVICE_ALLOWED_SECTORS = [
+  'AGUA',
+  'DESOBSTRUCAO',
+  'ESGOTO',
+  'HIDROMETRIA',
+  'REPOSICAO',
+];
 
 /** Converte uma data YYYY-MM-DD para o fim do dia (23:59:59.999) em UTC. */
 function toEndOfDay(dateStr: string): Date {
@@ -133,6 +140,7 @@ export class DashboardsService {
       .where('inspection.status != :draft', {
         draft: InspectionStatus.RASCUNHO,
       })
+      .andWhere('inspection.teamId IS NOT NULL')
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
       .andWhere('inspection.createdAt >= :from', { from: filters.from })
       .andWhere('inspection.createdAt <= :to', { to: toLimit });
@@ -190,6 +198,7 @@ export class DashboardsService {
       .where('inspection.status != :draft', {
         draft: InspectionStatus.RASCUNHO,
       })
+      .andWhere('inspection.teamId IS NOT NULL')
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
       .setParameter('noTeam', 'Sem equipe')
       .groupBy('inspection.teamId')
@@ -330,6 +339,9 @@ export class DashboardsService {
       .where('inspection.status IN (:...qualityStatuses)', {
         qualityStatuses: QUALITY_RELEVANT_STATUSES,
       })
+      .andWhere(`UPPER(TRIM(${serviceLabelExpr})) IN (:...allowedSectors)`, {
+        allowedSectors: QUALITY_BY_SERVICE_ALLOWED_SECTORS,
+      })
       .andWhere(`${dayExpr} >= :from`, { from: filters.from })
       .andWhere(`${dayExpr} <= :to`, { to: filters.to })
       .groupBy(monthExpr)
@@ -421,8 +433,15 @@ export class DashboardsService {
 
     const summaryQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
+      .leftJoin('inspection.checklist', 'checklist')
+      .leftJoin('checklist.sector', 'checklistSector')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .leftJoin('serviceOrder.sector', 'serviceOrderSector')
       .where('inspection.status IN (:...qualityStatuses)', {
         qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere(`UPPER(TRIM(${serviceLabelExpr})) IN (:...allowedSectors)`, {
+        allowedSectors: QUALITY_BY_SERVICE_ALLOWED_SECTORS,
       })
       .andWhere(`${monthExpr} = :month`, { month })
       .select('AVG(inspection.scorePercent)', 'averagePercent')
@@ -446,6 +465,9 @@ export class DashboardsService {
       .leftJoin('serviceOrder.sector', 'serviceOrderSector')
       .where('inspection.status IN (:...qualityStatuses)', {
         qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere(`UPPER(TRIM(${serviceLabelExpr})) IN (:...allowedSectors)`, {
+        allowedSectors: QUALITY_BY_SERVICE_ALLOWED_SECTORS,
       })
       .andWhere(`${monthExpr} = :month`, { month })
       .select(serviceLabelExpr, 'serviceLabel')
