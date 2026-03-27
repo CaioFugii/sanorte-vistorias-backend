@@ -5,3 +5,5 @@ export * from './low-score-collaborators-query.dto';
 export * from './low-score-collaborators-response.dto';
 export * from './quality-by-service-query.dto';
 export * from './quality-by-service-response.dto';
+export * from './team-performance-by-teams-query.dto';
+export * from './team-performance-by-teams-response.dto';

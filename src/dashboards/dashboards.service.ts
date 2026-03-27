@@ -4,13 +4,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { isUUID } from 'class-validator';
+import { In, Repository } from 'typeorm';
 import { Inspection, Team } from '../entities';
 import { ModuleType, InspectionScope, InspectionStatus } from '../common/enums';
 import {
   CurrentMonthByServiceResponseDto,
   LowScoreCollaboratorsResponseDto,
   QualityByServiceResponseDto,
+  TeamPerformanceByTeamsResponseDto,
 } from './dto';
 
 const MAX_DATE_RANGE_YEARS = 2;
@@ -40,6 +42,28 @@ function toEndOfDay(dateStr: string): Date {
 
 function roundTo2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function toDateOnlyString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function getPreviousPeriod(from: string, to: string): { from: string; to: string } {
+  const currentFrom = new Date(`${from}T00:00:00.000Z`);
+  const currentTo = new Date(`${to}T00:00:00.000Z`);
+  const inclusiveDays =
+    Math.floor((currentTo.getTime() - currentFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+  const previousTo = new Date(currentFrom);
+  previousTo.setUTCDate(previousTo.getUTCDate() - 1);
+
+  const previousFrom = new Date(previousTo);
+  previousFrom.setUTCDate(previousFrom.getUTCDate() - (inclusiveDays - 1));
+
+  return {
+    from: toDateOnlyString(previousFrom),
+    to: toDateOnlyString(previousTo),
+  };
 }
 
 function serviceKeyFromLabel(label: string): string {
@@ -110,6 +134,26 @@ export class DashboardsService {
         `O intervalo de datas não pode ser maior que ${MAX_DATE_RANGE_YEARS} anos.`,
       );
     }
+  }
+
+  private parseTeamIdsCsv(teamIdsCsv: string): string[] {
+    const teamIds = teamIdsCsv
+      .split(',')
+      .map((teamId) => teamId.trim())
+      .filter(Boolean);
+
+    if (teamIds.length === 0) {
+      throw new BadRequestException('teamIds deve conter ao menos um id');
+    }
+
+    const hasInvalidTeamId = teamIds.some((teamId) => !isUUID(teamId, '4'));
+    if (hasInvalidTeamId) {
+      throw new BadRequestException(
+        'teamIds deve conter apenas UUIDs válidos (v4)',
+      );
+    }
+
+    return Array.from(new Set(teamIds));
   }
 
   private applyQualityFilters(
@@ -517,6 +561,183 @@ export class DashboardsService {
         qualityPercent: roundTo2(parseFloat(row.qualityPercent ?? '0')),
         inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
       })),
+    };
+  }
+
+  async getTeamPerformanceByTeams(filters: {
+    from: string;
+    to: string;
+    teamIdsCsv: string;
+  }): Promise<TeamPerformanceByTeamsResponseDto> {
+    this.validateDateRange(filters.from, filters.to);
+    const teamIds = this.parseTeamIdsCsv(filters.teamIdsCsv);
+    const previousPeriod = getPreviousPeriod(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
+    const previousToLimit = toEndOfDay(previousPeriod.to);
+
+    const teams = await this.teamRepository.find({
+      where: { id: In(teamIds) },
+      select: ['id', 'name'],
+    });
+    const teamsById = new Map(teams.map((team) => [team.id, team]));
+    const missingTeamIds = teamIds.filter((teamId) => !teamsById.has(teamId));
+    if (missingTeamIds.length > 0) {
+      throw new BadRequestException(
+        `Equipe(s) não encontrada(s): ${missingTeamIds.join(', ')}`,
+      );
+    }
+
+    const currentSummaryQb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .select('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect(
+        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        'pendingAdjustmentsCount',
+      )
+      .where('inspection.status IN (:...qualityStatuses)', {
+        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere('inspection.teamId IN (:...teamIds)', { teamIds })
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: toLimit })
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
+
+    const previousSummaryQb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .select('AVG(inspection.scorePercent)', 'averagePercent')
+      .where('inspection.status IN (:...qualityStatuses)', {
+        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere('inspection.teamId IN (:...teamIds)', { teamIds })
+      .andWhere('inspection.createdAt >= :from', { from: previousPeriod.from })
+      .andWhere('inspection.createdAt <= :to', { to: previousToLimit });
+
+    const teamRankingQb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.team', 'team')
+      .select('inspection.teamId', 'teamId')
+      .addSelect('team.name', 'teamName')
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect(
+        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        'pendingAdjustmentsCount',
+      )
+      .where('inspection.status IN (:...qualityStatuses)', {
+        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere('inspection.teamId IN (:...teamIds)', { teamIds })
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: toLimit })
+      .groupBy('inspection.teamId')
+      .addGroupBy('team.name')
+      .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
+      .addOrderBy('team.name', 'ASC')
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
+
+    const collaboratorsQb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.collaborators', 'collaborator')
+      .innerJoin('inspection.team', 'team')
+      .select('inspection.teamId', 'teamId')
+      .addSelect('collaborator.id', 'collaboratorId')
+      .addSelect('collaborator.name', 'collaboratorName')
+      .addSelect('AVG(inspection.scorePercent)', 'qualityPercent')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .where('inspection.status IN (:...qualityStatuses)', {
+        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere('inspection.teamId IN (:...teamIds)', { teamIds })
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: toLimit })
+      .groupBy('inspection.teamId')
+      .addGroupBy('collaborator.id')
+      .addGroupBy('collaborator.name')
+      .orderBy('inspection.teamId', 'ASC')
+      .addOrderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
+      .addOrderBy('collaborator.name', 'ASC');
+
+    const [currentSummaryRow, previousSummaryRow, teamRows, collaboratorRows] =
+      await Promise.all([
+        currentSummaryQb.getRawOne<{
+          averagePercent: string | null;
+          inspectionsCount: string;
+          pendingAdjustmentsCount: string;
+        }>(),
+        previousSummaryQb.getRawOne<{ averagePercent: string | null }>(),
+        teamRankingQb.getRawMany<{
+          teamId: string;
+          teamName: string;
+          averagePercent: string | null;
+          inspectionsCount: string;
+          pendingAdjustmentsCount: string;
+        }>(),
+        collaboratorsQb.getRawMany<{
+          teamId: string;
+          collaboratorId: string;
+          collaboratorName: string;
+          qualityPercent: string | null;
+          inspectionsCount: string;
+        }>(),
+      ]);
+
+    const collaboratorsByTeam = new Map<
+      string,
+      {
+        collaboratorId: string;
+        collaboratorName: string;
+        qualityPercent: number;
+        inspectionsCount: number;
+      }[]
+    >();
+
+    for (const row of collaboratorRows) {
+      if (!collaboratorsByTeam.has(row.teamId)) {
+        collaboratorsByTeam.set(row.teamId, []);
+      }
+      collaboratorsByTeam.get(row.teamId)!.push({
+        collaboratorId: row.collaboratorId,
+        collaboratorName: row.collaboratorName,
+        qualityPercent: roundTo2(parseFloat(row.qualityPercent ?? '0')),
+        inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
+      });
+    }
+
+    const teamStatsById = new Map(teamRows.map((row) => [row.teamId, row]));
+    const teamsResult = teamIds.map((teamId) => {
+      const team = teamsById.get(teamId)!;
+      const teamStats = teamStatsById.get(teamId);
+
+      return {
+        teamId,
+        teamName: team.name,
+        averagePercent: roundTo2(parseFloat(teamStats?.averagePercent ?? '0')),
+        inspectionsCount: parseInt(teamStats?.inspectionsCount ?? '0', 10),
+        pendingAdjustmentsCount: parseInt(
+          teamStats?.pendingAdjustmentsCount ?? '0',
+          10,
+        ),
+        collaborators: collaboratorsByTeam.get(teamId) ?? [],
+      };
+    });
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      teamIds,
+      summary: {
+        averagePercent: roundTo2(parseFloat(currentSummaryRow?.averagePercent ?? '0')),
+        previousAveragePercent: roundTo2(
+          parseFloat(previousSummaryRow?.averagePercent ?? '0'),
+        ),
+        inspectionsCount: parseInt(currentSummaryRow?.inspectionsCount ?? '0', 10),
+        pendingAdjustmentsCount: parseInt(
+          currentSummaryRow?.pendingAdjustmentsCount ?? '0',
+          10,
+        ),
+      },
+      teams: teamsResult,
     };
   }
 

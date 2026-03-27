@@ -9,6 +9,7 @@ import {
   DashboardQueryDto,
   LowScoreCollaboratorsQueryDto,
   QualityByServiceQueryDto,
+  TeamPerformanceByTeamsQueryDto,
 } from './dto';
 
 @Controller('dashboards')
@@ -74,6 +75,15 @@ export class DashboardsController {
       to: query.to,
       lowScoreThreshold: query.lowScoreThreshold,
       limit: query.limit,
+    });
+  }
+
+  @Get('team-performance-by-teams')
+  getTeamPerformanceByTeams(@Query() query: TeamPerformanceByTeamsQueryDto) {
+    return this.dashboardsService.getTeamPerformanceByTeams({
+      from: query.from,
+      to: query.to,
+      teamIdsCsv: query.teamIds,
     });
   }
 }
