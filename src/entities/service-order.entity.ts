@@ -58,6 +58,9 @@ export class ServiceOrder {
   equipe: string | null;
 
   @Column({ type: 'text', nullable: true })
+  familia: string | null;
+
+  @Column({ type: 'text', nullable: true })
   status: string | null;
 
   @CreateDateColumn({ name: 'created_at' })

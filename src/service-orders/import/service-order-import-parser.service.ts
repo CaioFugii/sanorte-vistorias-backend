@@ -5,6 +5,7 @@ export interface ParsedServiceOrderImportRow {
   sectorName: string | null;
   status: string;
   address: string;
+  familia: string | null;
   resultado: string | null;
   fimExecucao: Date | null;
   tempoExecucaoEfetivo: string | null;
@@ -122,6 +123,8 @@ export class ServiceOrderImportParserService {
       ),
       status: this.normalizeString(statusRaw as string | number | undefined),
       address,
+      familia:
+        this.normalizeString(familyRaw as string | number | undefined) || null,
       resultado:
         this.normalizeString(resultadoRaw as string | number | undefined) ||
         null,
