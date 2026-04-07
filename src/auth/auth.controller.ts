@@ -21,6 +21,10 @@ export class AuthController {
       name: user.name,
       email: user.email,
       role: user.role,
+      contracts: (user.contracts || []).map((contract: any) => ({
+        id: contract.id,
+        name: contract.name,
+      })),
     };
   }
 }

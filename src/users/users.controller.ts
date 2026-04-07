@@ -40,6 +40,14 @@ export class UsersController {
     return this.usersService.update(id, updateUserDto);
   }
 
+  @Put(':id/contracts')
+  updateContracts(
+    @Param('id') id: string,
+    @Body() body: { contractIds: string[] },
+  ) {
+    return this.usersService.updateContracts(id, body.contractIds || []);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);

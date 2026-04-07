@@ -5,9 +5,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
 import { UserRole } from '../common/enums';
 import { Inspection } from './inspection.entity';
+import { Contract } from './contract.entity';
 
 @Entity('users')
 export class User {
@@ -37,4 +40,12 @@ export class User {
 
   @OneToMany(() => Inspection, (inspection) => inspection.createdBy)
   inspections: Inspection[];
+
+  @ManyToMany(() => Contract, (contract) => contract.users)
+  @JoinTable({
+    name: 'user_contracts',
+    joinColumn: { name: 'user_id' },
+    inverseJoinColumn: { name: 'contract_id' },
+  })
+  contracts: Contract[];
 }

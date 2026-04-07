@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../entities';
+import { In, Repository } from 'typeorm';
+import { Contract, User } from '../entities';
 import { UserRole } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import * as bcrypt from 'bcrypt';
@@ -11,14 +11,25 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Contract)
+    private contractsRepository: Repository<Contract>,
   ) {}
 
-  async findByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { email } });
+  async findByEmail(
+    email: string,
+    withContracts: boolean = false,
+  ): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { email },
+      relations: withContracts ? ['contracts'] : [],
+    });
   }
 
-  async findOne(id: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { id } });
+  async findOne(id: string, withContracts: boolean = false): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+      relations: withContracts ? ['contracts'] : [],
+    });
   }
 
   async findAll(
@@ -28,10 +39,10 @@ export class UsersService {
     const skip = (page - 1) * limit;
 
     const [data, total] = await this.usersRepository.findAndCount({
-      select: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt'],
       skip,
       take: limit,
       order: { createdAt: 'DESC' },
+      relations: ['contracts'],
     });
 
     const totalPages = Math.ceil(total / limit);
@@ -54,31 +65,71 @@ export class UsersService {
     email: string;
     password: string;
     role: UserRole;
+    contractIds?: string[];
   }): Promise<User> {
     const passwordHash = await bcrypt.hash(userData.password, 10);
+    const contracts = await this.resolveContracts(userData.contractIds);
+
     const user = this.usersRepository.create({
       name: userData.name,
       email: userData.email,
       role: userData.role,
       passwordHash,
+      contracts,
     });
     return this.usersRepository.save(user);
   }
 
-  async update(id: string, userData: Partial<User>): Promise<User> {
-    if (userData.passwordHash) {
-      // Se vier password, hash
-      const password = (userData as any).password;
-      if (password) {
-        userData.passwordHash = await bcrypt.hash(password, 10);
-        delete (userData as any).password;
-      }
+  async update(
+    id: string,
+    userData: Partial<User> & { contractIds?: string[]; password?: string },
+  ): Promise<User> {
+    if (userData.password) {
+      userData.passwordHash = await bcrypt.hash(userData.password, 10);
+      delete (userData as any).password;
     }
-    await this.usersRepository.update(id, userData);
-    return this.findOne(id);
+
+    const existing = await this.findOne(id, true);
+    if (!existing) {
+      return null;
+    }
+
+    const { contractIds, ...baseData } = userData;
+    const contracts =
+      contractIds !== undefined
+        ? await this.resolveContracts(contractIds)
+        : existing.contracts;
+
+    const merged = this.usersRepository.merge(existing, baseData, { contracts });
+    await this.usersRepository.save(merged);
+
+    return this.findOne(id, true);
+  }
+
+  async updateContracts(id: string, contractIds: string[]): Promise<User | null> {
+    const user = await this.findOne(id, true);
+    if (!user) {
+      return null;
+    }
+
+    user.contracts = await this.resolveContracts(contractIds);
+    await this.usersRepository.save(user);
+    return this.findOne(id, true);
   }
 
   async remove(id: string): Promise<void> {
     await this.usersRepository.delete(id);
+  }
+
+  private async resolveContracts(contractIds?: string[]): Promise<Contract[]> {
+    if (!contractIds || contractIds.length === 0) {
+      return [];
+    }
+
+    return this.contractsRepository.find({
+      where: {
+        id: In(contractIds),
+      },
+    });
   }
 }

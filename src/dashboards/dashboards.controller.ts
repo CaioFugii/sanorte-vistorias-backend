@@ -3,6 +3,7 @@ import { DashboardsService } from './dashboards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import {
   CurrentMonthByServiceQueryDto,
@@ -19,8 +20,9 @@ export class DashboardsController {
   constructor(private readonly dashboardsService: DashboardsService) {}
 
   @Get('summary')
-  getSummary(@Query() query: DashboardQueryDto) {
+  getSummary(@CurrentUser() user: any, @Query() query: DashboardQueryDto) {
     return this.dashboardsService.getSummary({
+      user,
       from: query.from,
       to: query.to,
       module: query.module,
@@ -29,8 +31,9 @@ export class DashboardsController {
   }
 
   @Get('ranking/teams')
-  getTeamsRanking(@Query() query: DashboardQueryDto) {
+  getTeamsRanking(@CurrentUser() user: any, @Query() query: DashboardQueryDto) {
     return this.dashboardsService.getTeamsRanking({
+      user,
       from: query.from,
       to: query.to,
       module: query.module,
@@ -39,10 +42,12 @@ export class DashboardsController {
 
   @Get('teams/:teamId')
   getTeamPerformance(
+    @CurrentUser() user: any,
     @Param('teamId') teamId: string,
     @Query() query: DashboardQueryDto,
   ) {
     return this.dashboardsService.getTeamPerformance(teamId, {
+      user,
       from: query.from,
       to: query.to,
       module: query.module,
@@ -50,8 +55,12 @@ export class DashboardsController {
   }
 
   @Get('quality-by-service')
-  getQualityByService(@Query() query: QualityByServiceQueryDto) {
+  getQualityByService(
+    @CurrentUser() user: any,
+    @Query() query: QualityByServiceQueryDto,
+  ) {
     return this.dashboardsService.getQualityByService({
+      user,
       from: query.from,
       to: query.to,
       module: query.module,
@@ -60,8 +69,12 @@ export class DashboardsController {
   }
 
   @Get('current-month-by-service')
-  getCurrentMonthByService(@Query() query: CurrentMonthByServiceQueryDto) {
+  getCurrentMonthByService(
+    @CurrentUser() user: any,
+    @Query() query: CurrentMonthByServiceQueryDto,
+  ) {
     return this.dashboardsService.getCurrentMonthByService({
+      user,
       month: query.month,
       module: query.module,
       teamId: query.teamId,
@@ -69,8 +82,12 @@ export class DashboardsController {
   }
 
   @Get('safety-work/low-score-collaborators')
-  getLowScoreCollaborators(@Query() query: LowScoreCollaboratorsQueryDto) {
+  getLowScoreCollaborators(
+    @CurrentUser() user: any,
+    @Query() query: LowScoreCollaboratorsQueryDto,
+  ) {
     return this.dashboardsService.getLowScoreCollaborators({
+      user,
       from: query.from,
       to: query.to,
       lowScoreThreshold: query.lowScoreThreshold,
@@ -79,8 +96,12 @@ export class DashboardsController {
   }
 
   @Get('team-performance-by-teams')
-  getTeamPerformanceByTeams(@Query() query: TeamPerformanceByTeamsQueryDto) {
+  getTeamPerformanceByTeams(
+    @CurrentUser() user: any,
+    @Query() query: TeamPerformanceByTeamsQueryDto,
+  ) {
     return this.dashboardsService.getTeamPerformanceByTeams({
+      user,
       from: query.from,
       to: query.to,
       teamIdsCsv: query.teamIds,

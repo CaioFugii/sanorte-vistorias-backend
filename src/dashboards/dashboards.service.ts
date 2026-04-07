@@ -9,6 +9,10 @@ import { In, Repository } from 'typeorm';
 import { Inspection, Team } from '../entities';
 import { ModuleType, InspectionScope, InspectionStatus } from '../common/enums';
 import {
+  applyContractScopeFilter,
+  getAllowedContractIds,
+} from '../common/auth/contract-scope.util';
+import {
   CurrentMonthByServiceResponseDto,
   LowScoreCollaboratorsResponseDto,
   QualityByServiceResponseDto,
@@ -171,7 +175,13 @@ export class DashboardsService {
     }
   }
 
+  private applyContractScope(qb: any, user: any): void {
+    const allowedContractIds = getAllowedContractIds(user);
+    applyContractScopeFilter(qb, allowedContractIds, 'serviceOrder.contractId');
+  }
+
   async getSummary(filters: {
+    user?: any;
     from: string;
     to: string;
     module?: ModuleType;
@@ -181,6 +191,7 @@ export class DashboardsService {
     const toLimit = toEndOfDay(filters.to);
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect(
         `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
@@ -201,6 +212,8 @@ export class DashboardsService {
     if (filters.teamId) {
       qb.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
     }
+
+    this.applyContractScope(qb, filters.user);
 
     const row = await qb.getRawOne<{
       inspectionsCount: string;
@@ -224,6 +237,7 @@ export class DashboardsService {
   }
 
   async getTeamsRanking(filters: {
+    user?: any;
     from: string;
     to: string;
     module?: ModuleType;
@@ -233,6 +247,7 @@ export class DashboardsService {
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .leftJoin('inspection.team', 'team')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('inspection.teamId', 'teamId')
       .addSelect('COALESCE(team.name, :noTeam)', 'teamName')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
@@ -260,6 +275,8 @@ export class DashboardsService {
     if (filters.module) {
       qb.andWhere('inspection.module = :module', { module: filters.module });
     }
+
+    this.applyContractScope(qb, filters.user);
 
     const rows = await qb.getRawMany<{
       teamId: string;
@@ -298,6 +315,7 @@ export class DashboardsService {
   async getTeamPerformance(
     teamId: string,
     filters: {
+      user?: any;
       from: string;
       to: string;
       module?: ModuleType;
@@ -312,6 +330,7 @@ export class DashboardsService {
     const toLimit = toEndOfDay(filters.to);
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect(
@@ -333,6 +352,8 @@ export class DashboardsService {
     if (filters.module) {
       qb.andWhere('inspection.module = :module', { module: filters.module });
     }
+
+    this.applyContractScope(qb, filters.user);
 
     const row = await qb.getRawOne<{
       inspectionsCount: string;
@@ -365,6 +386,7 @@ export class DashboardsService {
   }
 
   async getQualityByService(filters: {
+    user?: any;
     from: string;
     to: string;
     module?: ModuleType;
@@ -403,6 +425,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    this.applyContractScope(qb, filters.user);
 
     const rows = await qb.getRawMany<{
       month: string;
@@ -472,6 +495,7 @@ export class DashboardsService {
   }
 
   async getCurrentMonthByService(filters: {
+    user?: any;
     month?: string;
     module?: ModuleType;
     teamId?: string;
@@ -506,6 +530,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    this.applyContractScope(summaryQb, filters.user);
 
     const rankingQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -531,6 +556,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    this.applyContractScope(rankingQb, filters.user);
 
     const [summaryRow, rankingRows] = await Promise.all([
       summaryQb.getRawOne<{
@@ -565,6 +591,7 @@ export class DashboardsService {
   }
 
   async getTeamPerformanceByTeams(filters: {
+    user?: any;
     from: string;
     to: string;
     teamIdsCsv: string;
@@ -589,6 +616,7 @@ export class DashboardsService {
 
     const currentSummaryQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect(
@@ -605,6 +633,7 @@ export class DashboardsService {
 
     const previousSummaryQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('AVG(inspection.scorePercent)', 'averagePercent')
       .where('inspection.status IN (:...qualityStatuses)', {
         qualityStatuses: QUALITY_RELEVANT_STATUSES,
@@ -616,6 +645,7 @@ export class DashboardsService {
     const teamRankingQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .innerJoin('inspection.team', 'team')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('inspection.teamId', 'teamId')
       .addSelect('team.name', 'teamName')
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
@@ -640,6 +670,7 @@ export class DashboardsService {
       .createQueryBuilder('inspection')
       .innerJoin('inspection.collaborators', 'collaborator')
       .innerJoin('inspection.team', 'team')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('inspection.teamId', 'teamId')
       .addSelect('collaborator.id', 'collaboratorId')
       .addSelect('collaborator.name', 'collaboratorName')
@@ -657,6 +688,11 @@ export class DashboardsService {
       .orderBy('inspection.teamId', 'ASC')
       .addOrderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
       .addOrderBy('collaborator.name', 'ASC');
+
+    this.applyContractScope(currentSummaryQb, filters.user);
+    this.applyContractScope(previousSummaryQb, filters.user);
+    this.applyContractScope(teamRankingQb, filters.user);
+    this.applyContractScope(collaboratorsQb, filters.user);
 
     const [currentSummaryRow, previousSummaryRow, teamRows, collaboratorRows] =
       await Promise.all([
@@ -742,6 +778,7 @@ export class DashboardsService {
   }
 
   async getLowScoreCollaborators(filters: {
+    user?: any;
     from: string;
     to: string;
     lowScoreThreshold?: number;
@@ -762,6 +799,7 @@ export class DashboardsService {
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .innerJoin('inspection.collaborators', 'collaborator')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('collaborator.id', 'collaboratorId')
       .addSelect('collaborator.name', 'collaboratorName')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
@@ -788,6 +826,8 @@ export class DashboardsService {
       .addOrderBy('AVG(inspection.scorePercent)', 'ASC', 'NULLS LAST')
       .addOrderBy('COUNT(inspection.id)', 'DESC')
       .limit(limit);
+
+    this.applyContractScope(qb, filters.user);
 
     const rows = await qb.getRawMany<{
       collaboratorId: string;

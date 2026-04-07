@@ -16,12 +16,8 @@ export class SyncController {
   @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
   syncInspections(
     @Body() body: SyncInspectionsRequestDto,
-    @CurrentUser() user: { id: string; role: UserRole },
+    @CurrentUser() user: any,
   ) {
-    return this.inspectionsService.syncInspections(
-      body?.inspections || [],
-      user.id,
-      user.role,
-    );
+    return this.inspectionsService.syncInspections(body?.inspections || [], user);
   }
 }

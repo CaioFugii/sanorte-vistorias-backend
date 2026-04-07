@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, FindOperator } from 'typeorm';
+import { Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { ServiceOrder, Sector } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { ServiceOrderImportParserService } from './import/service-order-import-parser.service';
+import {
+  applyContractScopeFilter,
+  getAllowedContractIds,
+} from '../common/auth/contract-scope.util';
 
 export interface ImportResult {
   inserted: number;
@@ -24,6 +28,7 @@ export class ServiceOrdersService {
   ) {}
 
   async findAll(
+    user: any,
     page: number = 1,
     limit: number = 10,
     osNumber?: string,
@@ -33,37 +38,42 @@ export class ServiceOrdersService {
     postWork?: boolean,
   ): Promise<PaginatedResponseDto<ServiceOrder>> {
     const skip = (page - 1) * limit;
-    const where: {
-      osNumber?: string | FindOperator<string>;
-      sectorId?: string;
-      field?: boolean;
-      remote?: boolean;
-      postWork?: boolean;
-    } = {};
+    const allowedContractIds = getAllowedContractIds(user);
+
+    const query = this.serviceOrderRepository
+      .createQueryBuilder('serviceOrder')
+      .leftJoinAndSelect('serviceOrder.sector', 'sector')
+      .leftJoinAndSelect('serviceOrder.contract', 'contract');
 
     if (osNumber?.trim()) {
-      where.osNumber = Like(`%${osNumber.trim()}%`) as FindOperator<string>;
+      query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
+        osNumber: `%${osNumber.trim()}%`,
+      });
     }
     if (sectorId) {
-      where.sectorId = sectorId;
+      query.andWhere('serviceOrder.sectorId = :sectorId', { sectorId });
     }
     if (field !== undefined) {
-      where.field = field;
+      query.andWhere('serviceOrder.field = :field', { field });
     }
     if (remote !== undefined) {
-      where.remote = remote;
+      query.andWhere('serviceOrder.remote = :remote', { remote });
     }
     if (postWork !== undefined) {
-      where.postWork = postWork;
+      query.andWhere('serviceOrder.postWork = :postWork', { postWork });
     }
 
-    const [data, total] = await this.serviceOrderRepository.findAndCount({
-      where,
-      relations: ['sector'],
-      skip,
-      take: limit,
-      order: { osNumber: 'ASC' },
-    });
+    applyContractScopeFilter(
+      query,
+      allowedContractIds,
+      'serviceOrder.contractId',
+    );
+
+    const [data, total] = await query
+      .skip(skip)
+      .take(limit)
+      .orderBy('serviceOrder.osNumber', 'ASC')
+      .getManyAndCount();
 
     const totalPages = Math.ceil(total / limit);
 

@@ -9,6 +9,7 @@ import {
   Unique,
 } from 'typeorm';
 import { Sector } from './sector.entity';
+import { Contract } from './contract.entity';
 
 @Entity('service_orders')
 @Unique('UQ_os_number_sector_id', ['osNumber', 'sectorId'])
@@ -25,6 +26,15 @@ export class ServiceOrder {
   @ManyToOne(() => Sector, (sector) => sector.serviceOrders)
   @JoinColumn({ name: 'sector_id' })
   sector: Sector;
+
+  @Column({ name: 'contract_id', nullable: true })
+  contractId: string | null;
+
+  @ManyToOne(() => Contract, (contract) => contract.serviceOrders, {
+    nullable: true,
+  })
+  @JoinColumn({ name: 'contract_id' })
+  contract: Contract | null;
 
   @Column({ type: 'text' })
   address: string;

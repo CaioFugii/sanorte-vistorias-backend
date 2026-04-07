@@ -12,7 +12,7 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmail(email, true);
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       const { passwordHash, ...result } = user;
       return result;
@@ -33,6 +33,10 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
+        contracts: (user.contracts || []).map((contract) => ({
+          id: contract.id,
+          name: contract.name,
+        })),
       },
     };
   }

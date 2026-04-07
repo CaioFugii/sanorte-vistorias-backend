@@ -39,13 +39,13 @@ export class InspectionsController {
     @Body() createInspectionDto: CreateInspectionDto,
     @CurrentUser() user: any,
   ) {
-    return this.inspectionsService.create(createInspectionDto, user.id);
+    return this.inspectionsService.create(createInspectionDto, user.id, user);
   }
 
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.GESTOR)
-  findAll(@Query() filterDto: FilterInspectionsDto) {
+  findAll(@CurrentUser() user: any, @Query() filterDto: FilterInspectionsDto) {
     return this.inspectionsService.findAll(
       {
         periodFrom: filterDto.periodFrom,
@@ -58,6 +58,7 @@ export class InspectionsController {
       },
       filterDto.page || 1,
       filterDto.limit || 10,
+      user,
     );
   }
 
@@ -71,6 +72,7 @@ export class InspectionsController {
       filterDto.limit || 10,
       filterDto.osNumber,
       filterDto.inspectionScope,
+      user,
     );
   }
 

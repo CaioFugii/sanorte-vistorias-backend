@@ -33,6 +33,10 @@ import {
   SyncSignatureDto,
 } from './dto/sync-inspections.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import {
+  applyContractScopeFilter,
+  getAllowedContractIds,
+} from '../common/auth/contract-scope.util';
 
 @Injectable()
 export class InspectionsService {
@@ -73,7 +77,9 @@ export class InspectionsService {
       syncedAt?: string;
     },
     userId: string,
+    userScope?: any,
   ): Promise<Inspection> {
+    const allowedContractIds = getAllowedContractIds(userScope);
     const inspectionScope = this.resolveInspectionScope(
       inspectionData.module,
       inspectionData.inspectionScope,
@@ -101,6 +107,16 @@ export class InspectionsService {
       if (!serviceOrder) {
         throw new BadRequestException(
           'Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.',
+        );
+      }
+
+      if (
+        allowedContractIds !== null &&
+        (!serviceOrder.contractId ||
+          !allowedContractIds.includes(serviceOrder.contractId))
+      ) {
+        throw new ForbiddenException(
+          'Você não tem acesso ao contrato desta ordem de serviço.',
         );
       }
     }
@@ -197,7 +213,9 @@ export class InspectionsService {
     },
     page: number = 1,
     limit: number = 10,
+    userScope?: any,
   ): Promise<PaginatedResponseDto<Inspection>> {
+    const allowedContractIds = getAllowedContractIds(userScope);
     if (filters.status === InspectionStatus.RASCUNHO) {
       return {
         data: [],
@@ -258,6 +276,12 @@ export class InspectionsService {
       });
     }
 
+    applyContractScopeFilter(
+      query,
+      allowedContractIds,
+      'serviceOrder.contractId',
+    );
+
     query.skip(skip).take(limit).orderBy('inspection.createdAt', 'DESC');
 
     const [data, total] = await query.getManyAndCount();
@@ -283,7 +307,9 @@ export class InspectionsService {
     limit: number = 10,
     osNumber?: string,
     inspectionScope?: InspectionScope,
+    userScope?: any,
   ): Promise<PaginatedResponseDto<Inspection>> {
+    const allowedContractIds = getAllowedContractIds(userScope);
     const skip = (page - 1) * limit;
 
     const query = this.inspectionsRepository
@@ -313,6 +339,12 @@ export class InspectionsService {
         inspectionScope,
       });
     }
+
+    applyContractScopeFilter(
+      query,
+      allowedContractIds,
+      'serviceOrder.contractId',
+    );
 
     const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
 
@@ -718,8 +750,8 @@ export class InspectionsService {
 
   async syncInspections(
     inspections: SyncInspectionDto[],
-    userId: string,
-    userRole: UserRole,
+    userOrId: any,
+    userRoleArg?: UserRole,
   ): Promise<{
     results: Array<{
       externalId: string;
@@ -728,6 +760,11 @@ export class InspectionsService {
       message?: string;
     }>;
   }> {
+    const user =
+      typeof userOrId === 'string'
+        ? { id: userOrId, role: userRoleArg }
+        : userOrId;
+
     if (!Array.isArray(inspections)) {
       throw new BadRequestException('Payload de sincronização inválido');
     }
@@ -744,8 +781,7 @@ export class InspectionsService {
       try {
         const result = await this.syncSingleInspection(
           payload,
-          userId,
-          userRole,
+          user,
         );
         results.push(result);
       } catch (error: any) {
@@ -762,13 +798,15 @@ export class InspectionsService {
 
   private async syncSingleInspection(
     payload: SyncInspectionDto,
-    userId: string,
-    userRole: UserRole,
+    user: any,
   ): Promise<{
     externalId: string;
     serverId: string;
     status: 'CREATED' | 'UPDATED';
   }> {
+    const userId = user.id;
+    const userRole: UserRole = user.role;
+
     if (!payload?.externalId) {
       throw new BadRequestException(
         'externalId é obrigatório para sincronização',
@@ -803,6 +841,7 @@ export class InspectionsService {
           syncedAt: payload.syncedAt || new Date().toISOString(),
         },
         userId,
+        user,
       );
       status = 'CREATED';
     } else {

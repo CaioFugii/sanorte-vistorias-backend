@@ -16,6 +16,7 @@ import { ServiceOrdersService } from './service-orders.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import { FilterServiceOrdersDto } from './dto/filter-service-orders.dto';
 
@@ -27,8 +28,9 @@ export class ServiceOrdersController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.FISCAL)
-  findAll(@Query() query: FilterServiceOrdersDto) {
+  findAll(@CurrentUser() user: any, @Query() query: FilterServiceOrdersDto) {
     return this.serviceOrdersService.findAll(
+      user,
       query.page || 1,
       query.limit || 10,
       query.osNumber,
