@@ -1,14 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
-import { ServiceOrder, Sector } from '../entities';
+import { Contract, ServiceOrder, Sector } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { ServiceOrderImportParserService } from './import/service-order-import-parser.service';
 import {
   applyContractScopeFilter,
   getAllowedContractIds,
 } from '../common/auth/contract-scope.util';
+import { UserRole } from '../common/enums';
 
 export interface ImportResult {
   inserted: number;
@@ -24,6 +25,8 @@ export class ServiceOrdersService {
     private readonly serviceOrderRepository: Repository<ServiceOrder>,
     @InjectRepository(Sector)
     private readonly sectorsRepository: Repository<Sector>,
+    @InjectRepository(Contract)
+    private readonly contractsRepository: Repository<Contract>,
     private readonly serviceOrderImportParser: ServiceOrderImportParserService,
   ) {}
 
@@ -90,7 +93,33 @@ export class ServiceOrdersService {
     };
   }
 
-  async importFromExcel(file: Express.Multer.File): Promise<ImportResult> {
+  async importFromExcel(
+    user: any,
+    file: Express.Multer.File,
+    contractId: string,
+  ): Promise<ImportResult> {
+    if (!contractId) {
+      throw new BadRequestException('contractId é obrigatório na importação');
+    }
+
+    const contract = await this.contractsRepository.findOne({
+      where: { id: contractId },
+    });
+    if (!contract) {
+      throw new BadRequestException('Contrato informado não encontrado');
+    }
+
+    const allowedContractIds = getAllowedContractIds(user);
+    if (
+      user?.role === UserRole.GESTOR &&
+      allowedContractIds !== null &&
+      !allowedContractIds.includes(contractId)
+    ) {
+      throw new ForbiddenException(
+        'Você não tem acesso ao contrato selecionado para importação.',
+      );
+    }
+
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
@@ -213,6 +242,7 @@ export class ServiceOrdersService {
           .values({
             osNumber,
             sectorId: sector.id,
+            contractId,
             address,
             field: false,
             remote: false,
@@ -227,6 +257,7 @@ export class ServiceOrdersService {
           })
           .orUpdate(
             [
+              'contract_id',
               'status',
               'resultado',
               'fim_execucao',

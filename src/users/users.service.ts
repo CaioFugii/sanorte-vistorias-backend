@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Contract, User } from '../entities';
@@ -67,6 +67,10 @@ export class UsersService {
     role: UserRole;
     contractIds?: string[];
   }): Promise<User> {
+    if (!Array.isArray(userData.contractIds)) {
+      throw new BadRequestException('contractIds é obrigatório');
+    }
+
     const passwordHash = await bcrypt.hash(userData.password, 10);
     const contracts = await this.resolveContracts(userData.contractIds);
 
@@ -84,6 +88,10 @@ export class UsersService {
     id: string,
     userData: Partial<User> & { contractIds?: string[]; password?: string },
   ): Promise<User> {
+    if (!Array.isArray(userData.contractIds)) {
+      throw new BadRequestException('contractIds é obrigatório');
+    }
+
     if (userData.password) {
       userData.passwordHash = await bcrypt.hash(userData.password, 10);
       delete (userData as any).password;
@@ -95,10 +103,7 @@ export class UsersService {
     }
 
     const { contractIds, ...baseData } = userData;
-    const contracts =
-      contractIds !== undefined
-        ? await this.resolveContracts(contractIds)
-        : existing.contracts;
+    const contracts = await this.resolveContracts(contractIds);
 
     const merged = this.usersRepository.merge(existing, baseData, { contracts });
     await this.usersRepository.save(merged);
@@ -126,10 +131,16 @@ export class UsersService {
       return [];
     }
 
-    return this.contractsRepository.find({
+    const contracts = await this.contractsRepository.find({
       where: {
         id: In(contractIds),
       },
     });
+
+    if (contracts.length !== contractIds.length) {
+      throw new BadRequestException('Um ou mais contratos não foram encontrados');
+    }
+
+    return contracts;
   }
 }

@@ -1,8 +1,12 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, ILike, QueryFailedError } from 'typeorm';
-import { Team, Collaborator } from '../entities';
+import { Repository, In, QueryFailedError } from 'typeorm';
+import { Team, Collaborator, Contract } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import {
+  applyContractScopeFilter,
+  getAllowedContractIds,
+} from '../common/auth/contract-scope.util';
 
 @Injectable()
 export class TeamsService {
@@ -11,26 +15,38 @@ export class TeamsService {
     private teamsRepository: Repository<Team>,
     @InjectRepository(Collaborator)
     private collaboratorsRepository: Repository<Collaborator>,
+    @InjectRepository(Contract)
+    private contractsRepository: Repository<Contract>,
   ) {}
 
   async findAll(
+    user: any,
     page: number = 1,
     limit: number = 10,
     name?: string,
   ): Promise<PaginatedResponseDto<Team>> {
     const skip = (page - 1) * limit;
     const trimmedName = name?.trim();
+    const allowedContractIds = getAllowedContractIds(user);
 
-    const [data, total] = await this.teamsRepository.findAndCount({
-      where: {
-        active: true,
-        ...(trimmedName ? { name: ILike(`%${trimmedName}%`) } : {}),
-      },
-      relations: ['collaborators'],
-      skip,
-      take: limit,
-      order: { createdAt: 'DESC' },
-    });
+    const query = this.teamsRepository
+      .createQueryBuilder('team')
+      .leftJoinAndSelect('team.collaborators', 'collaborators')
+      .leftJoinAndSelect('team.contracts', 'contracts')
+      .distinct(true)
+      .where('team.active = :active', { active: true });
+
+    if (trimmedName) {
+      query.andWhere('team.name ILIKE :name', { name: `%${trimmedName}%` });
+    }
+
+    applyContractScopeFilter(query, allowedContractIds, 'contracts.id');
+
+    const [data, total] = await query
+      .skip(skip)
+      .take(limit)
+      .orderBy('team.createdAt', 'DESC')
+      .getManyAndCount();
 
     const totalPages = Math.ceil(total / limit);
 
@@ -50,7 +66,7 @@ export class TeamsService {
   async findOne(id: string): Promise<Team> {
     return this.teamsRepository.findOne({
       where: { id },
-      relations: ['collaborators'],
+      relations: ['collaborators', 'contracts'],
     });
   }
 
@@ -59,8 +75,13 @@ export class TeamsService {
     active?: boolean;
     isContractor?: boolean;
     collaboratorIds?: string[];
+    contractIds: string[];
   }): Promise<Team> {
-    const { collaboratorIds, ...baseData } = teamData;
+    if (!Array.isArray(teamData.contractIds)) {
+      throw new BadRequestException('contractIds é obrigatório');
+    }
+
+    const { collaboratorIds, contractIds, ...baseData } = teamData;
     const normalizedName = this.normalizeTeamName(baseData.name);
     await this.ensureTeamNameIsAvailable(normalizedName);
     this.validateCollaboratorsForContractorTeam(
@@ -75,6 +96,9 @@ export class TeamsService {
 
     if (collaboratorIds !== undefined) {
       team.collaborators = await this.resolveCollaborators(collaboratorIds);
+    }
+    if (contractIds !== undefined) {
+      team.contracts = await this.resolveContracts(contractIds);
     }
 
     let saved: Team;
@@ -93,9 +117,13 @@ export class TeamsService {
 
   async update(
     id: string,
-    teamData: Partial<Team> & { collaboratorIds?: string[] },
+    teamData: Partial<Team> & { collaboratorIds?: string[]; contractIds: string[] },
   ): Promise<Team> {
-    const { collaboratorIds, ...baseData } = teamData;
+    if (!Array.isArray(teamData.contractIds)) {
+      throw new BadRequestException('contractIds é obrigatório');
+    }
+
+    const { collaboratorIds, contractIds, ...baseData } = teamData;
     const dataToUpdate = { ...baseData };
     let nextIsContractor = teamData.isContractor;
 
@@ -129,8 +157,10 @@ export class TeamsService {
 
     if (collaboratorIds !== undefined) {
       team.collaborators = await this.resolveCollaborators(collaboratorIds);
-      await this.teamsRepository.save(team);
     }
+    team.contracts = await this.resolveContracts(contractIds);
+
+    await this.teamsRepository.save(team);
 
     return this.findOne(id);
   }
@@ -158,6 +188,25 @@ export class TeamsService {
     }
 
     return collaborators;
+  }
+
+  private async resolveContracts(contractIds: string[]): Promise<Contract[]> {
+    const uniqueIds = [...new Set(contractIds)];
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const contracts = await this.contractsRepository.findBy({
+      id: In(uniqueIds),
+    });
+
+    if (contracts.length !== uniqueIds.length) {
+      throw new BadRequestException(
+        'Um ou mais contractIds informados não existem',
+      );
+    }
+
+    return contracts;
   }
 
   private normalizeTeamName(name?: string): string {

@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Collaborator } from './collaborator.entity';
 import { Inspection } from './inspection.entity';
+import { Contract } from './contract.entity';
 
 @Entity('teams')
 export class Team {
@@ -41,4 +42,12 @@ export class Team {
 
   @OneToMany(() => Inspection, (inspection) => inspection.team)
   inspections: Inspection[];
+
+  @ManyToMany(() => Contract, (contract) => contract.teams)
+  @JoinTable({
+    name: 'team_contracts',
+    joinColumn: { name: 'team_id' },
+    inverseJoinColumn: { name: 'contract_id' },
+  })
+  contracts: Contract[];
 }

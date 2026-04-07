@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Post,
@@ -9,6 +10,7 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
   BadRequestException,
+  ParseUUIDPipe,
   Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -46,6 +48,9 @@ export class ServiceOrdersController {
   @Roles(UserRole.ADMIN, UserRole.GESTOR)
   @UseInterceptors(FileInterceptor('file'))
   async importFromExcel(
+    @CurrentUser() user: any,
+    @Body('contractId', new ParseUUIDPipe({ version: '4' }))
+    contractId: string,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
@@ -71,6 +76,6 @@ export class ServiceOrdersController {
     )
     file: Express.Multer.File,
   ) {
-    return this.serviceOrdersService.importFromExcel(file);
+    return this.serviceOrdersService.importFromExcel(user, file, contractId);
   }
 }
