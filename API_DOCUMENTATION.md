@@ -24,7 +24,8 @@ Authorization: Bearer <token>
 ### Mapa rápido de telas -> endpoints
 
 - Login / sessão: `POST /auth/login`, `GET /auth/me`
-- Usuários: `GET/POST/PUT/DELETE /users`
+- Usuários: `GET/POST/PUT/DELETE /users`, `PUT /users/:id/contracts`
+- Contratos (admin): `GET/POST/PUT/DELETE /contracts`
 - Equipes: `GET/POST/PUT/DELETE /teams`
 - Setores: `GET/POST/PUT/DELETE /sectors`
 - Colaboradores: `GET/POST/PUT/DELETE /collaborators`
@@ -48,6 +49,19 @@ Authorization: Bearer <token>
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
 - `GET /inspections` (GESTOR/ADMIN) não retorna `RASCUNHO`.
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
+- Escopo por contrato:
+  - `ADMIN` vê todos os dados.
+  - `GESTOR` e `FISCAL` veem apenas dados dentro dos contratos vinculados ao usuário.
+  - O filtro é aplicado nas listagens principais (`service-orders`, `inspections`, `dashboards`, `teams`).
+- Usuários:
+  - `POST /users` exige `contractIds`.
+  - `PUT /users/:id` exige `contractIds`.
+- Equipes:
+  - `POST /teams` exige `contractIds`.
+  - `PUT /teams/:id` exige `contractIds`.
+- Importação de OS (`POST /service-orders/import`):
+  - exige `contractId` no form-data.
+  - uma execução de importação aplica exatamente 1 contrato para todas as OS processadas.
 - `PUT /inspections/:id`:
   - FISCAL só edita em `RASCUNHO`.
   - GESTOR/ADMIN editam em qualquer status.
@@ -203,6 +217,9 @@ Resposta paginada:
   "name": "string",
   "email": "string",
   "role": "ADMIN",
+  "contracts": [
+    { "id": "uuid", "name": "CONTRATO_NORTE" }
+  ],
   "createdAt": "2026-02-19T12:00:00.000Z",
   "updatedAt": "2026-02-19T12:00:00.000Z"
 }
@@ -215,8 +232,12 @@ Resposta paginada:
   "id": "uuid",
   "name": "Equipe A",
   "active": true,
+  "isContractor": false,
   "createdAt": "2026-02-19T12:00:00.000Z",
   "updatedAt": "2026-02-19T12:00:00.000Z",
+  "contracts": [
+    { "id": "uuid", "name": "CONTRATO_NORTE" }
+  ],
   "collaborators": [
     {
       "id": "uuid",
@@ -304,6 +325,11 @@ Resposta paginada:
 {
   "id": "uuid",
   "osNumber": "OS-001",
+  "contractId": "uuid",
+  "contract": {
+    "id": "uuid",
+    "name": "CONTRATO_NORTE"
+  },
   "address": "Rua Exemplo, 123",
   "field": false,
   "remote": false,
@@ -450,7 +476,10 @@ Response 200:
     "id": "uuid",
     "name": "Fiscal",
     "email": "fiscal@sanorte.com",
-    "role": "FISCAL"
+    "role": "FISCAL",
+    "contracts": [
+      { "id": "uuid", "name": "CONTRATO_NORTE" }
+    ]
   }
 }
 ```
@@ -470,7 +499,10 @@ Response 200:
   "id": "uuid",
   "name": "Fiscal",
   "email": "fiscal@sanorte.com",
-  "role": "FISCAL"
+  "role": "FISCAL",
+  "contracts": [
+    { "id": "uuid", "name": "CONTRATO_NORTE" }
+  ]
 }
 ```
 
@@ -493,7 +525,8 @@ Request JSON:
   "name": "Novo Usuário",
   "email": "novo@sanorte.com",
   "password": "senha123",
-  "role": "GESTOR"
+  "role": "GESTOR",
+  "contractIds": ["uuid-contrato-1"]
 }
 ```
 
@@ -515,12 +548,13 @@ Response 201:
 
 - Auth: JWT + ADMIN
 
-Request JSON (parcial):
+Request JSON (parcial, `contractIds` obrigatório):
 
 ```json
 {
   "name": "Nome Atualizado",
-  "role": "ADMIN"
+  "role": "ADMIN",
+  "contractIds": ["uuid-contrato-1", "uuid-contrato-2"]
 }
 ```
 
@@ -542,13 +576,71 @@ Response 200:
 - Auth: JWT + ADMIN
 - Response 200: vazio
 
+### PUT /users/:id/contracts
+
+- Auth: JWT + ADMIN
+
+Request JSON:
+
+```json
+{
+  "contractIds": ["uuid-contrato-1", "uuid-contrato-2"]
+}
+```
+
+Response 200: `User` atualizado com novos vínculos de contrato
+
+## Contracts (ADMIN)
+
+### GET /contracts
+
+- Auth: JWT + ADMIN
+- Query: `page`, `limit`
+- Response: paginação de contratos
+
+### GET /contracts/:id
+
+- Auth: JWT + ADMIN
+- Response 200: contrato
+
+### POST /contracts
+
+- Auth: JWT + ADMIN
+
+Request JSON:
+
+```json
+{
+  "name": "CONTRATO_NORTE"
+}
+```
+
+Response 201: contrato criado
+
+### PUT /contracts/:id
+
+- Auth: JWT + ADMIN
+- Request JSON parcial:
+
+```json
+{
+  "name": "CONTRATO_NORTE_ATUALIZADO"
+}
+```
+
+### DELETE /contracts/:id
+
+- Auth: JWT + ADMIN
+- Response 200: vazio
+
 ## Teams
 
 ### GET /teams
 
 - Auth: JWT
 - Query: `page`, `limit`
-- Response: paginação de `Team` com `collaborators`
+- Response: paginação de `Team` com `collaborators` e `contracts`
+- Escopo: `GESTOR`/`FISCAL` enxergam apenas equipes vinculadas aos contratos permitidos
 
 ### POST /teams
 
@@ -560,7 +652,8 @@ Request JSON:
 {
   "name": "Equipe Norte",
   "active": true,
-  "collaboratorIds": ["uuid-1", "uuid-2"]
+  "collaboratorIds": ["uuid-1", "uuid-2"],
+  "contractIds": ["uuid-contrato-1"]
 }
 ```
 
@@ -571,6 +664,7 @@ Response 201:
   "id": "uuid",
   "name": "Equipe Norte",
   "active": true,
+  "contracts": [{ "id": "uuid-contrato-1", "name": "CONTRATO_NORTE" }],
   "collaborators": [
     { "id": "uuid-1", "name": "Colab 1", "active": true },
     { "id": "uuid-2", "name": "Colab 2", "active": true }
@@ -584,12 +678,13 @@ Response 201:
 
 - Auth: JWT + ADMIN
 
-Request JSON (parcial):
+Request JSON (parcial, `contractIds` obrigatório):
 
 ```json
 {
   "name": "Equipe Norte Atualizada",
-  "collaboratorIds": ["uuid-3"]
+  "collaboratorIds": ["uuid-3"],
+  "contractIds": ["uuid-contrato-2"]
 }
 ```
 
@@ -889,14 +984,19 @@ Response 200: `ChecklistItem` atualizado
   - `postWork` (opcional; `true` ou `false` — filtra OS já usadas em vistoria POS_OBRA)
 - Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`
 - Uso: listar OS disponíveis para vincular a novas vistorias; filtrar por uso por módulo (field/remote/postWork)
+- Escopo: `GESTOR`/`FISCAL` veem apenas OS dos contratos permitidos (`serviceOrder.contractId`)
 
 ### POST /service-orders/import
 
 - Auth: JWT + ADMIN ou GESTOR
-- Body: multipart/form-data com campo `file` (arquivo Excel `.xlsx` ou `.xls`, até 5MB)
+- Body: multipart/form-data com campos:
+  - `file` (arquivo Excel `.xlsx` ou `.xls`, até 5MB)
+  - `contractId` (UUID, obrigatório)
 - Estrutura do Excel: colunas "Numero da OS" e "Endereço"
-- Regra: `osNumber` é único; duplicatas são ignoradas (não trava o processamento)
+- Regra: uma importação aplica apenas 1 contrato (o `contractId` informado) para todas as OS processadas
+- Regra: `osNumber` é único por setor; duplicatas são ignoradas (não trava o processamento)
 - Campos adicionais em cada registro: `field`, `remote`, `postWork` (boolean, default `false`)
+- Regra de escopo: `GESTOR` só pode importar para contratos aos quais já está vinculado
 
 Response 200:
 
@@ -904,6 +1004,7 @@ Response 200:
 {
   "inserted": 10,
   "skipped": 2,
+  "deleted": 1,
   "errors": []
 }
 ```
@@ -954,12 +1055,14 @@ Response 201: `Inspection` completo (já com `items` baseados no checklist)
 - Response: paginação de `Inspection` com relação `serviceOrder`
 - Regra: esta listagem não retorna vistorias com status `RASCUNHO`
 - Regra: se `status=RASCUNHO` for informado, o retorno é vazio (`data: []`)
+- Escopo: `GESTOR` vê apenas vistorias de OS vinculadas aos seus contratos
 
 ### GET /inspections/mine
 
 - Auth: JWT + FISCAL
 - Query: `page`, `limit`, `osNumber` (busca parcial por número da OS), `inspectionScope`
 - Response: paginação de `Inspection` do usuário logado com relação `serviceOrder`
+- Escopo: além de `createdByUserId`, aplica contrato permitido da OS
 
 ### GET /inspections/:id
 
@@ -1325,6 +1428,7 @@ Response 200:
   - `module` (`ModuleType`) opcional
   - `teamId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
 
@@ -1344,6 +1448,7 @@ Response 200:
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `module` (`ModuleType`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
 
@@ -1382,6 +1487,7 @@ Response 200:
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `module` (`ModuleType`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Retorna métricas de desempenho de uma equipe específica no período e módulo (mesmos filtros do summary/ranking). Útil para tela de detalhe da equipe ou relatório.
 
@@ -1419,6 +1525,7 @@ Response 404 quando a equipe não existe:
   - `module` (`ModuleType`) opcional
   - `teamId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Timezone da agregação mensal: `America/Sao_Paulo`.
 - Status considerados no cálculo de qualidade:
   - `FINALIZADA`
@@ -1469,6 +1576,7 @@ Response 200:
 - `pendingAdjustmentsCount` contabiliza inspeções do mês com status `PENDENTE_AJUSTE`.
 - Observação: para `SEGURANCA_TRABALHO`, `pendingAdjustmentsCount` tende a 0, pois não há transição para `PENDENTE_AJUSTE`.
 - `qualityPercent` por serviço é `AVG(scorePercent)` no mês.
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
 
@@ -1501,6 +1609,7 @@ Response 200:
 - Finalizar vistoria
 - Resolver itens não conformes e pendências
 - Listar apenas as próprias vistorias (`/inspections/mine`)
+- Todos os dados listados são restringidos aos contratos vinculados ao usuário
 
 ### GESTOR
 
@@ -1509,12 +1618,13 @@ Response 200:
 - Paralisar e remover penalidade de paralisação (unparalyze)
 - Resolver itens não conformes e pendências
 - Acessar listagem geral de vistorias
+- Dados operacionais e dashboards limitados aos contratos vinculados ao usuário
 
 ### ADMIN
 
 - Todas as permissões operacionais do GESTOR
 - Importar OS via Excel (`POST /service-orders/import`)
-- CRUD de usuários, equipes, colaboradores e checklists
+- CRUD de usuários, contratos/cidades, equipes, colaboradores e checklists
 
 ## Erros comuns
 
@@ -1533,6 +1643,12 @@ Mensagens relevantes do domínio:
 - `serviceOrderId é obrigatório. Informe o ID de uma OS cadastrada na tabela de ordens de serviço.`
 - `Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.`
 - `serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.`
+- `contractIds é obrigatório`
+- `Um ou mais contratos não foram encontrados`
+- `contractId é obrigatório na importação`
+- `Contrato informado não encontrado`
+- `Você não tem acesso ao contrato selecionado para importação.`
+- `Você não tem acesso ao contrato desta ordem de serviço.`
 - `Vistoria de Segurança do Trabalho por colaborador exige exatamente 1 colaborador.`
 - `Todos os colaboradores informados devem existir na plataforma.`
 - `Vistoria não encontrada`

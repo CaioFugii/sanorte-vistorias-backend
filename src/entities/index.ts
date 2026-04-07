@@ -12,4 +12,3 @@ export * from './signature.entity';
 export * from './pending-adjustment.entity';
 export * from './service-order.entity';
 export * from './contract.entity';
-export * from './city.entity';

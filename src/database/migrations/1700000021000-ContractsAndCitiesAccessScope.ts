@@ -5,17 +5,6 @@ export class ContractsAndCitiesAccessScope1700000021000
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TABLE "cities" (
-        "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
-        "name" character varying NOT NULL,
-        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-        "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
-        CONSTRAINT "PK_cities" PRIMARY KEY ("id"),
-        CONSTRAINT "UQ_cities_name" UNIQUE ("name")
-      )
-    `);
-
-    await queryRunner.query(`
       CREATE TABLE "contracts" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "name" character varying NOT NULL,
@@ -23,14 +12,6 @@ export class ContractsAndCitiesAccessScope1700000021000
         "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "PK_contracts" PRIMARY KEY ("id"),
         CONSTRAINT "UQ_contracts_name" UNIQUE ("name")
-      )
-    `);
-
-    await queryRunner.query(`
-      CREATE TABLE "contract_cities" (
-        "contract_id" uuid NOT NULL,
-        "city_id" uuid NOT NULL,
-        CONSTRAINT "PK_contract_cities" PRIMARY KEY ("contract_id", "city_id")
       )
     `);
 
@@ -45,18 +26,6 @@ export class ContractsAndCitiesAccessScope1700000021000
     await queryRunner.query(`
       ALTER TABLE "service_orders"
       ADD COLUMN "contract_id" uuid
-    `);
-
-    await queryRunner.query(`
-      ALTER TABLE "contract_cities"
-      ADD CONSTRAINT "FK_contract_cities_contract"
-      FOREIGN KEY ("contract_id") REFERENCES "contracts"("id") ON DELETE CASCADE ON UPDATE NO ACTION
-    `);
-
-    await queryRunner.query(`
-      ALTER TABLE "contract_cities"
-      ADD CONSTRAINT "FK_contract_cities_city"
-      FOREIGN KEY ("city_id") REFERENCES "cities"("id") ON DELETE CASCADE ON UPDATE NO ACTION
     `);
 
     await queryRunner.query(`
@@ -88,25 +57,12 @@ export class ContractsAndCitiesAccessScope1700000021000
     `);
 
     await queryRunner.query(`
-      CREATE INDEX "IDX_contract_cities_city_id"
-      ON "contract_cities"("city_id")
-    `);
-
-    await queryRunner.query(`
-      WITH initial_city AS (
-        INSERT INTO "cities" ("name")
-        VALUES ('CIDADE_INICIAL')
-        RETURNING "id"
-      ),
-      initial_contract AS (
+      WITH initial_contract AS (
         INSERT INTO "contracts" ("name")
         VALUES ('CONTRATO_INICIAL')
         RETURNING "id"
       )
-      INSERT INTO "contract_cities" ("contract_id", "city_id")
-      SELECT c."id", ct."id"
-      FROM initial_contract c
-      CROSS JOIN initial_city ct
+      SELECT "id" FROM initial_contract
     `);
 
     await queryRunner.query(`
@@ -128,9 +84,6 @@ export class ContractsAndCitiesAccessScope1700000021000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX IF EXISTS "IDX_contract_cities_city_id"`,
-    );
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_user_contracts_contract_id"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "IDX_service_orders_contract_id"`);
     await queryRunner.query(`
@@ -146,20 +99,10 @@ export class ContractsAndCitiesAccessScope1700000021000
       DROP CONSTRAINT IF EXISTS "FK_user_contracts_user"
     `);
     await queryRunner.query(`
-      ALTER TABLE "contract_cities"
-      DROP CONSTRAINT IF EXISTS "FK_contract_cities_city"
-    `);
-    await queryRunner.query(`
-      ALTER TABLE "contract_cities"
-      DROP CONSTRAINT IF EXISTS "FK_contract_cities_contract"
-    `);
-    await queryRunner.query(`
       ALTER TABLE "service_orders"
       DROP COLUMN IF EXISTS "contract_id"
     `);
     await queryRunner.query(`DROP TABLE IF EXISTS "user_contracts"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "contract_cities"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "contracts"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "cities"`);
   }
 }

@@ -5,10 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToMany,
-  JoinTable,
   OneToMany,
 } from 'typeorm';
-import { City } from './city.entity';
 import { User } from './user.entity';
 import { ServiceOrder } from './service-order.entity';
 import { Team } from './team.entity';
@@ -26,14 +24,6 @@ export class Contract {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-
-  @ManyToMany(() => City, (city) => city.contracts)
-  @JoinTable({
-    name: 'contract_cities',
-    joinColumn: { name: 'contract_id' },
-    inverseJoinColumn: { name: 'city_id' },
-  })
-  cities: City[];
 
   @ManyToMany(() => User, (user) => user.contracts)
   users: User[];

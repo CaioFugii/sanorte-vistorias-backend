@@ -15,13 +15,7 @@ import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
 import { ContractsService } from './contracts.service';
-import {
-  CreateCityDto,
-  CreateContractDto,
-  SetContractCitiesDto,
-  UpdateCityDto,
-  UpdateContractDto,
-} from './dto';
+import { CreateContractDto, UpdateContractDto } from './dto';
 
 @Controller('contracts')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -47,37 +41,9 @@ export class ContractsController {
     return this.contractsService.update(id, dto);
   }
 
-  @Put(':id/cities')
-  setCities(@Param('id') id: string, @Body() dto: SetContractCitiesDto) {
-    return this.contractsService.setCities(id, dto.cityIds || []);
-  }
-
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.contractsService.remove(id);
-  }
-
-  @Get('cities/list')
-  findCities(@Query() pagination: PaginationQueryDto) {
-    return this.contractsService.findCities(
-      pagination.page || 1,
-      pagination.limit || 50,
-    );
-  }
-
-  @Post('cities')
-  createCity(@Body() dto: CreateCityDto) {
-    return this.contractsService.createCity(dto);
-  }
-
-  @Put('cities/:id')
-  updateCity(@Param('id') id: string, @Body() dto: UpdateCityDto) {
-    return this.contractsService.updateCity(id, dto);
-  }
-
-  @Delete('cities/:id')
-  removeCity(@Param('id') id: string) {
-    return this.contractsService.removeCity(id);
   }
 
   @Get(':id')
