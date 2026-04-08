@@ -203,8 +203,8 @@ export class DashboardsService {
       })
       .andWhere('inspection.teamId IS NOT NULL')
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
-      .andWhere('inspection.createdAt >= :from', { from: filters.from })
-      .andWhere('inspection.createdAt <= :to', { to: toLimit });
+      .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
+      .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
 
     if (filters.module) {
       qb.andWhere('inspection.module = :module', { module: filters.module });
