@@ -402,6 +402,22 @@ export class InspectionsService {
       );
     }
 
+    const serviceOrderUpdate: Partial<ServiceOrder> = {};
+    if (inspection.module === ModuleType.CAMPO) serviceOrderUpdate.field = false;
+    if (inspection.module === ModuleType.REMOTO)
+      serviceOrderUpdate.remote = false;
+    if (inspection.module === ModuleType.POS_OBRA)
+      serviceOrderUpdate.postWork = false;
+    if (
+      inspection.serviceOrderId &&
+      Object.keys(serviceOrderUpdate).length > 0
+    ) {
+      await this.serviceOrderRepository.update(
+        inspection.serviceOrderId,
+        serviceOrderUpdate,
+      );
+    }
+
     await this.inspectionsRepository.delete(inspection.id);
   }
 
