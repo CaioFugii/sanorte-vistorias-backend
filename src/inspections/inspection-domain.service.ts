@@ -41,7 +41,10 @@ export class InspectionDomainService {
     items: InspectionItem[],
     module: ModuleType,
   ): InspectionStatus {
-    if (module === ModuleType.SEGURANCA_TRABALHO) {
+    if (
+      module === ModuleType.SEGURANCA_TRABALHO ||
+      module === ModuleType.REMOTO
+    ) {
       return InspectionStatus.FINALIZADA;
     }
 

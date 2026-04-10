@@ -1364,7 +1364,10 @@ export class InspectionsService {
     nextStatus: InspectionStatus,
     userId: string,
   ): Promise<void> {
-    if (module === ModuleType.SEGURANCA_TRABALHO) {
+    if (
+      module === ModuleType.SEGURANCA_TRABALHO ||
+      module === ModuleType.REMOTO
+    ) {
       return;
     }
 

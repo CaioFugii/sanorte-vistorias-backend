@@ -216,6 +216,37 @@ describe('InspectionsService - Regras de Negócio', () => {
     expect(pendingAdjustmentsRepository.save).not.toHaveBeenCalled();
   });
 
+  it('deve finalizar vistoria REMOTO mesmo com NAO_CONFORME e sem criar pendência', async () => {
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.REMOTO,
+    } as Inspection);
+    inspectionItemsRepository.find.mockResolvedValue([
+      {
+        id: 'item-1',
+        inspectionId: 'test-id',
+        checklistItemId: 'check-item-1',
+        answer: ChecklistAnswer.NAO_CONFORME,
+        evidences: [{ id: 'ev-1' }],
+      } as InspectionItem,
+    ]);
+    checklistItemsRepository.findOne.mockResolvedValue({
+      id: 'check-item-1',
+      title: 'Item de teste',
+      requiresPhotoOnNonConformity: true,
+    } as ChecklistItem);
+
+    await service.finalize('test-id');
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.FINALIZADA,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).not.toHaveBeenCalled();
+  });
+
   it('deve permitir finalizar sem assinatura (assinatura é opcional)', async () => {
     jest
       .spyOn(service, 'findOne')
@@ -308,6 +339,41 @@ describe('InspectionsService - Regras de Negócio', () => {
         resolvedByUserId: 'admin-id',
       }),
     );
+  });
+
+  it('não deve reavaliar REMOTO para PENDENTE_AJUSTE ao atualizar itens', async () => {
+    const inspection = {
+      ...mockInspection,
+      module: ModuleType.REMOTO,
+      status: InspectionStatus.FINALIZADA,
+      hasParalysisPenalty: false,
+    } as Inspection;
+
+    jest.spyOn(service, 'findOne').mockResolvedValue(inspection);
+    inspectionItemsRepository.findOne.mockResolvedValue({
+      id: 'item-1',
+      inspectionId: 'test-id',
+    } as InspectionItem);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.CONFORME },
+      { answer: ChecklistAnswer.NAO_CONFORME },
+    ] as InspectionItem[]);
+
+    await service.updateItems(
+      'test-id',
+      [{ inspectionItemId: 'item-1', answer: ChecklistAnswer.NAO_CONFORME }],
+      'gestor-id',
+      UserRole.GESTOR,
+    );
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        scorePercent: 50,
+        status: InspectionStatus.FINALIZADA,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).not.toHaveBeenCalled();
   });
 
   it('deve marcar paralisação e habilitar penalidade persistente', async () => {
