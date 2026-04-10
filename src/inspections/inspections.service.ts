@@ -69,7 +69,7 @@ export class InspectionsService {
       checklistId: string;
       teamId?: string;
       serviceOrderId?: string;
-      serviceDescription: string;
+      serviceDescription?: string;
       locationDescription?: string;
       collaboratorIds?: string[];
       externalId?: string;
@@ -85,8 +85,10 @@ export class InspectionsService {
       inspectionData.inspectionScope,
     );
     const teamId = inspectionData.teamId ?? null;
-
     const serviceOrderId = inspectionData.serviceOrderId ?? null;
+    const serviceDescription = this.normalizeServiceDescription(
+      inspectionData.serviceDescription,
+    );
 
     if (this.isTeamRequired(inspectionData.module) && !teamId) {
       throw new BadRequestException(
@@ -97,6 +99,15 @@ export class InspectionsService {
     if (this.isServiceOrderRequired(inspectionData.module) && !serviceOrderId) {
       throw new BadRequestException(
         'serviceOrderId é obrigatório. Informe uma OS válida cadastrada na tabela de ordens de serviço.',
+      );
+    }
+
+    if (
+      this.isServiceDescriptionRequired(inspectionData.module) &&
+      !serviceDescription
+    ) {
+      throw new BadRequestException(
+        'serviceDescription é obrigatório para módulos diferentes de REMOTO.',
       );
     }
 
@@ -136,6 +147,7 @@ export class InspectionsService {
       inspectionScope,
       teamId,
       serviceOrderId,
+      serviceDescription,
       createdByUserId: userId,
       status: InspectionStatus.RASCUNHO,
       createdOffline: inspectionData.createdOffline || false,
@@ -432,10 +444,19 @@ export class InspectionsService {
       inspectionData,
       'serviceOrderId',
     );
+    const hasServiceDescriptionChange = Object.prototype.hasOwnProperty.call(
+      inspectionData,
+      'serviceDescription',
+    );
     const nextModule = inspectionData.module ?? inspection.module;
     const nextServiceOrderId = hasServiceOrderChange
       ? inspectionData.serviceOrderId
       : inspection.serviceOrderId;
+    const nextServiceDescription = hasServiceDescriptionChange
+      ? this.normalizeServiceDescription(
+          inspectionData.serviceDescription as string | null | undefined,
+        )
+      : inspection.serviceDescription;
     const nextTeamId = inspectionData.teamId ?? inspection.teamId;
     const nextInspectionScope = this.resolveInspectionScope(
       nextModule,
@@ -469,6 +490,12 @@ export class InspectionsService {
       );
     }
 
+    if (this.isServiceDescriptionRequired(nextModule) && !nextServiceDescription) {
+      throw new BadRequestException(
+        'serviceDescription é obrigatório para módulos diferentes de REMOTO.',
+      );
+    }
+
     if (nextServiceOrderId) {
       const serviceOrder = await this.serviceOrderRepository.findOne({
         where: { id: nextServiceOrderId },
@@ -491,6 +518,9 @@ export class InspectionsService {
     );
 
     inspectionData.inspectionScope = nextInspectionScope;
+    if (hasServiceDescriptionChange) {
+      inspectionData.serviceDescription = nextServiceDescription;
+    }
 
     // GESTOR e ADMIN podem editar sempre
     await this.inspectionsRepository.update(inspection.id, inspectionData);
@@ -880,10 +910,23 @@ export class InspectionsService {
         payload.collaboratorIds ??
         inspection.collaborators?.map((collaborator) => collaborator.id) ??
         [];
+      const hasServiceDescriptionChange = Object.prototype.hasOwnProperty.call(
+        payload,
+        'serviceDescription',
+      );
+      const nextServiceDescription = hasServiceDescriptionChange
+        ? this.normalizeServiceDescription(payload.serviceDescription)
+        : inspection.serviceDescription;
 
       if (this.isTeamRequired(nextModule) && !nextTeamId) {
         throw new BadRequestException(
           'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
+        );
+      }
+
+      if (this.isServiceDescriptionRequired(nextModule) && !nextServiceDescription) {
+        throw new BadRequestException(
+          'serviceDescription é obrigatório para módulos diferentes de REMOTO.',
         );
       }
 
@@ -902,8 +945,7 @@ export class InspectionsService {
         inspectionScope: nextInspectionScope,
         checklistId: payload.checklistId ?? inspection.checklistId,
         teamId: nextTeamId,
-        serviceDescription:
-          payload.serviceDescription ?? inspection.serviceDescription,
+        serviceDescription: nextServiceDescription,
         locationDescription:
           payload.locationDescription ?? inspection.locationDescription,
         createdOffline: payload.createdOffline ?? inspection.createdOffline,
@@ -1114,6 +1156,21 @@ export class InspectionsService {
 
   private isTeamRequired(module: ModuleType): boolean {
     return module !== ModuleType.SEGURANCA_TRABALHO;
+  }
+
+  private isServiceDescriptionRequired(module: ModuleType): boolean {
+    return module !== ModuleType.REMOTO;
+  }
+
+  private normalizeServiceDescription(
+    serviceDescription?: string | null,
+  ): string | null {
+    if (typeof serviceDescription !== 'string') {
+      return null;
+    }
+
+    const normalized = serviceDescription.trim();
+    return normalized.length > 0 ? normalized : null;
   }
 
   private resolveInspectionScope(

@@ -33,6 +33,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     module: ModuleType.QUALIDADE,
     teamId: 'team-id',
     serviceOrderId: 'service-order-id',
+    serviceDescription: 'Vistoria padrão',
     status: InspectionStatus.RASCUNHO,
     createdByUserId: 'user-id',
     hasParalysisPenalty: false,
@@ -524,6 +525,49 @@ describe('InspectionsService - Regras de Negócio', () => {
       ),
     ).rejects.toThrow(
       'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
+    );
+  });
+
+  it('deve permitir criar vistoria REMOTO sem serviceDescription', async () => {
+    inspectionsRepository.create.mockImplementation((payload: any) => payload);
+    inspectionsRepository.save.mockResolvedValue({ id: 'inspection-remote-id' });
+    dataSource.getRepository.mockReturnValue({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      id: 'inspection-remote-id',
+      module: ModuleType.REMOTO,
+      inspectionScope: InspectionScope.TEAM,
+      serviceDescription: null,
+    } as Inspection);
+
+    await expect(
+      service.create(
+        {
+          module: ModuleType.REMOTO,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
+        },
+        'user-id',
+      ),
+    ).resolves.toMatchObject({
+      id: 'inspection-remote-id',
+      module: ModuleType.REMOTO,
+    });
+  });
+
+  it('deve rejeitar criar vistoria sem serviceDescription quando módulo não é REMOTO', async () => {
+    await expect(
+      service.create(
+        {
+          module: ModuleType.SEGURANCA_TRABALHO,
+          checklistId: 'checklist-id',
+        },
+        'user-id',
+      ),
+    ).rejects.toThrow(
+      'serviceDescription é obrigatório para módulos diferentes de REMOTO.',
     );
   });
 

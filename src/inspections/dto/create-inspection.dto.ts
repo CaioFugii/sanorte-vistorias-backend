@@ -42,10 +42,10 @@ export class CreateInspectionDto {
   })
   serviceOrderId?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'serviceDescription é obrigatório' })
   @MaxLength(2000)
-  serviceDescription: string;
+  serviceDescription?: string;
 
   @IsString()
   @IsOptional()

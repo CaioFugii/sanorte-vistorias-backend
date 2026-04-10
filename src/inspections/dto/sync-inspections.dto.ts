@@ -50,7 +50,7 @@ export type SyncInspectionDto = {
   checklistId: string;
   teamId?: string;
   serviceOrderId?: string;
-  serviceDescription: string;
+  serviceDescription?: string;
   locationDescription?: string;
   collaboratorIds?: string[];
   createdOffline?: boolean;

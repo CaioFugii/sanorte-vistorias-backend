@@ -54,8 +54,8 @@ export class Inspection {
   @JoinColumn({ name: 'team_id' })
   team: Team | null;
 
-  @Column({ name: 'service_description', type: 'text' })
-  serviceDescription: string;
+  @Column({ name: 'service_description', type: 'text', nullable: true })
+  serviceDescription: string | null;
 
   @Column({ name: 'service_order_id', nullable: true })
   serviceOrderId: string | null;

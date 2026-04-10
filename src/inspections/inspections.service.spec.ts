@@ -315,4 +315,41 @@ describe('InspectionsService', () => {
         'serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.',
     });
   });
+
+  it('deve permitir criação no sync REMOTO sem serviceDescription', async () => {
+    const createdInspection = {
+      id: 'server-id-remote',
+      status: 'RASCUNHO',
+      module: ModuleType.REMOTO,
+      checklistId: 'checklist-id',
+      teamId: 'team-id',
+      serviceDescription: null,
+      createdOffline: true,
+      inspectionScope: InspectionScope.TEAM,
+    } as unknown as Inspection;
+
+    jest.spyOn(service, 'create').mockResolvedValue(createdInspection);
+    inspectionsRepository.findOne.mockResolvedValueOnce(null);
+
+    const result = await service.syncInspections(
+      [
+        {
+          externalId: 'remote-uuid-1',
+          module: ModuleType.REMOTO,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
+          inspectionScope: InspectionScope.TEAM,
+        },
+      ] as any,
+      'user-id',
+      UserRole.FISCAL,
+    );
+
+    expect(result.results[0]).toMatchObject({
+      externalId: 'remote-uuid-1',
+      serverId: 'server-id-remote',
+      status: 'CREATED',
+    });
+  });
 });
