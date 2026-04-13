@@ -25,6 +25,8 @@ export class ServiceOrderImportParserService {
     HIDRÔMETRO: 'HIDROMETRIA',
     HIDROMETRO: 'HIDROMETRIA',
     'HIDRÔMETRO PREVENTIVO': 'HIDROMETRIA',
+    CAVALETE: 'HIDROMETRIA',
+    ABASTECIMENTO: 'HIDROMETRIA',
     'OUTROS SERVIÇOS DE CAVALETE': 'HIDROMETRIA',
   };
 
@@ -34,8 +36,6 @@ export class ServiceOrderImportParserService {
     'RAMAL DE ÁGUA': 'AGUA',
     'REDE DE ÁGUA': 'AGUA',
     'VAZAMENTO DE ÁGUA': 'AGUA',
-    CAVALETE: 'AGUA',
-    ABASTECIMENTO: 'AGUA',
   };
 
   private readonly DESOBSTRUCAO_MAP: Record<string, string> = {
