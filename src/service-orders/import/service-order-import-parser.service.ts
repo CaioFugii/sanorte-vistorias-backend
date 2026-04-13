@@ -28,6 +28,7 @@ export class ServiceOrderImportParserService {
     CAVALETE: 'HIDROMETRIA',
     ABASTECIMENTO: 'HIDROMETRIA',
     'OUTROS SERVIÇOS DE CAVALETE': 'HIDROMETRIA',
+    'CAVALETE VAZANDO': 'HIDROMETRIA',
   };
 
   private readonly AGUA_MAP: Record<string, string> = {
@@ -36,6 +37,7 @@ export class ServiceOrderImportParserService {
     'RAMAL DE ÁGUA': 'AGUA',
     'REDE DE ÁGUA': 'AGUA',
     'VAZAMENTO DE ÁGUA': 'AGUA',
+    'PROLONGAR REDE DE ÁGUA': 'AGUA',
   };
 
   private readonly DESOBSTRUCAO_MAP: Record<string, string> = {
@@ -47,6 +49,7 @@ export class ServiceOrderImportParserService {
   };
 
   private readonly ESGOTO_MAP: Record<string, string> = {
+    'PROLONGAR REDE DE ESGOTO': 'ESGOTO',
     'LIGAÇÃO DE ESGOTO': 'ESGOTO',
     'LIGAÇÃO DE ESGOTO ADICIONAL': 'ESGOTO',
     'LIGAÇÃO DE ESGOTO AVULSA S/V': 'ESGOTO',
@@ -56,12 +59,14 @@ export class ServiceOrderImportParserService {
     'TROCA DE RAMAL DE ESGOTO': 'ESGOTO',
     'OUTROS SERVIÇOS DE ESGOTO': 'ESGOTO',
     'CONSERTO DE ESGOTO': 'ESGOTO',
+    'CONSTRUIR CX PROTEÇÃO DE SINGULARIDADE': 'ESGOTO',
   };
 
   private readonly REPOSICAO_MAP: Record<string, string> = {
     'OUTROS SERVIÇOS DE REPOSIÇÃO': 'REPOSICAO',
     REPOSIÇÃO: 'REPOSICAO',
     'PI, PV, TL': 'REPOSICAO',
+    'NIVELAR POÇO DE INSPEÇÃO/VISITA': 'REPOSICAO',
   };
 
   parseForCancellation(row: Record<string, unknown>): {
