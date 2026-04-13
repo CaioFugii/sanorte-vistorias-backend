@@ -44,6 +44,12 @@ export class ChecklistItem {
   })
   requiresPhotoOnNonConformity: boolean;
 
+  @Column({ name: 'reference_image_url', nullable: true })
+  referenceImageUrl: string | null;
+
+  @Column({ name: 'reference_image_public_id', nullable: true })
+  referenceImagePublicId: string | null;
+
   @Column({ default: true })
   active: boolean;
 

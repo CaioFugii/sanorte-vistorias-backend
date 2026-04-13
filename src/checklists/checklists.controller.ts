@@ -8,7 +8,13 @@ import {
   Delete,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ChecklistsService } from './checklists.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -97,6 +103,26 @@ export class ChecklistsController {
     @Body() updateItemDto: any,
   ) {
     return this.checklistsService.updateItem(id, itemId, updateItemDto);
+  }
+
+  @Post(':id/items/:itemId/reference-image')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadItemReferenceImage(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /^image\/.*/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return this.checklistsService.uploadItemReferenceImage(id, itemId, file);
   }
 
   @Delete(':id/items/:itemId')

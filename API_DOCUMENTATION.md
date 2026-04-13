@@ -29,7 +29,7 @@ Authorization: Bearer <token>
 - Equipes: `GET/POST/PUT/DELETE /teams`
 - Setores: `GET/POST/PUT/DELETE /sectors`
 - Colaboradores: `GET/POST/PUT/DELETE /collaborators`
-- Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections` e `items`
+- Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections`, `items` e upload de imagem de referência
 - Ordens de Serviço (OS): `GET /service-orders`, `POST /service-orders/import`
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/mine`, `GET /inspections/:id`
@@ -311,6 +311,8 @@ Resposta paginada:
       "description": "string",
       "order": 1,
       "requiresPhotoOnNonConformity": true,
+      "referenceImageUrl": "https://res.cloudinary.com/.../image/upload/...jpg",
+      "referenceImagePublicId": "quality/checklists/reference-images/abc123",
       "active": true
     }
   ],
@@ -946,6 +948,8 @@ Response 201:
   "description": "Verificar uso correto",
   "order": 1,
   "requiresPhotoOnNonConformity": true,
+  "referenceImageUrl": null,
+  "referenceImagePublicId": null,
   "active": true
 }
 ```
@@ -964,6 +968,32 @@ Request JSON (parcial):
 ```
 
 Response 200: `ChecklistItem` atualizado
+
+### POST /checklists/:id/items/:itemId/reference-image
+
+- Auth: JWT + ADMIN
+- Request JSON: não se aplica (multipart/form-data com campo `file`)
+- Regras:
+  - aceita apenas arquivos de imagem (`image/*`)
+  - tamanho máximo: 10MB
+  - se já existir imagem de referência para o item, o backend remove o asset anterior antes de salvar o novo
+
+Response 201:
+
+```json
+{
+  "id": "uuid",
+  "checklistId": "uuid",
+  "sectionId": "uuid",
+  "title": "O item se encontra parecido com a imagem referência?",
+  "description": "Comparar com a foto padrão",
+  "order": 1,
+  "requiresPhotoOnNonConformity": true,
+  "referenceImageUrl": "https://res.cloudinary.com/.../image/upload/...jpg",
+  "referenceImagePublicId": "quality/checklists/reference-images/abc123",
+  "active": true
+}
+```
 
 ### DELETE /checklists/:id/items/:itemId
 
@@ -1660,4 +1690,5 @@ Mensagens relevantes do domínio:
 - `Vistoria não está pendente de ajuste`
 - `Apenas itens em não conformidade podem ser resolvidos`
 - `Resolva todos os itens não conformes antes de resolver a vistoria. Use POST /inspections/:id/items/:itemId/resolve para cada item.`
+- `Item do checklist não encontrado`
 - `Assets must be uploaded before sync`

@@ -14,6 +14,7 @@ import {
 } from '../entities';
 import { InspectionScope, ModuleType } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
 export class ChecklistsService {
@@ -28,6 +29,7 @@ export class ChecklistsService {
     private inspectionsRepository: Repository<Inspection>,
     @InjectRepository(Sector)
     private sectorsRepository: Repository<Sector>,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
   async findAll(
@@ -145,6 +147,29 @@ export class ChecklistsService {
     });
   }
 
+  async uploadItemReferenceImage(
+    checklistId: string,
+    itemId: string,
+    file: Express.Multer.File,
+  ): Promise<ChecklistItem> {
+    const item = await this.findChecklistItemOrFail(checklistId, itemId);
+
+    const uploaded = await this.cloudinaryService.uploadImage(file.buffer, {
+      folder: 'quality/checklists/reference-images',
+    });
+
+    if (item.referenceImagePublicId) {
+      await this.cloudinaryService.deleteAsset(item.referenceImagePublicId);
+    }
+
+    await this.checklistItemsRepository.update(item.id, {
+      referenceImageUrl: uploaded.secure_url,
+      referenceImagePublicId: uploaded.public_id,
+    });
+
+    return this.findChecklistItemOrFail(checklistId, itemId);
+  }
+
   async addSection(
     checklistId: string,
     sectionData: { name: string; order: number; active?: boolean },
@@ -227,5 +252,18 @@ export class ChecklistsService {
     if (!sectorExists) {
       throw new BadRequestException('sectorId informado não existe');
     }
+  }
+
+  private async findChecklistItemOrFail(
+    checklistId: string,
+    itemId: string,
+  ): Promise<ChecklistItem> {
+    const item = await this.checklistItemsRepository.findOne({
+      where: { id: itemId, checklistId },
+    });
+    if (!item) {
+      throw new NotFoundException('Item do checklist não encontrado');
+    }
+    return item;
   }
 }

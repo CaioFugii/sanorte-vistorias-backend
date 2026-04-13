@@ -9,9 +9,11 @@ import {
   Inspection,
   Sector,
 } from '../entities';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
 @Module({
   imports: [
+    CloudinaryModule,
     TypeOrmModule.forFeature([
       Checklist,
       ChecklistItem,
