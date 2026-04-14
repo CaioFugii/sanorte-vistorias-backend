@@ -26,6 +26,7 @@ export class CollaboratorsController {
     return this.collaboratorsService.findAll(
       query.name,
       query.sectorId,
+      query.contractId,
       query.page || 1,
       query.limit || 10,
     );

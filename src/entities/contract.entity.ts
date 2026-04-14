@@ -10,6 +10,7 @@ import {
 import { User } from './user.entity';
 import { ServiceOrder } from './service-order.entity';
 import { Team } from './team.entity';
+import { Collaborator } from './collaborator.entity';
 
 @Entity('contracts')
 export class Contract {
@@ -30,6 +31,9 @@ export class Contract {
 
   @OneToMany(() => ServiceOrder, (serviceOrder) => serviceOrder.contract)
   serviceOrders: ServiceOrder[];
+
+  @OneToMany(() => Collaborator, (collaborator) => collaborator.contract)
+  collaborators: Collaborator[];
 
   @ManyToMany(() => Team, (team) => team.contracts)
   teams: Team[];

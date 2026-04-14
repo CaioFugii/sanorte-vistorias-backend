@@ -11,6 +11,7 @@ import {
 import { Team } from './team.entity';
 import { Inspection } from './inspection.entity';
 import { Sector } from './sector.entity';
+import { Contract } from './contract.entity';
 
 @Entity('collaborators')
 export class Collaborator {
@@ -25,6 +26,9 @@ export class Collaborator {
 
   @Column({ name: 'sector_id', nullable: true })
   sectorId: string;
+
+  @Column({ name: 'contract_id', nullable: true })
+  contractId: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
@@ -41,4 +45,10 @@ export class Collaborator {
   @ManyToOne(() => Sector, (sector) => sector.collaborators, { nullable: true })
   @JoinColumn({ name: 'sector_id' })
   sector: Sector;
+
+  @ManyToOne(() => Contract, (contract) => contract.collaborators, {
+    nullable: true,
+  })
+  @JoinColumn({ name: 'contract_id' })
+  contract: Contract | null;
 }
