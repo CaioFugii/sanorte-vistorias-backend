@@ -127,6 +127,10 @@ Authorization: Bearer {{token}}
 GET {{baseUrl}}/dashboards/ranking/teams?from=2024-01-01&to=2024-12-31
 Authorization: Bearer {{token}}
 
+### 17.1 Dashboard - Não conformidades por checklist
+GET {{baseUrl}}/dashboards/non-conformities/by-checklist?from=2024-01-01&to=2024-12-31&module=CAMPO&limitPerChecklist=5
+Authorization: Bearer {{token}}
+
 ### 18. Criar equipe (ADMIN)
 POST {{baseUrl}}/teams
 Authorization: Bearer {{token}}

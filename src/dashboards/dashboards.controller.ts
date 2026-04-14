@@ -9,6 +9,7 @@ import {
   CurrentMonthByServiceQueryDto,
   DashboardQueryDto,
   LowScoreCollaboratorsQueryDto,
+  NonConformitiesByChecklistQueryDto,
   QualityByServiceQueryDto,
   TeamPerformanceByTeamsQueryDto,
 } from './dto';
@@ -105,6 +106,21 @@ export class DashboardsController {
       from: query.from,
       to: query.to,
       teamIdsCsv: query.teamIds,
+    });
+  }
+
+  @Get('non-conformities/by-checklist')
+  getTopNonConformitiesByChecklist(
+    @CurrentUser() user: any,
+    @Query() query: NonConformitiesByChecklistQueryDto,
+  ) {
+    return this.dashboardsService.getTopNonConformitiesByChecklist({
+      user,
+      from: query.from,
+      to: query.to,
+      module: query.module,
+      teamId: query.teamId,
+      limitPerChecklist: query.limitPerChecklist,
     });
   }
 }

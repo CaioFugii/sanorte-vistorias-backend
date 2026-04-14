@@ -19,6 +19,7 @@ function createMockQueryBuilder({
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    having: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
     addGroupBy: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
@@ -250,5 +251,94 @@ describe('DashboardsService', () => {
     );
     expect(qb.setParameter).toHaveBeenCalledWith('lowScoreThreshold', 70);
     expect(qb.limit).toHaveBeenCalledWith(20);
+  });
+
+  it('deve agrupar perguntas não conformes por checklist e limitar por checklist', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          checklistId: 'checklist-1',
+          checklistName: 'Checklist Rede',
+          checklistItemId: 'item-1',
+          checklistItemTitle: 'Uso correto de EPI',
+          nonConformitiesCount: '10',
+          answersCount: '40',
+        },
+        {
+          checklistId: 'checklist-1',
+          checklistName: 'Checklist Rede',
+          checklistItemId: 'item-2',
+          checklistItemTitle: 'Sinalização da área',
+          nonConformitiesCount: '6',
+          answersCount: '30',
+        },
+        {
+          checklistId: 'checklist-2',
+          checklistName: 'Checklist Ligação',
+          checklistItemId: 'item-3',
+          checklistItemTitle: 'Isolamento elétrico',
+          nonConformitiesCount: '8',
+          answersCount: '16',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTopNonConformitiesByChecklist({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      module: ModuleType.CAMPO,
+      teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+      limitPerChecklist: 1,
+    });
+
+    expect(result).toEqual({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      module: ModuleType.CAMPO,
+      teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+      limitPerChecklist: 1,
+      checklists: [
+        {
+          checklistId: 'checklist-1',
+          checklistName: 'Checklist Rede',
+          totalNonConformities: 16,
+          questions: [
+            {
+              checklistItemId: 'item-1',
+              checklistItemTitle: 'Uso correto de EPI',
+              nonConformitiesCount: 10,
+              answersCount: 40,
+              nonConformityRatePercent: 25,
+            },
+          ],
+        },
+        {
+          checklistId: 'checklist-2',
+          checklistName: 'Checklist Ligação',
+          totalNonConformities: 8,
+          questions: [
+            {
+              checklistItemId: 'item-3',
+              checklistItemTitle: 'Isolamento elétrico',
+              nonConformitiesCount: 8,
+              answersCount: 16,
+              nonConformityRatePercent: 50,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
+      module: ModuleType.CAMPO,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
+      teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+    });
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'nonConformAnswer',
+      'NAO_CONFORME',
+    );
   });
 });

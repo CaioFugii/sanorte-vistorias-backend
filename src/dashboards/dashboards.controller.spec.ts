@@ -52,6 +52,12 @@ describe('DashboardsController (integration)', () => {
       lowScoreThreshold: 70,
       collaborators: [],
     }),
+    getTopNonConformitiesByChecklist: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      limitPerChecklist: 5,
+      checklists: [],
+    }),
   };
 
   beforeAll(async () => {
@@ -106,6 +112,14 @@ describe('DashboardsController (integration)', () => {
       .get('/dashboards/safety-work/low-score-collaborators')
       .query({ from: '2025-11-01', to: '2025-11-30' })
       .set('x-role', 'ADMIN')
+      .expect(200);
+  });
+
+  it('deve permitir GESTOR no endpoint de não conformidades por checklist', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/non-conformities/by-checklist')
+      .query({ from: '2025-11-01', to: '2025-11-30', limitPerChecklist: 3 })
+      .set('x-role', 'GESTOR')
       .expect(200);
   });
 });

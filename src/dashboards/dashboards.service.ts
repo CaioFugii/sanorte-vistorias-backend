@@ -7,7 +7,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { In, Repository } from 'typeorm';
 import { Inspection, Team } from '../entities';
-import { ModuleType, InspectionScope, InspectionStatus } from '../common/enums';
+import {
+  ModuleType,
+  InspectionScope,
+  InspectionStatus,
+  ChecklistAnswer,
+} from '../common/enums';
 import {
   applyContractScopeFilter,
   getAllowedContractIds,
@@ -15,6 +20,7 @@ import {
 import {
   CurrentMonthByServiceResponseDto,
   LowScoreCollaboratorsResponseDto,
+  NonConformitiesByChecklistResponseDto,
   QualityByServiceResponseDto,
   TeamPerformanceByTeamsResponseDto,
 } from './dto';
@@ -36,6 +42,8 @@ const QUALITY_BY_SERVICE_ALLOWED_SECTORS = [
 const DEFAULT_LOW_SCORE_THRESHOLD = 70;
 const DEFAULT_LOW_SCORE_LIMIT = 15;
 const MAX_LOW_SCORE_LIMIT = 100;
+const DEFAULT_NON_CONFORMITIES_LIMIT_PER_CHECKLIST = 5;
+const MAX_NON_CONFORMITIES_LIMIT_PER_CHECKLIST = 20;
 
 /** Converte uma data YYYY-MM-DD para o fim do dia (23:59:59.999) em UTC. */
 function toEndOfDay(dateStr: string): Date {
@@ -860,6 +868,143 @@ export class DashboardsService {
           bestScorePercent: roundTo2(parseFloat(row.bestScorePercent ?? '0')),
         };
       }),
+    };
+  }
+
+  async getTopNonConformitiesByChecklist(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    module?: ModuleType;
+    teamId?: string;
+    limitPerChecklist?: number;
+  }): Promise<NonConformitiesByChecklistResponseDto> {
+    this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
+    const limitPerChecklist = Math.min(
+      Math.max(
+        filters.limitPerChecklist ?? DEFAULT_NON_CONFORMITIES_LIMIT_PER_CHECKLIST,
+        1,
+      ),
+      MAX_NON_CONFORMITIES_LIMIT_PER_CHECKLIST,
+    );
+
+    const nonConformCountExpr = `SUM(CASE WHEN inspectionItem.answer = :nonConformAnswer THEN 1 ELSE 0 END)`;
+    const answersCountExpr = `SUM(CASE WHEN inspectionItem.answer IS NOT NULL THEN 1 ELSE 0 END)`;
+
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.items', 'inspectionItem')
+      .innerJoin('inspection.checklist', 'checklist')
+      .innerJoin('inspectionItem.checklistItem', 'checklistItem')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select('checklist.id', 'checklistId')
+      .addSelect('checklist.name', 'checklistName')
+      .addSelect('checklistItem.id', 'checklistItemId')
+      .addSelect('checklistItem.title', 'checklistItemTitle')
+      .addSelect(nonConformCountExpr, 'nonConformitiesCount')
+      .addSelect(answersCountExpr, 'answersCount')
+      .where('inspection.status IN (:...qualityStatuses)', {
+        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: toLimit })
+      .setParameter('nonConformAnswer', ChecklistAnswer.NAO_CONFORME)
+      .groupBy('checklist.id')
+      .addGroupBy('checklist.name')
+      .addGroupBy('checklistItem.id')
+      .addGroupBy('checklistItem.title')
+      .having(`${nonConformCountExpr} > 0`)
+      .orderBy(nonConformCountExpr, 'DESC')
+      .addOrderBy('checklist.name', 'ASC')
+      .addOrderBy('checklistItem.title', 'ASC');
+
+    this.applyQualityFilters(qb, {
+      module: filters.module,
+      teamId: filters.teamId,
+    });
+    this.applyContractScope(qb, filters.user);
+
+    const rows = await qb.getRawMany<{
+      checklistId: string;
+      checklistName: string;
+      checklistItemId: string;
+      checklistItemTitle: string;
+      nonConformitiesCount: string;
+      answersCount: string;
+    }>();
+
+    const checklistsMap = new Map<
+      string,
+      {
+        checklistId: string;
+        checklistName: string;
+        totalNonConformities: number;
+        questions: Array<{
+          checklistItemId: string;
+          checklistItemTitle: string;
+          nonConformitiesCount: number;
+          answersCount: number;
+          nonConformityRatePercent: number;
+        }>;
+      }
+    >();
+
+    for (const row of rows) {
+      const checklistId = row.checklistId;
+      const nonConformitiesCount = parseInt(row.nonConformitiesCount ?? '0', 10);
+      const answersCount = parseInt(row.answersCount ?? '0', 10);
+      const nonConformityRatePercent =
+        answersCount > 0 ? roundTo2((nonConformitiesCount / answersCount) * 100) : 0;
+
+      if (!checklistsMap.has(checklistId)) {
+        checklistsMap.set(checklistId, {
+          checklistId,
+          checklistName: row.checklistName,
+          totalNonConformities: 0,
+          questions: [],
+        });
+      }
+
+      const checklistEntry = checklistsMap.get(checklistId)!;
+      checklistEntry.totalNonConformities += nonConformitiesCount;
+      checklistEntry.questions.push({
+        checklistItemId: row.checklistItemId,
+        checklistItemTitle: row.checklistItemTitle,
+        nonConformitiesCount,
+        answersCount,
+        nonConformityRatePercent,
+      });
+    }
+
+    const checklists = Array.from(checklistsMap.values())
+      .map((checklistEntry) => ({
+        ...checklistEntry,
+        questions: checklistEntry.questions
+          .sort((a, b) => {
+            if (b.nonConformitiesCount !== a.nonConformitiesCount) {
+              return b.nonConformitiesCount - a.nonConformitiesCount;
+            }
+
+            return a.checklistItemTitle.localeCompare(b.checklistItemTitle);
+          })
+          .slice(0, limitPerChecklist),
+      }))
+      .sort((a, b) => {
+        if (b.totalNonConformities !== a.totalNonConformities) {
+          return b.totalNonConformities - a.totalNonConformities;
+        }
+
+        return a.checklistName.localeCompare(b.checklistName);
+      });
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      module: filters.module,
+      teamId: filters.teamId,
+      limitPerChecklist,
+      checklists,
     };
   }
 }

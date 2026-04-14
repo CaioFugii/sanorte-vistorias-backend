@@ -38,7 +38,7 @@ Authorization: Bearer <token>
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`
+- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/non-conformities/by-checklist`
 
 ### Regras críticas que impactam UI
 
@@ -388,6 +388,12 @@ Resposta paginada:
   "id": "uuid",
   "inspectionId": "uuid",
   "checklistItemId": "uuid",
+  "checklistItem": {
+    "id": "uuid",
+    "title": "O item se encontra parecido com a imagem referência?",
+    "referenceImageUrl": "https://res.cloudinary.com/.../image/upload/...jpg",
+    "referenceImagePublicId": "quality/checklists/reference-images/abc123"
+  },
   "answer": "NAO_CONFORME",
   "notes": "string",
   "resolvedAt": "2026-02-19T12:00:00.000Z",
@@ -1070,6 +1076,11 @@ Request JSON:
 
 Response 201: `Inspection` completo (já com `items` baseados no checklist)
 
+Observação importante para UI (FISCAL):
+
+- A imagem de referência do item vem em `items[].checklistItem.referenceImageUrl`.
+- O identificador do asset vem em `items[].checklistItem.referenceImagePublicId`.
+
 ### GET /inspections
 
 - Auth: JWT + GESTOR ou ADMIN
@@ -1624,6 +1635,59 @@ Response 200:
       "serviceLabel": "CAVALETE / HM",
       "qualityPercent": 83.1,
       "inspectionsCount": 328
+    }
+  ]
+}
+```
+
+### GET /dashboards/non-conformities/by-checklist
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `module` (`ModuleType`) opcional
+  - `teamId` (`uuid`) opcional
+  - `limitPerChecklist` (`int`) opcional (default: `5`, máximo: `20`)
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Status considerados:
+  - `FINALIZADA`
+  - `PENDENTE_AJUSTE`
+  - `RESOLVIDA`
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Retorna os checklists com perguntas que mais receberam `NAO_CONFORME`, incluindo taxa de não conformidade por pergunta.
+
+Response 200:
+
+```json
+{
+  "from": "2026-01-01",
+  "to": "2026-01-31",
+  "module": "CAMPO",
+  "teamId": "7f214d1f-5e2a-46f8-8f90-e64129876f84",
+  "limitPerChecklist": 2,
+  "checklists": [
+    {
+      "checklistId": "8b0f1d7a-2d06-4f80-92f9-6889edc8e5ba",
+      "checklistName": "Checklist Rede",
+      "totalNonConformities": 16,
+      "questions": [
+        {
+          "checklistItemId": "0f4f9da6-0f43-4f22-a4d0-b0c4b6a7e31f",
+          "checklistItemTitle": "Uso correto de EPI",
+          "nonConformitiesCount": 10,
+          "answersCount": 40,
+          "nonConformityRatePercent": 25
+        },
+        {
+          "checklistItemId": "64a2783f-66a4-4fc7-b112-478b95f80f4d",
+          "checklistItemTitle": "Sinalização da área",
+          "nonConformitiesCount": 6,
+          "answersCount": 30,
+          "nonConformityRatePercent": 20
+        }
+      ]
     }
   ]
 }
