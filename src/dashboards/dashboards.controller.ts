@@ -28,6 +28,7 @@ export class DashboardsController {
       to: query.to,
       module: query.module,
       teamId: query.teamId,
+      contractId: query.contractId,
     });
   }
 
@@ -38,6 +39,7 @@ export class DashboardsController {
       from: query.from,
       to: query.to,
       module: query.module,
+      contractId: query.contractId,
     });
   }
 
@@ -52,6 +54,7 @@ export class DashboardsController {
       from: query.from,
       to: query.to,
       module: query.module,
+      contractId: query.contractId,
     });
   }
 
@@ -66,6 +69,7 @@ export class DashboardsController {
       to: query.to,
       module: query.module,
       teamId: query.teamId,
+      contractId: query.contractId,
     });
   }
 
@@ -79,6 +83,7 @@ export class DashboardsController {
       month: query.month,
       module: query.module,
       teamId: query.teamId,
+      contractId: query.contractId,
     });
   }
 
@@ -93,6 +98,7 @@ export class DashboardsController {
       to: query.to,
       lowScoreThreshold: query.lowScoreThreshold,
       limit: query.limit,
+      contractId: query.contractId,
     });
   }
 
@@ -106,6 +112,7 @@ export class DashboardsController {
       from: query.from,
       to: query.to,
       teamIdsCsv: query.teamIds,
+      contractId: query.contractId,
     });
   }
 
@@ -121,6 +128,7 @@ export class DashboardsController {
       module: query.module,
       teamId: query.teamId,
       limitPerChecklist: query.limitPerChecklist,
+      contractId: query.contractId,
     });
   }
 }

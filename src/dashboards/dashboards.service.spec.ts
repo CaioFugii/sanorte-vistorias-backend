@@ -121,6 +121,24 @@ describe('DashboardsService', () => {
     });
   });
 
+  it('deve filtrar por contractId quando informado', async () => {
+    const qb = createMockQueryBuilder({});
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const contractId = '7f214d1f-5e2a-46f8-8f90-e64129876f84';
+
+    await service.getQualityByService({
+      from: '2025-01-01',
+      to: '2025-01-31',
+      contractId,
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'serviceOrder.contractId = :dashboardContractId',
+      { dashboardContractId: contractId },
+    );
+  });
+
   it('deve retornar mês vigente por serviço com KPIs e ranking', async () => {
     const summaryQb = createMockQueryBuilder({
       rawOne: {

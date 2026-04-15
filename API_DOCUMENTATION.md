@@ -38,7 +38,7 @@ Authorization: Bearer <token>
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/non-conformities/by-checklist`
+- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist` (todas aceitam filtro opcional `contractId`; ver `Dashboards`)
 
 ### Regras críticas que impactam UI
 
@@ -53,6 +53,7 @@ Authorization: Bearer <token>
   - `ADMIN` vê todos os dados.
   - `GESTOR` e `FISCAL` veem apenas dados dentro dos contratos vinculados ao usuário.
   - O filtro é aplicado nas listagens principais (`service-orders`, `inspections`, `dashboards`, `teams`).
+  - Nos **dashboards** (`GET /dashboards/*`), é possível restringir explicitamente a um contrato com o query param opcional `contractId` (UUID). Para `GESTOR`, o resultado continua limitado à interseção com os contratos do usuário; para `ADMIN`, filtra apenas por esse contrato quando informado.
 - Usuários:
   - `POST /users` exige `contractIds`.
   - `PUT /users/:id` exige `contractIds`.
@@ -1475,6 +1476,8 @@ Response 200:
 
 ## Dashboards
 
+Em todas as rotas abaixo, o query param opcional **`contractId`** (`uuid`) restringe os dados às vistorias cuja ordem de serviço pertence a esse contrato. A regra de escopo por perfil (`ADMIN` vs `GESTOR`) permanece; ver `Guia rápido` → Escopo por contrato.
+
 ### GET /dashboards/summary
 
 - Auth: JWT
@@ -1483,6 +1486,7 @@ Response 200:
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `module` (`ModuleType`) opcional
   - `teamId` (`uuid`) opcional
+  - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
@@ -1503,6 +1507,7 @@ Response 200:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `module` (`ModuleType`) opcional
+  - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
@@ -1542,6 +1547,7 @@ Response 200:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `module` (`ModuleType`) opcional
+  - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
@@ -1580,6 +1586,7 @@ Response 404 quando a equipe não existe:
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `module` (`ModuleType`) opcional
   - `teamId` (`uuid`) opcional
+  - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Timezone da agregação mensal: `America/Sao_Paulo`.
@@ -1625,6 +1632,7 @@ Response 200:
   - `month` (`YYYY-MM`) opcional (default = mês atual em `America/Sao_Paulo`)
   - `module` (`ModuleType`) opcional
   - `teamId` (`uuid`) opcional
+  - `contractId` (`uuid`) opcional
 - Status considerados no cálculo de qualidade:
   - `FINALIZADA`
   - `PENDENTE_AJUSTE`
@@ -1655,6 +1663,88 @@ Response 200:
 }
 ```
 
+### GET /dashboards/safety-work/low-score-collaborators
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `lowScoreThreshold` (`number`, 0–100) opcional (default: `70`)
+  - `limit` (`int`, 1–100) opcional (default: `15`)
+  - `contractId` (`uuid`) opcional
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Considera vistorias de `SEGURANCA_TRABALHO` com `inspectionScope` por colaborador; ver implementação para detalhes de ordenação.
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+
+Response 200 (estrutura simplificada):
+
+```json
+{
+  "from": "2026-01-01",
+  "to": "2026-01-31",
+  "lowScoreThreshold": 70,
+  "collaborators": [
+    {
+      "collaboratorId": "uuid",
+      "collaboratorName": "Nome",
+      "inspectionsCount": 5,
+      "badScoresCount": 3,
+      "badScoreRatePercent": 60,
+      "averagePercent": 62.4,
+      "worstScorePercent": 40,
+      "bestScorePercent": 80
+    }
+  ]
+}
+```
+
+### GET /dashboards/team-performance-by-teams
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `teamIds` (**obrigatório**): lista CSV de UUIDs de equipes (ex.: `uuid1,uuid2`)
+  - `contractId` (`uuid`) opcional
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Compara período atual com período imediatamente anterior de mesma duração; retorna resumo agregado e métricas por equipe e colaboradores.
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+
+Response 200 (estrutura simplificada):
+
+```json
+{
+  "from": "2026-01-01",
+  "to": "2026-01-31",
+  "teamIds": ["uuid"],
+  "summary": {
+    "averagePercent": 0,
+    "previousAveragePercent": 0,
+    "inspectionsCount": 0,
+    "pendingAdjustmentsCount": 0
+  },
+  "teams": [
+    {
+      "teamId": "uuid",
+      "teamName": "Equipe",
+      "averagePercent": 0,
+      "inspectionsCount": 0,
+      "pendingAdjustmentsCount": 0,
+      "collaborators": [
+        {
+          "collaboratorId": "uuid",
+          "collaboratorName": "Nome",
+          "qualityPercent": 0,
+          "inspectionsCount": 0
+        }
+      ]
+    }
+  ]
+}
+```
+
 ### GET /dashboards/non-conformities/by-checklist
 
 - Auth: JWT
@@ -1664,6 +1754,7 @@ Response 200:
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `module` (`ModuleType`) opcional
   - `teamId` (`uuid`) opcional
+  - `contractId` (`uuid`) opcional
   - `limitPerChecklist` (`int`) opcional (default: `5`, máximo: `20`)
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Status considerados:
@@ -1757,6 +1848,7 @@ Mensagens relevantes do domínio:
 - `contractId é obrigatório na importação`
 - `Contrato informado não encontrado`
 - `contractId informado não existe`
+- `contractId deve ser um UUID válido` (query inválido em dashboards e outros DTOs que aceitam `contractId` opcional)
 - `Você não tem acesso ao contrato selecionado para importação.`
 - `Você não tem acesso ao contrato desta ordem de serviço.`
 - `Vistoria de Segurança do Trabalho por colaborador exige exatamente 1 colaborador.`

@@ -17,4 +17,8 @@ export class CurrentMonthByServiceQueryDto {
   @IsOptional()
   @IsUUID('4', { message: 'teamId deve ser um UUID válido' })
   teamId?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'contractId deve ser um UUID válido' })
+  contractId?: string;
 }

@@ -183,7 +183,12 @@ export class DashboardsService {
     }
   }
 
-  private applyContractScope(qb: any, user: any): void {
+  private applyContractScope(qb: any, user: any, contractId?: string): void {
+    if (contractId) {
+      qb.andWhere('serviceOrder.contractId = :dashboardContractId', {
+        dashboardContractId: contractId,
+      });
+    }
     const allowedContractIds = getAllowedContractIds(user);
     applyContractScopeFilter(qb, allowedContractIds, 'serviceOrder.contractId');
   }
@@ -194,6 +199,7 @@ export class DashboardsService {
     to: string;
     module?: ModuleType;
     teamId?: string;
+    contractId?: string;
   }) {
     this.validateDateRange(filters.from, filters.to);
     const toLimit = toEndOfDay(filters.to);
@@ -221,7 +227,7 @@ export class DashboardsService {
       qb.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
     }
 
-    this.applyContractScope(qb, filters.user);
+    this.applyContractScope(qb, filters.user, filters.contractId);
 
     const row = await qb.getRawOne<{
       inspectionsCount: string;
@@ -249,6 +255,7 @@ export class DashboardsService {
     from: string;
     to: string;
     module?: ModuleType;
+    contractId?: string;
   }) {
     this.validateDateRange(filters.from, filters.to);
     const toLimit = toEndOfDay(filters.to);
@@ -284,7 +291,7 @@ export class DashboardsService {
       qb.andWhere('inspection.module = :module', { module: filters.module });
     }
 
-    this.applyContractScope(qb, filters.user);
+    this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
       teamId: string;
@@ -327,6 +334,7 @@ export class DashboardsService {
       from: string;
       to: string;
       module?: ModuleType;
+      contractId?: string;
     },
   ) {
     const team = await this.teamRepository.findOne({ where: { id: teamId } });
@@ -361,7 +369,7 @@ export class DashboardsService {
       qb.andWhere('inspection.module = :module', { module: filters.module });
     }
 
-    this.applyContractScope(qb, filters.user);
+    this.applyContractScope(qb, filters.user, filters.contractId);
 
     const row = await qb.getRawOne<{
       inspectionsCount: string;
@@ -399,6 +407,7 @@ export class DashboardsService {
     to: string;
     module?: ModuleType;
     teamId?: string;
+    contractId?: string;
   }): Promise<QualityByServiceResponseDto> {
     this.validateDateRange(filters.from, filters.to);
 
@@ -433,7 +442,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
-    this.applyContractScope(qb, filters.user);
+    this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
       month: string;
@@ -507,6 +516,7 @@ export class DashboardsService {
     month?: string;
     module?: ModuleType;
     teamId?: string;
+    contractId?: string;
   }): Promise<CurrentMonthByServiceResponseDto> {
     const month = resolveMonthOrCurrent(filters.month);
 
@@ -538,7 +548,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
-    this.applyContractScope(summaryQb, filters.user);
+    this.applyContractScope(summaryQb, filters.user, filters.contractId);
 
     const rankingQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -564,7 +574,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
-    this.applyContractScope(rankingQb, filters.user);
+    this.applyContractScope(rankingQb, filters.user, filters.contractId);
 
     const [summaryRow, rankingRows] = await Promise.all([
       summaryQb.getRawOne<{
@@ -603,6 +613,7 @@ export class DashboardsService {
     from: string;
     to: string;
     teamIdsCsv: string;
+    contractId?: string;
   }): Promise<TeamPerformanceByTeamsResponseDto> {
     this.validateDateRange(filters.from, filters.to);
     const teamIds = this.parseTeamIdsCsv(filters.teamIdsCsv);
@@ -697,10 +708,10 @@ export class DashboardsService {
       .addOrderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
       .addOrderBy('collaborator.name', 'ASC');
 
-    this.applyContractScope(currentSummaryQb, filters.user);
-    this.applyContractScope(previousSummaryQb, filters.user);
-    this.applyContractScope(teamRankingQb, filters.user);
-    this.applyContractScope(collaboratorsQb, filters.user);
+    this.applyContractScope(currentSummaryQb, filters.user, filters.contractId);
+    this.applyContractScope(previousSummaryQb, filters.user, filters.contractId);
+    this.applyContractScope(teamRankingQb, filters.user, filters.contractId);
+    this.applyContractScope(collaboratorsQb, filters.user, filters.contractId);
 
     const [currentSummaryRow, previousSummaryRow, teamRows, collaboratorRows] =
       await Promise.all([
@@ -791,6 +802,7 @@ export class DashboardsService {
     to: string;
     lowScoreThreshold?: number;
     limit?: number;
+    contractId?: string;
   }): Promise<LowScoreCollaboratorsResponseDto> {
     this.validateDateRange(filters.from, filters.to);
     const toLimit = toEndOfDay(filters.to);
@@ -835,7 +847,7 @@ export class DashboardsService {
       .addOrderBy('COUNT(inspection.id)', 'DESC')
       .limit(limit);
 
-    this.applyContractScope(qb, filters.user);
+    this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
       collaboratorId: string;
@@ -878,6 +890,7 @@ export class DashboardsService {
     module?: ModuleType;
     teamId?: string;
     limitPerChecklist?: number;
+    contractId?: string;
   }): Promise<NonConformitiesByChecklistResponseDto> {
     this.validateDateRange(filters.from, filters.to);
     const toLimit = toEndOfDay(filters.to);
@@ -923,7 +936,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
-    this.applyContractScope(qb, filters.user);
+    this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
       checklistId: string;

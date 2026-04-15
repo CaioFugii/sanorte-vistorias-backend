@@ -58,6 +58,13 @@ describe('DashboardsController (integration)', () => {
       limitPerChecklist: 5,
       checklists: [],
     }),
+    getTeamPerformanceByTeams: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      teamIds: [],
+      summary: {},
+      teams: [],
+    }),
   };
 
   beforeAll(async () => {

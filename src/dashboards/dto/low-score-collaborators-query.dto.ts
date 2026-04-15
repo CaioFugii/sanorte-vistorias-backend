@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsUUID,
   Max,
   Min,
 } from 'class-validator';
@@ -37,4 +38,8 @@ export class LowScoreCollaboratorsQueryDto {
   @Min(1, { message: 'limit deve ser maior ou igual a 1' })
   @Max(100, { message: 'limit deve ser menor ou igual a 100' })
   limit?: number;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'contractId deve ser um UUID válido' })
+  contractId?: string;
 }

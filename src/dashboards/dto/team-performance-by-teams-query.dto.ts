@@ -1,4 +1,10 @@
-import { IsDateString, IsNotEmpty, Matches } from 'class-validator';
+import {
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  Matches,
+} from 'class-validator';
 
 export class TeamPerformanceByTeamsQueryDto {
   @IsNotEmpty({ message: 'from é obrigatório' })
@@ -18,4 +24,8 @@ export class TeamPerformanceByTeamsQueryDto {
     { message: 'teamIds deve ser uma lista CSV de UUIDs válidos' },
   )
   teamIds: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'contractId deve ser um UUID válido' })
+  contractId?: string;
 }
