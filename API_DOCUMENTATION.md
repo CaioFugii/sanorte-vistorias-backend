@@ -59,6 +59,9 @@ Authorization: Bearer <token>
 - Equipes:
   - `POST /teams` exige `contractIds`.
   - `PUT /teams/:id` exige `contractIds`.
+- Colaboradores:
+  - `POST /collaborators` e `PUT /collaborators/:id` aceitam `contractId` (UUID) para vínculo direto com contrato.
+  - quando `contractId` é informado, o contrato deve existir.
 - Importação de OS (`POST /service-orders/import`):
   - exige `contractId` no form-data.
   - uma execução de importação aplica exatamente 1 contrato para todas as OS processadas.
@@ -104,7 +107,7 @@ Authorization: Bearer <token>
 
 - Paginação padrão em listas: `page`, `limit`.
 - `GET /service-orders`: filtros por `osNumber` (busca parcial), `sectorId`, `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA).
-- `GET /collaborators`: filtros por `name` (busca parcial) e `sectorId`.
+- `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`.
 - `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status`, `osNumber` (busca parcial por número da OS; regra de ocultar rascunho para GESTOR/ADMIN).
 - `GET /inspections/mine`: filtro por `osNumber` (busca parcial por número da OS).
@@ -267,10 +270,15 @@ Resposta paginada:
   "id": "uuid",
   "name": "Colaborador 1",
   "sectorId": "uuid",
+  "contractId": "uuid",
   "sector": {
     "id": "uuid",
     "name": "ESGOTO",
     "active": true
+  },
+  "contract": {
+    "id": "uuid",
+    "name": "CONTRATO_NORTE"
   },
   "active": true,
   "createdAt": "2026-02-19T12:00:00.000Z",
@@ -767,8 +775,8 @@ Response 200: `Sector` atualizado
 ### GET /collaborators
 
 - Auth: JWT
-- Query: `page`, `limit`, `name` (busca parcial), `sectorId`
-- Response: paginação de `Collaborator` com relação `sector`
+- Query: `page`, `limit`, `name` (busca parcial), `sectorId`, `contractId`
+- Response: paginação de `Collaborator` com relações `sector` e `contract`
 
 ### POST /collaborators
 
@@ -780,6 +788,7 @@ Request JSON:
 {
   "name": "Novo Colaborador",
   "sectorId": "uuid",
+  "contractId": "uuid",
   "active": true
 }
 ```
@@ -791,10 +800,15 @@ Response 201:
   "id": "uuid",
   "name": "Novo Colaborador",
   "sectorId": "uuid",
+  "contractId": "uuid",
   "sector": {
     "id": "uuid",
     "name": "ESGOTO",
     "active": true
+  },
+  "contract": {
+    "id": "uuid",
+    "name": "CONTRATO_NORTE"
   },
   "active": true,
   "createdAt": "2026-02-19T12:00:00.000Z",
@@ -812,6 +826,7 @@ Request JSON (parcial):
 {
   "name": "Nome Atualizado",
   "sectorId": "uuid",
+  "contractId": "uuid",
   "active": false
 }
 ```
@@ -1741,6 +1756,7 @@ Mensagens relevantes do domínio:
 - `Um ou mais contratos não foram encontrados`
 - `contractId é obrigatório na importação`
 - `Contrato informado não encontrado`
+- `contractId informado não existe`
 - `Você não tem acesso ao contrato selecionado para importação.`
 - `Você não tem acesso ao contrato desta ordem de serviço.`
 - `Vistoria de Segurança do Trabalho por colaborador exige exatamente 1 colaborador.`

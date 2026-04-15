@@ -30,11 +30,46 @@ export class ServiceOrdersService {
     private readonly serviceOrderImportParser: ServiceOrderImportParserService,
   ) {}
 
+  private parseFimExecucaoBoundary(value: string, boundary: 'start' | 'end'): Date {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      throw new BadRequestException(
+        `${boundary === 'start' ? 'from' : 'to'} must be a valid ISO8601 date`,
+      );
+    }
+
+    // Accept date-only inputs by expanding to full-day boundaries (UTC).
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const iso =
+        boundary === 'start'
+          ? `${trimmed}T00:00:00.000Z`
+          : `${trimmed}T23:59:59.999Z`;
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) {
+        throw new BadRequestException(
+          `${boundary === 'start' ? 'from' : 'to'} must be a valid ISO8601 date`,
+        );
+      }
+      return d;
+    }
+
+    const d = new Date(trimmed);
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestException(
+        `${boundary === 'start' ? 'from' : 'to'} must be a valid ISO8601 date`,
+      );
+    }
+    return d;
+  }
+
   async findAll(
     user: any,
     page: number = 1,
     limit: number = 10,
     osNumber?: string,
+    contractId?: string,
+    from?: string,
+    to?: string,
     sectorId?: string,
     field?: boolean,
     remote?: boolean,
@@ -53,6 +88,27 @@ export class ServiceOrdersService {
         osNumber: `%${osNumber.trim()}%`,
       });
     }
+
+    if (contractId) {
+      query.andWhere('serviceOrder.contractId = :contractId', { contractId });
+    }
+
+    if (from || to) {
+      const fromDate = from ? this.parseFimExecucaoBoundary(from, 'start') : undefined;
+      const toDate = to ? this.parseFimExecucaoBoundary(to, 'end') : undefined;
+
+      if (fromDate && toDate) {
+        query.andWhere('serviceOrder.fimExecucao BETWEEN :from AND :to', {
+          from: fromDate,
+          to: toDate,
+        });
+      } else if (fromDate) {
+        query.andWhere('serviceOrder.fimExecucao >= :from', { from: fromDate });
+      } else if (toDate) {
+        query.andWhere('serviceOrder.fimExecucao <= :to', { to: toDate });
+      }
+    }
+
     if (sectorId) {
       query.andWhere('serviceOrder.sectorId = :sectorId', { sectorId });
     }

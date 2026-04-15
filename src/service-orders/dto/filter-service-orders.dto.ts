@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsISO8601,
   IsOptional,
   IsString,
   IsUUID,
@@ -19,6 +20,24 @@ export class FilterServiceOrdersDto extends PaginationQueryDto {
   @IsString()
   @MaxLength(100)
   osNumber?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'contractId must be a valid UUID' })
+  contractId?: string;
+
+  @IsOptional()
+  @IsISO8601(
+    { strict: true },
+    { message: 'from must be a valid ISO8601 date (YYYY-MM-DD or datetime)' },
+  )
+  from?: string;
+
+  @IsOptional()
+  @IsISO8601(
+    { strict: true },
+    { message: 'to must be a valid ISO8601 date (YYYY-MM-DD or datetime)' },
+  )
+  to?: string;
 
   @IsOptional()
   @IsUUID('4', { message: 'sectorId must be a valid UUID' })
