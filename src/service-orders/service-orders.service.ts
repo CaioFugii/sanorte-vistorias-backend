@@ -62,6 +62,24 @@ export class ServiceOrdersService {
     return d;
   }
 
+  /**
+   * Rejects when the span from `from` through `to` exceeds 2 calendar years:
+   * `to` must not be after the end (UTC) of the day that is exactly 2 years after `from`.
+   */
+  private assertFimExecucaoRangeAtMostTwoYears(fromDate: Date, toDate: Date): void {
+    if (fromDate.getTime() > toDate.getTime()) {
+      throw new BadRequestException('from deve ser anterior ou igual a to.');
+    }
+    const maxTo = new Date(fromDate);
+    maxTo.setUTCFullYear(maxTo.getUTCFullYear() + 2);
+    maxTo.setUTCHours(23, 59, 59, 999);
+    if (toDate.getTime() > maxTo.getTime()) {
+      throw new BadRequestException(
+        'O intervalo entre from e to não pode ser maior que 2 anos.',
+      );
+    }
+  }
+
   async findAll(
     user: any,
     page: number = 1,
@@ -98,6 +116,7 @@ export class ServiceOrdersService {
       const toDate = to ? this.parseFimExecucaoBoundary(to, 'end') : undefined;
 
       if (fromDate && toDate) {
+        this.assertFimExecucaoRangeAtMostTwoYears(fromDate, toDate);
         query.andWhere('serviceOrder.fimExecucao BETWEEN :from AND :to', {
           from: fromDate,
           to: toDate,
