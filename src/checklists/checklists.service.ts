@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import * as fs from 'fs/promises';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -154,20 +155,31 @@ export class ChecklistsService {
   ): Promise<ChecklistItem> {
     const item = await this.findChecklistItemOrFail(checklistId, itemId);
 
-    const uploaded = await this.cloudinaryService.uploadImage(file.buffer, {
-      folder: 'quality/checklists/reference-images',
-    });
-
-    if (item.referenceImagePublicId) {
-      await this.cloudinaryService.deleteAsset(item.referenceImagePublicId);
+    if (!file?.path) {
+      throw new BadRequestException('Arquivo inválido ou ausente');
     }
 
-    await this.checklistItemsRepository.update(item.id, {
-      referenceImageUrl: uploaded.secure_url,
-      referenceImagePublicId: uploaded.public_id,
-    });
+    try {
+      const uploaded = await this.cloudinaryService.uploadImageFromPath(
+        file.path,
+        {
+          folder: 'quality/checklists/reference-images',
+        },
+      );
 
-    return this.findChecklistItemOrFail(checklistId, itemId);
+      if (item.referenceImagePublicId) {
+        await this.cloudinaryService.deleteAsset(item.referenceImagePublicId);
+      }
+
+      await this.checklistItemsRepository.update(item.id, {
+        referenceImageUrl: uploaded.secure_url,
+        referenceImagePublicId: uploaded.public_id,
+      });
+
+      return this.findChecklistItemOrFail(checklistId, itemId);
+    } finally {
+      await fs.unlink(file.path).catch(() => undefined);
+    }
   }
 
   async addSection(

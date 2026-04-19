@@ -149,6 +149,8 @@ Authorization: Bearer <token>
 - Autenticação: JWT Bearer Token
 - Formato padrão: JSON (exceto upload de arquivo)
 
+**Uploads de imagem (multipart):** rotas que recebem `multipart/form-data` com o binário no campo `file` validam o tipo de imagem pelo **MIME declarado na parte** (ex.: `image/jpeg`, `image/png`). Ferramentas e SDKs costumam preencher isso automaticamente a partir da extensão ou do arquivo; evite enviar parte sem `Content-Type` de imagem. No servidor, o arquivo é escrito em diretório temporário (ex.: `/tmp` no Heroku) e enviado ao Cloudinary em **streaming**, o que não altera URL, método HTTP nem formato da resposta — apenas reduz uso de memória no dyno.
+
 Header para rotas autenticadas:
 
 ```text
@@ -996,9 +998,10 @@ Response 200: `ChecklistItem` atualizado
 - Auth: JWT + ADMIN
 - Request JSON: não se aplica (multipart/form-data com campo `file`)
 - Regras:
-  - aceita apenas arquivos de imagem (`image/*`)
+  - aceita apenas imagens cujo MIME declarado na parte `file` corresponda a `image/*`
   - tamanho máximo: 10MB
   - se já existir imagem de referência para o item, o backend remove o asset anterior antes de salvar o novo
+  - validação de tipo usa o MIME da parte multipart (ver nota em **Informações gerais** → uploads de imagem)
 
 Response 201:
 
@@ -1193,6 +1196,10 @@ Response 200:
 
 - Auth: JWT + FISCAL ou GESTOR ou ADMIN
 - Body JSON: não se aplica (multipart/form-data com campo `file`; opcional `inspectionItemId`)
+- Arquivo:
+  - tamanho máximo: 5MB
+  - tipos aceitos: MIME da parte deve terminar em `jpg`, `jpeg`, `png` ou `webp` (ex.: `image/jpeg`, `image/png`, `image/webp`)
+  - validação pelo MIME declarado na parte multipart (ver **Informações gerais** → uploads de imagem)
 - Regra:
   - FISCAL só adiciona evidência se `status = RASCUNHO`
   - GESTOR/ADMIN podem adicionar evidência em qualquer status
@@ -1446,6 +1453,9 @@ Regras importantes:
 
 - Auth: JWT
 - Request JSON: não se aplica (multipart/form-data com `file` e opcional `folder`)
+- Arquivo:
+  - tamanho máximo: 10MB
+  - apenas imagens cujo MIME declarado na parte `file` corresponda a `image/*` (ver **Informações gerais** → uploads de imagem)
 
 Response 201:
 

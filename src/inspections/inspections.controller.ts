@@ -16,6 +16,7 @@ import {
   FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { createTempDiskStorage } from '../common/multer/temp-disk.storage';
 import { InspectionsService } from './inspections.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -117,7 +118,12 @@ export class InspectionsController {
   @Post(':id/evidences')
   @UseGuards(RolesGuard)
   @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: createTempDiskStorage('sanorte-evidence'),
+      limits: { fileSize: 5242880 },
+    }),
+  )
   addEvidence(
     @Param('id') id: string,
     @UploadedFile(
@@ -126,7 +132,10 @@ export class InspectionsController {
           new MaxFileSizeValidator({
             maxSize: 5242880, // 5MB
           }),
-          new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp)$/ }),
+          new FileTypeValidator({
+            fileType: /(jpg|jpeg|png|webp)$/,
+            skipMagicNumbersValidation: true,
+          }),
         ],
       }),
     )

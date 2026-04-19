@@ -13,7 +13,9 @@ import {
   FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import * as fs from 'fs/promises';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { createTempDiskStorage } from '../common/multer/temp-disk.storage';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Controller('uploads')
@@ -22,36 +24,52 @@ export class UploadsController {
   constructor(private readonly cloudinaryService: CloudinaryService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: createTempDiskStorage('sanorte-upload'),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
   async upload(
     @UploadedFile(
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
-          new FileTypeValidator({ fileType: /^image\/.*/ }),
+          // diskStorage leaves `buffer` empty; validate declared MIME without reading the whole file into RAM
+          new FileTypeValidator({
+            fileType: /^image\/.*/,
+            skipMagicNumbersValidation: true,
+          }),
         ],
       }),
     )
     file: Express.Multer.File,
     @Body('folder') folder?: string,
   ) {
-    if (!file?.buffer) {
+    if (!file?.path) {
       throw new BadRequestException('File is required');
     }
 
-    const uploaded = await this.cloudinaryService.uploadImage(file.buffer, {
-      folder: this.resolveFolder(folder),
-    });
+    try {
+      const uploaded = await this.cloudinaryService.uploadImageFromPath(
+        file.path,
+        {
+          folder: this.resolveFolder(folder),
+        },
+      );
 
-    return {
-      publicId: uploaded.public_id,
-      url: uploaded.secure_url,
-      resourceType: uploaded.resource_type,
-      bytes: uploaded.bytes,
-      format: uploaded.format,
-      width: uploaded.width,
-      height: uploaded.height,
-    };
+      return {
+        publicId: uploaded.public_id,
+        url: uploaded.secure_url,
+        resourceType: uploaded.resource_type,
+        bytes: uploaded.bytes,
+        format: uploaded.format,
+        width: uploaded.width,
+        height: uploaded.height,
+      };
+    } finally {
+      await fs.unlink(file.path).catch(() => undefined);
+    }
   }
 
   @Delete(':publicId(*)')

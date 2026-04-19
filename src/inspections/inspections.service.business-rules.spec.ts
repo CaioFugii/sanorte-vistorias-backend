@@ -89,7 +89,11 @@ describe('InspectionsService - Regras de Negócio', () => {
       checklistItemsRepository as any,
       teamsRepository as any,
       serviceOrderRepository as any,
-      { uploadImage: jest.fn() } as any,
+      {
+        uploadImage: jest.fn(),
+        uploadImageFromPath: jest.fn(),
+        uploadImageStream: jest.fn(),
+      } as any,
       dataSource as any,
       new InspectionDomainService(),
     );

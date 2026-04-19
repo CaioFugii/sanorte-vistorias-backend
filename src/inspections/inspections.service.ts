@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import * as fs from 'fs/promises';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import {
@@ -664,27 +665,38 @@ export class InspectionsService {
       );
     }
 
-    const uploaded = await this.cloudinaryService.uploadImage(file.buffer, {
-      folder: 'quality/evidences',
-    });
+    if (!file?.path) {
+      throw new BadRequestException('Arquivo inválido ou ausente');
+    }
 
-    const evidence = this.evidencesRepository.create({
-      inspectionId: inspection.id,
-      inspectionItemId,
-      filePath: uploaded.secure_url,
-      fileName: file.originalname,
-      mimeType: file.mimetype,
-      size: uploaded.bytes,
-      cloudinaryPublicId: uploaded.public_id,
-      url: uploaded.secure_url,
-      bytes: uploaded.bytes,
-      format: uploaded.format,
-      width: uploaded.width,
-      height: uploaded.height,
-      uploadedByUserId: userId || inspection.createdByUserId,
-    });
+    try {
+      const uploaded = await this.cloudinaryService.uploadImageFromPath(
+        file.path,
+        {
+          folder: 'quality/evidences',
+        },
+      );
 
-    return this.evidencesRepository.save(evidence);
+      const evidence = this.evidencesRepository.create({
+        inspectionId: inspection.id,
+        inspectionItemId,
+        filePath: uploaded.secure_url,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        size: uploaded.bytes,
+        cloudinaryPublicId: uploaded.public_id,
+        url: uploaded.secure_url,
+        bytes: uploaded.bytes,
+        format: uploaded.format,
+        width: uploaded.width,
+        height: uploaded.height,
+        uploadedByUserId: userId || inspection.createdByUserId,
+      });
+
+      return this.evidencesRepository.save(evidence);
+    } finally {
+      await fs.unlink(file.path).catch(() => undefined);
+    }
   }
 
   async addSignature(

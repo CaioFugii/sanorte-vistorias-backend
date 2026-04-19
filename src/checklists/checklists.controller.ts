@@ -15,6 +15,7 @@ import {
   FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { createTempDiskStorage } from '../common/multer/temp-disk.storage';
 import { ChecklistsService } from './checklists.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -108,7 +109,12 @@ export class ChecklistsController {
   @Post(':id/items/:itemId/reference-image')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: createTempDiskStorage('sanorte-checklist-ref'),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
   uploadItemReferenceImage(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
@@ -116,7 +122,10 @@ export class ChecklistsController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
-          new FileTypeValidator({ fileType: /^image\/.*/ }),
+          new FileTypeValidator({
+            fileType: /^image\/.*/,
+            skipMagicNumbersValidation: true,
+          }),
         ],
       }),
     )

@@ -66,6 +66,8 @@ describe('InspectionsService', () => {
 
     const cloudinaryService = {
       uploadImage: jest.fn(),
+      uploadImageFromPath: jest.fn(),
+      uploadImageStream: jest.fn(),
     };
 
     dataSource = {

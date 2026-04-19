@@ -3,20 +3,20 @@ import { UploadsController } from './uploads.controller';
 describe('UploadsController', () => {
   let controller: UploadsController;
   let cloudinaryService: {
-    uploadImage: jest.Mock;
+    uploadImageFromPath: jest.Mock;
     deleteAsset: jest.Mock;
   };
 
   beforeEach(() => {
     cloudinaryService = {
-      uploadImage: jest.fn(),
+      uploadImageFromPath: jest.fn(),
       deleteAsset: jest.fn(),
     };
     controller = new UploadsController(cloudinaryService as any);
   });
 
   it('should upload with default evidences folder and return metadata', async () => {
-    cloudinaryService.uploadImage.mockResolvedValue({
+    cloudinaryService.uploadImageFromPath.mockResolvedValue({
       public_id: 'quality/evidences/asset-1',
       secure_url: 'https://res.cloudinary.com/demo/image/upload/v1/asset-1.jpg',
       resource_type: 'image',
@@ -27,7 +27,7 @@ describe('UploadsController', () => {
     });
 
     const file = {
-      buffer: Buffer.from('image'),
+      path: '/tmp/sanorte-upload-test.jpg',
       mimetype: 'image/jpeg',
       size: 5,
       originalname: 'photo.jpg',
@@ -35,9 +35,12 @@ describe('UploadsController', () => {
 
     const result = await controller.upload(file);
 
-    expect(cloudinaryService.uploadImage).toHaveBeenCalledWith(file.buffer, {
-      folder: 'quality/evidences',
-    });
+    expect(cloudinaryService.uploadImageFromPath).toHaveBeenCalledWith(
+      file.path,
+      {
+        folder: 'quality/evidences',
+      },
+    );
     expect(result).toEqual({
       publicId: 'quality/evidences/asset-1',
       url: 'https://res.cloudinary.com/demo/image/upload/v1/asset-1.jpg',
@@ -50,7 +53,7 @@ describe('UploadsController', () => {
   });
 
   it('should map signatures alias folder', async () => {
-    cloudinaryService.uploadImage.mockResolvedValue({
+    cloudinaryService.uploadImageFromPath.mockResolvedValue({
       public_id: 'quality/signatures/asset-2',
       secure_url: 'https://res.cloudinary.com/demo/image/upload/v1/asset-2.png',
       resource_type: 'image',
@@ -61,7 +64,7 @@ describe('UploadsController', () => {
     });
 
     const file = {
-      buffer: Buffer.from('image'),
+      path: '/tmp/sanorte-upload-test.png',
       mimetype: 'image/png',
       size: 8,
       originalname: 'signature.png',
@@ -69,9 +72,12 @@ describe('UploadsController', () => {
 
     await controller.upload(file, 'signatures');
 
-    expect(cloudinaryService.uploadImage).toHaveBeenCalledWith(file.buffer, {
-      folder: 'quality/signatures',
-    });
+    expect(cloudinaryService.uploadImageFromPath).toHaveBeenCalledWith(
+      file.path,
+      {
+        folder: 'quality/signatures',
+      },
+    );
   });
 
   it('should delete a cloudinary asset', async () => {
