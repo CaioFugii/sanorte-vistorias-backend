@@ -28,6 +28,7 @@ import {
   UserRole,
 } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { InspectionMineListItem } from './dto/inspection-mine-list-item.dto';
 import { InspectionDomainService } from './inspection-domain.service';
 import {
   SyncInspectionDto,
@@ -321,24 +322,26 @@ export class InspectionsService {
     osNumber?: string,
     inspectionScope?: InspectionScope,
     userScope?: any,
-  ): Promise<PaginatedResponseDto<Inspection>> {
+  ): Promise<PaginatedResponseDto<InspectionMineListItem>> {
     const allowedContractIds = getAllowedContractIds(userScope);
     const skip = (page - 1) * limit;
 
     const query = this.inspectionsRepository
       .createQueryBuilder('inspection')
-      .leftJoinAndSelect('inspection.checklist', 'checklist')
-      .leftJoinAndSelect('checklist.sections', 'checklistSections')
-      .leftJoinAndSelect('checklist.items', 'checklistItems')
-      .leftJoinAndSelect('checklistItems.section', 'checklistItemSection')
-      .leftJoinAndSelect('inspection.team', 'team')
-      .leftJoinAndSelect('inspection.serviceOrder', 'serviceOrder')
-      .leftJoinAndSelect('inspection.items', 'items')
-      .leftJoinAndSelect('items.checklistItem', 'itemsChecklistItem')
-      .leftJoinAndSelect(
-        'itemsChecklistItem.section',
-        'itemsChecklistItemSection',
-      )
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select([
+        'inspection.id',
+        'inspection.externalId',
+        'inspection.module',
+        'inspection.serviceDescription',
+        'inspection.locationDescription',
+        'inspection.status',
+        'inspection.hasParalysisPenalty',
+        'inspection.scorePercent',
+        'inspection.finalizedAt',
+        'inspection.createdAt',
+      ])
+      .addSelect(['serviceOrder.id', 'serviceOrder.osNumber'])
       .where('inspection.createdByUserId = :userId', { userId })
       .orderBy('inspection.createdAt', 'DESC');
 
@@ -359,7 +362,14 @@ export class InspectionsService {
       'serviceOrder.contractId',
     );
 
-    const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
+    const [entities, total] = await query
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const data: InspectionMineListItem[] = entities.map((row) =>
+      this.toInspectionMineListItem(row),
+    );
 
     const totalPages = Math.ceil(total / limit);
 
@@ -373,6 +383,31 @@ export class InspectionsService {
         hasNext: page < totalPages,
         hasPrev: page > 1,
       },
+    };
+  }
+
+  private toInspectionMineListItem(inspection: Inspection): InspectionMineListItem {
+    const rawScore = inspection.scorePercent as unknown;
+    let scorePercent: number | null = null;
+    if (rawScore !== undefined && rawScore !== null && rawScore !== '') {
+      const n = Number(rawScore);
+      scorePercent = Number.isFinite(n) ? n : null;
+    }
+
+    return {
+      id: inspection.id,
+      externalId: inspection.externalId ?? null,
+      module: inspection.module,
+      serviceDescription: inspection.serviceDescription ?? null,
+      locationDescription: inspection.locationDescription ?? null,
+      status: inspection.status,
+      hasParalysisPenalty: inspection.hasParalysisPenalty === true,
+      scorePercent,
+      finalizedAt: inspection.finalizedAt ?? null,
+      createdAt: inspection.createdAt,
+      serviceOrder: inspection.serviceOrder
+        ? { osNumber: inspection.serviceOrder.osNumber }
+        : null,
     };
   }
 

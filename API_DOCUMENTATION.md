@@ -1121,8 +1121,28 @@ Observação importante para UI (FISCAL):
 
 - Auth: JWT + FISCAL
 - Query: `page`, `limit`, `osNumber` (busca parcial por número da OS), `inspectionScope`
-- Response: paginação de `Inspection` do usuário logado com relação `serviceOrder`
+- Response: paginação **enxuta** apenas com campos usados na listagem do app (menos payload e menos memória no servidor). Cada item inclui:
+  - `id`, `externalId` (pelo menos um sempre presente conforme fluxo do app), `module`, `serviceDescription`, `locationDescription`, `status`, `hasParalysisPenalty`, `scorePercent` (`null` → exibir “N/A”), `finalizedAt`, `createdAt`
+  - `serviceOrder`: objeto `{ "osNumber": "..." }` ou `null` se não houver OS vinculada
 - Escopo: além de `createdByUserId`, aplica contrato permitido da OS
+
+Exemplo de item em `data`:
+
+```json
+{
+  "id": "uuid",
+  "externalId": "uuid-offline",
+  "module": "QUALIDADE",
+  "serviceDescription": "Vistoria de campo",
+  "locationDescription": "Setor A",
+  "status": "RASCUNHO",
+  "hasParalysisPenalty": false,
+  "scorePercent": 92.5,
+  "finalizedAt": null,
+  "createdAt": "2026-04-19T12:00:00.000Z",
+  "serviceOrder": { "osNumber": "1234567" }
+}
+```
 
 ### GET /inspections/:id
 
