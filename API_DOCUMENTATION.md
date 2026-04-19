@@ -34,7 +34,7 @@ Authorization: Bearer <token>
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
-  - anexos e assinatura: `POST /inspections/:id/evidences`, `POST /inspections/:id/signature`
+  - anexos e assinatura: `POST /inspections/:id/evidences`, `DELETE /inspections/:id/evidences/:evidenceId`, `POST /inspections/:id/signature`
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
@@ -75,7 +75,7 @@ Authorization: Bearer <token>
   - Sempre recalcula `scorePercent`.
   - Para GESTOR/ADMIN, reavalia status automaticamente (`FINALIZADA` <-> `PENDENTE_AJUSTE`) quando aplicável.
   - Exceção: para módulo `SEGURANCA_TRABALHO`, o status não vai para `PENDENTE_AJUSTE` (permanece/retorna `FINALIZADA`).
-- `POST /inspections/:id/evidences`:
+- `POST /inspections/:id/evidences` e `DELETE /inspections/:id/evidences/:evidenceId`:
   - FISCAL só em `RASCUNHO`.
   - GESTOR/ADMIN em qualquer status.
 - `POST /inspections/:id/paralyze`:
@@ -1225,6 +1225,25 @@ Response 201:
   "createdAt": "2026-02-19T12:00:00.000Z"
 }
 ```
+
+### DELETE /inspections/:id/evidences/:evidenceId
+
+- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Request JSON: não se aplica
+- Path:
+  - `id`: UUID da vistoria (ou `externalId`, mesmo critério de `GET /inspections/:id`)
+  - `evidenceId`: UUID da evidência (retornado em `POST /inspections/:id/evidences` ou no detalhe da vistoria em `evidences[].id`)
+- Comportamento:
+  - Remove o registro da evidência no banco.
+  - Se existir `cloudinaryPublicId`, remove o asset correspondente no Cloudinary antes de apagar o registro.
+  - Se não houver `cloudinaryPublicId` (registro legado), apenas remove o registro.
+- Regras de perfil (iguais ao POST de evidência):
+  - FISCAL só pode remover se `status = RASCUNHO`.
+  - GESTOR/ADMIN podem remover em qualquer status de vistoria.
+- Erros:
+  - `404` se a evidência não existir ou não pertencer à vistoria informada.
+
+Response `204`: sem body.
 
 ### POST /inspections/:id/signature
 

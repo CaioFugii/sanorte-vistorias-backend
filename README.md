@@ -135,6 +135,7 @@ Authorization: Bearer <token>
 - `PUT /inspections/:id` (autenticado; regra por status/role)
 - `PUT /inspections/:id/items` (autenticado)
 - `POST /inspections/:id/evidences` (multipart)
+- `DELETE /inspections/:id/evidences/:evidenceId` (FISCAL/GESTOR/ADMIN; 204)
 - `POST /inspections/:id/signature` (JSON)
 - `POST /inspections/:id/paralyze` (FISCAL/GESTOR/ADMIN)
 - `POST /inspections/:id/unparalyze` (GESTOR/ADMIN)

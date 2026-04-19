@@ -14,6 +14,7 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { createTempDiskStorage } from '../common/multer/temp-disk.storage';
@@ -150,6 +151,19 @@ export class InspectionsController {
       user?.id,
       user?.role,
     );
+  }
+
+  @Delete(':id/evidences/:evidenceId')
+  @HttpCode(204)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  async removeEvidence(
+    @Param('id') id: string,
+    @Param('evidenceId', new ParseUUIDPipe({ version: '4' }))
+    evidenceId: string,
+    @CurrentUser() user: any,
+  ): Promise<void> {
+    await this.inspectionsService.removeEvidence(id, evidenceId, user?.role);
   }
 
   @Post(':id/signature')

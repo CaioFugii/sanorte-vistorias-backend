@@ -699,6 +699,37 @@ export class InspectionsService {
     }
   }
 
+  async removeEvidence(
+    inspectionId: string,
+    evidenceId: string,
+    userRole?: UserRole,
+  ): Promise<void> {
+    const inspection = await this.findOne(inspectionId);
+
+    if (
+      userRole === UserRole.FISCAL &&
+      inspection.status !== InspectionStatus.RASCUNHO
+    ) {
+      throw new ForbiddenException(
+        'Fiscal não pode editar vistoria após finalização',
+      );
+    }
+
+    const evidence = await this.evidencesRepository.findOne({
+      where: { id: evidenceId, inspectionId: inspection.id },
+    });
+
+    if (!evidence) {
+      throw new NotFoundException('Evidência não encontrada nesta vistoria');
+    }
+
+    if (evidence.cloudinaryPublicId?.trim()) {
+      await this.cloudinaryService.deleteAsset(evidence.cloudinaryPublicId);
+    }
+
+    await this.evidencesRepository.delete(evidence.id);
+  }
+
   async addSignature(
     id: string,
     signerName: string,

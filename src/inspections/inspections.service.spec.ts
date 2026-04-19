@@ -1,8 +1,10 @@
+import { ForbiddenException } from '@nestjs/common';
 import { InspectionsService } from './inspections.service';
 import { Inspection } from '../entities';
 import {
   ChecklistAnswer,
   InspectionScope,
+  InspectionStatus,
   ModuleType,
   UserRole,
 } from '../common/enums';
@@ -19,6 +21,12 @@ describe('InspectionsService', () => {
   let teamsRepository: any;
   let serviceOrderRepository: any;
   let dataSource: any;
+  let cloudinaryService: {
+    uploadImage: jest.Mock;
+    uploadImageFromPath: jest.Mock;
+    uploadImageStream: jest.Mock;
+    deleteAsset: jest.Mock;
+  };
 
   beforeEach(async () => {
     inspectionsRepository = {
@@ -40,6 +48,7 @@ describe('InspectionsService', () => {
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
+      delete: jest.fn(),
     };
     signaturesRepository = {
       findOne: jest.fn(),
@@ -64,10 +73,11 @@ describe('InspectionsService', () => {
       update: jest.fn(),
     };
 
-    const cloudinaryService = {
+    cloudinaryService = {
       uploadImage: jest.fn(),
       uploadImageFromPath: jest.fn(),
       uploadImageStream: jest.fn(),
+      deleteAsset: jest.fn(),
     };
 
     dataSource = {
@@ -353,5 +363,56 @@ describe('InspectionsService', () => {
       serverId: 'server-id-remote',
       status: 'CREATED',
     });
+  });
+
+  it('removeEvidence deve apagar asset no Cloudinary e o registro', async () => {
+    const insp = {
+      id: 'i1',
+      status: InspectionStatus.RASCUNHO,
+    } as Inspection;
+    jest.spyOn(service, 'findOne').mockResolvedValue(insp);
+    evidencesRepository.findOne.mockResolvedValue({
+      id: 'e1',
+      inspectionId: 'i1',
+      cloudinaryPublicId: 'quality/evidences/x',
+    });
+    cloudinaryService.deleteAsset.mockResolvedValue({ result: 'ok' });
+
+    await service.removeEvidence('i1', 'e1', UserRole.FISCAL);
+
+    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith(
+      'quality/evidences/x',
+    );
+    expect(evidencesRepository.delete).toHaveBeenCalledWith('e1');
+  });
+
+  it('removeEvidence deve ignorar Cloudinary quando não há publicId', async () => {
+    const insp = {
+      id: 'i1',
+      status: InspectionStatus.RASCUNHO,
+    } as Inspection;
+    jest.spyOn(service, 'findOne').mockResolvedValue(insp);
+    evidencesRepository.findOne.mockResolvedValue({
+      id: 'e1',
+      inspectionId: 'i1',
+      cloudinaryPublicId: null,
+    });
+
+    await service.removeEvidence('i1', 'e1', UserRole.GESTOR);
+
+    expect(cloudinaryService.deleteAsset).not.toHaveBeenCalled();
+    expect(evidencesRepository.delete).toHaveBeenCalledWith('e1');
+  });
+
+  it('removeEvidence deve proibir FISCAL quando vistoria não está em RASCUNHO', async () => {
+    const insp = {
+      id: 'i1',
+      status: InspectionStatus.FINALIZADA,
+    } as Inspection;
+    jest.spyOn(service, 'findOne').mockResolvedValue(insp);
+
+    await expect(
+      service.removeEvidence('i1', 'e1', UserRole.FISCAL),
+    ).rejects.toThrow(ForbiddenException);
   });
 });
