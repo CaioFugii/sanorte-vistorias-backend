@@ -10,7 +10,6 @@ export function getDatabaseConfig(
     const databaseUrl = configService.get<string>('DATABASE_URL');
 
     if (databaseUrl) {
-      // Formato: postgres://user:password@host:port/database
       const url = new URL(databaseUrl);
       return {
         host: url.hostname,
@@ -18,12 +17,15 @@ export function getDatabaseConfig(
         username: url.username,
         password: url.password,
         database: url.pathname.slice(1), // Remove a barra inicial
-        ssl:
-          process.env.NODE_ENV === 'production'
-            ? {
-                rejectUnauthorized: false, // Necessário para Heroku Postgres
-              }
-            : false,
+        ssl: {
+                  rejectUnauthorized: false, // Necessário para Heroku Postgres
+                },
+        // ssl:
+        //   process.env.NODE_ENV === 'production'
+        //     ? {
+        //         rejectUnauthorized: false, // Necessário para Heroku Postgres
+        //       }
+        //     : false,
       };
     }
 

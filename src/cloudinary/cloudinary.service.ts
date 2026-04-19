@@ -1,6 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { createReadStream } from 'fs';
 import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import {
   v2 as cloudinary,
   UploadApiOptions,
@@ -45,27 +46,29 @@ export class CloudinaryService {
     this.assertConfigured();
 
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
+
       const uploadStream = cloudinary.uploader.upload_stream(
         { resource_type: 'image', ...options },
         (error, result) => {
-          if (error || !result) {
-            stream.destroy(error || undefined);
-            reject(error || new Error('Cloudinary upload failed'));
-            return;
-          }
-          resolve(result);
+          settle(() => {
+            if (error || !result) {
+              reject(error || new Error('Cloudinary upload failed'));
+              return;
+            }
+            resolve(result);
+          });
         },
       );
 
-      stream.once('error', (err: Error) => {
-        uploadStream.destroy(err);
-        reject(err);
-      });
-      uploadStream.once('error', (err: Error) => {
-        stream.destroy(err);
-        reject(err);
-      });
-      stream.pipe(uploadStream);
+      pipeline(stream, uploadStream).catch((err: Error) =>
+        settle(() => reject(err)),
+      );
     });
   }
 

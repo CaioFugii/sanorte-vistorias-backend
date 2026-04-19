@@ -366,11 +366,11 @@ describe('InspectionsService', () => {
   });
 
   it('removeEvidence deve apagar asset no Cloudinary e o registro', async () => {
-    const insp = {
+    inspectionsRepository.findOne.mockResolvedValue({
       id: 'i1',
       status: InspectionStatus.RASCUNHO,
-    } as Inspection;
-    jest.spyOn(service, 'findOne').mockResolvedValue(insp);
+      createdByUserId: 'u1',
+    });
     evidencesRepository.findOne.mockResolvedValue({
       id: 'e1',
       inspectionId: 'i1',
@@ -387,11 +387,11 @@ describe('InspectionsService', () => {
   });
 
   it('removeEvidence deve ignorar Cloudinary quando não há publicId', async () => {
-    const insp = {
+    inspectionsRepository.findOne.mockResolvedValue({
       id: 'i1',
       status: InspectionStatus.RASCUNHO,
-    } as Inspection;
-    jest.spyOn(service, 'findOne').mockResolvedValue(insp);
+      createdByUserId: 'u1',
+    });
     evidencesRepository.findOne.mockResolvedValue({
       id: 'e1',
       inspectionId: 'i1',
@@ -405,11 +405,11 @@ describe('InspectionsService', () => {
   });
 
   it('removeEvidence deve proibir FISCAL quando vistoria não está em RASCUNHO', async () => {
-    const insp = {
+    inspectionsRepository.findOne.mockResolvedValue({
       id: 'i1',
       status: InspectionStatus.FINALIZADA,
-    } as Inspection;
-    jest.spyOn(service, 'findOne').mockResolvedValue(insp);
+      createdByUserId: 'u1',
+    });
 
     await expect(
       service.removeEvidence('i1', 'e1', UserRole.FISCAL),

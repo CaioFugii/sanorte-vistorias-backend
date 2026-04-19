@@ -406,6 +406,24 @@ export class InspectionsService {
     return inspection;
   }
 
+  /**
+   * Carrega só id/status/dono — necessário para uploads de evidência.
+   * Não usar `findOne` aqui: ele puxa checklist inteiro, todos os items, todas as evidências etc.;
+   * a cada foto o grafo cresce e o RSS do dyno sobe até estourar quota (Heroku R14).
+   */
+  private async findInspectionCoreByIdOrExternalId(
+    id: string,
+  ): Promise<Pick<Inspection, 'id' | 'status' | 'createdByUserId'>> {
+    const inspection = await this.inspectionsRepository.findOne({
+      where: [{ id }, { externalId: id }],
+      select: ['id', 'status', 'createdByUserId'],
+    });
+    if (!inspection) {
+      throw new NotFoundException('Vistoria não encontrada');
+    }
+    return inspection;
+  }
+
   async remove(id: string): Promise<void> {
     const inspection = await this.findOne(id);
 
@@ -654,7 +672,7 @@ export class InspectionsService {
     userId?: string,
     userRole?: UserRole,
   ): Promise<Evidence> {
-    const inspection = await this.findOne(id);
+    const inspection = await this.findInspectionCoreByIdOrExternalId(id);
 
     if (
       userRole === UserRole.FISCAL &&
@@ -704,7 +722,9 @@ export class InspectionsService {
     evidenceId: string,
     userRole?: UserRole,
   ): Promise<void> {
-    const inspection = await this.findOne(inspectionId);
+    const inspection = await this.findInspectionCoreByIdOrExternalId(
+      inspectionId,
+    );
 
     if (
       userRole === UserRole.FISCAL &&
