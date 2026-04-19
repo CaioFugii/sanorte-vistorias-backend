@@ -3,9 +3,7 @@ import { InspectionsService } from './inspections.service';
 import {
   Inspection,
   InspectionItem,
-  Signature,
   PendingAdjustment,
-  ChecklistItem,
 } from '../entities';
 import {
   InspectionStatus,
@@ -24,6 +22,7 @@ describe('InspectionsService - Regras de Negócio', () => {
   let signaturesRepository: any;
   let pendingAdjustmentsRepository: any;
   let checklistItemsRepository: any;
+  let evidencesRepository: any;
   let teamsRepository: any;
   let serviceOrderRepository: any;
   let dataSource: any;
@@ -69,6 +68,10 @@ describe('InspectionsService - Regras de Negócio', () => {
     };
     checklistItemsRepository = {
       findOne: jest.fn(),
+      find: jest.fn(),
+    };
+    evidencesRepository = {
+      count: jest.fn(),
     };
     teamsRepository = {
       findOne: jest.fn(),
@@ -83,7 +86,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     service = new InspectionsService(
       inspectionsRepository as any,
       inspectionItemsRepository as any,
-      {} as any,
+      evidencesRepository as any,
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
@@ -154,26 +157,26 @@ describe('InspectionsService - Regras de Negócio', () => {
 
   it('deve marcar vistoria como PENDENTE_AJUSTE quando houver NAO_CONFORME ao finalizar', async () => {
     jest
-      .spyOn(service, 'findOne')
-      .mockResolvedValue(mockInspection as Inspection);
-    signaturesRepository.findOne.mockResolvedValue({
-      id: 'sig-id',
-      inspectionId: 'test-id',
-    } as Signature);
-    inspectionItemsRepository.find.mockResolvedValue([
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
+    inspectionItemsRepository.find.mockImplementation((opts: any) => {
+      if (opts?.where?.answer === ChecklistAnswer.NAO_CONFORME) {
+        return Promise.resolve([
+          { id: 'item-1', checklistItemId: 'check-item-1' },
+        ]);
+      }
+      return Promise.resolve([
+        { answer: ChecklistAnswer.NAO_CONFORME } as InspectionItem,
+      ]);
+    });
+    checklistItemsRepository.find.mockResolvedValue([
       {
-        id: 'item-1',
-        inspectionId: 'test-id',
-        checklistItemId: 'check-item-1',
-        answer: ChecklistAnswer.NAO_CONFORME,
-        evidences: [{ id: 'ev-1' }],
-      } as InspectionItem,
+        id: 'check-item-1',
+        title: 'Item de teste',
+        requiresPhotoOnNonConformity: true,
+      },
     ]);
-    checklistItemsRepository.findOne.mockResolvedValue({
-      id: 'check-item-1',
-      title: 'Item de teste',
-      requiresPhotoOnNonConformity: true,
-    } as ChecklistItem);
+    evidencesRepository.count.mockResolvedValue(1);
     pendingAdjustmentsRepository.findOne.mockResolvedValue(null);
     pendingAdjustmentsRepository.save.mockResolvedValue({
       id: 'pending-id',
@@ -192,24 +195,29 @@ describe('InspectionsService - Regras de Negócio', () => {
   });
 
   it('deve finalizar vistoria ST mesmo com NAO_CONFORME e sem criar pendência', async () => {
-    jest.spyOn(service, 'findOne').mockResolvedValue({
+    inspectionsRepository.findOne.mockResolvedValue({
       ...mockInspection,
       module: ModuleType.SEGURANCA_TRABALHO,
-    } as Inspection);
-    inspectionItemsRepository.find.mockResolvedValue([
+    });
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    inspectionItemsRepository.find.mockImplementation((opts: any) => {
+      if (opts?.where?.answer === ChecklistAnswer.NAO_CONFORME) {
+        return Promise.resolve([
+          { id: 'item-1', checklistItemId: 'check-item-1' },
+        ]);
+      }
+      return Promise.resolve([
+        { answer: ChecklistAnswer.NAO_CONFORME } as InspectionItem,
+      ]);
+    });
+    checklistItemsRepository.find.mockResolvedValue([
       {
-        id: 'item-1',
-        inspectionId: 'test-id',
-        checklistItemId: 'check-item-1',
-        answer: ChecklistAnswer.NAO_CONFORME,
-        evidences: [{ id: 'ev-1' }],
-      } as InspectionItem,
+        id: 'check-item-1',
+        title: 'Item de teste',
+        requiresPhotoOnNonConformity: true,
+      },
     ]);
-    checklistItemsRepository.findOne.mockResolvedValue({
-      id: 'check-item-1',
-      title: 'Item de teste',
-      requiresPhotoOnNonConformity: true,
-    } as ChecklistItem);
+    evidencesRepository.count.mockResolvedValue(1);
 
     await service.finalize('test-id');
 
@@ -223,24 +231,29 @@ describe('InspectionsService - Regras de Negócio', () => {
   });
 
   it('deve finalizar vistoria REMOTO mesmo com NAO_CONFORME e sem criar pendência', async () => {
-    jest.spyOn(service, 'findOne').mockResolvedValue({
+    inspectionsRepository.findOne.mockResolvedValue({
       ...mockInspection,
       module: ModuleType.REMOTO,
-    } as Inspection);
-    inspectionItemsRepository.find.mockResolvedValue([
+    });
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    inspectionItemsRepository.find.mockImplementation((opts: any) => {
+      if (opts?.where?.answer === ChecklistAnswer.NAO_CONFORME) {
+        return Promise.resolve([
+          { id: 'item-1', checklistItemId: 'check-item-1' },
+        ]);
+      }
+      return Promise.resolve([
+        { answer: ChecklistAnswer.NAO_CONFORME } as InspectionItem,
+      ]);
+    });
+    checklistItemsRepository.find.mockResolvedValue([
       {
-        id: 'item-1',
-        inspectionId: 'test-id',
-        checklistItemId: 'check-item-1',
-        answer: ChecklistAnswer.NAO_CONFORME,
-        evidences: [{ id: 'ev-1' }],
-      } as InspectionItem,
+        id: 'check-item-1',
+        title: 'Item de teste',
+        requiresPhotoOnNonConformity: true,
+      },
     ]);
-    checklistItemsRepository.findOne.mockResolvedValue({
-      id: 'check-item-1',
-      title: 'Item de teste',
-      requiresPhotoOnNonConformity: true,
-    } as ChecklistItem);
+    evidencesRepository.count.mockResolvedValue(1);
 
     await service.finalize('test-id');
 
@@ -254,13 +267,15 @@ describe('InspectionsService - Regras de Negócio', () => {
   });
 
   it('deve permitir finalizar sem assinatura (assinatura é opcional)', async () => {
-    jest
-      .spyOn(service, 'findOne')
-      .mockResolvedValue(mockInspection as Inspection);
-    signaturesRepository.findOne.mockResolvedValue(null);
-    inspectionItemsRepository.find.mockResolvedValue([
-      { answer: ChecklistAnswer.CONFORME },
-    ] as InspectionItem[]);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    inspectionItemsRepository.find.mockImplementation((opts: any) => {
+      if (opts?.where?.answer === ChecklistAnswer.NAO_CONFORME) {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve([
+        { answer: ChecklistAnswer.CONFORME },
+      ] as InspectionItem[]);
+    });
 
     await service.finalize('test-id');
 

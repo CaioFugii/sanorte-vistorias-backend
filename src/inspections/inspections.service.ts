@@ -1043,12 +1043,61 @@ export class InspectionsService {
   async calculateScorePercent(inspectionId: string): Promise<number> {
     const items = await this.inspectionItemsRepository.find({
       where: { inspectionId },
+      select: ['answer'],
     });
-    return this.inspectionDomainService.calculateScorePercent(items);
+    return this.inspectionDomainService.calculateScorePercent(
+      items as InspectionItem[],
+    );
   }
 
-  async finalize(id: string): Promise<Inspection> {
-    const inspection = await this.findOne(id);
+  /**
+   * Itens não conformes com flag de foto obrigatória devem ter ao menos uma evidência no item.
+   * Evita carregar todas as evidências em memória (relação `evidences` por item).
+   */
+  private async assertNonConformItemsHaveRequiredEvidence(
+    inspectionId: string,
+  ): Promise<void> {
+    const nonConformRows = await this.inspectionItemsRepository.find({
+      where: {
+        inspectionId,
+        answer: ChecklistAnswer.NAO_CONFORME,
+      },
+      select: ['id', 'checklistItemId'],
+    });
+
+    if (nonConformRows.length === 0) {
+      return;
+    }
+
+    const checklistIds = [
+      ...new Set(nonConformRows.map((r) => r.checklistItemId)),
+    ];
+    const checklistMetas = await this.checklistItemsRepository.find({
+      where: { id: In(checklistIds) },
+      select: ['id', 'title', 'requiresPhotoOnNonConformity'],
+    });
+    const metaById = new Map(
+      checklistMetas.map((c) => [c.id, c] as const),
+    );
+
+    for (const row of nonConformRows) {
+      const meta = metaById.get(row.checklistItemId);
+      if (!meta?.requiresPhotoOnNonConformity) {
+        continue;
+      }
+      const evidenceCount = await this.evidencesRepository.count({
+        where: { inspectionItemId: row.id },
+      });
+      if (evidenceCount === 0) {
+        throw new BadRequestException(
+          `Item "${meta.title}" requer foto de evidência quando não conforme`,
+        );
+      }
+    }
+  }
+
+  async finalize(id: string): Promise<InspectionDetailResponseDto> {
+    const inspection = await this.findInspectionCoreForUpdateItems(id);
 
     if (inspection.status !== InspectionStatus.RASCUNHO) {
       throw new BadRequestException('Vistoria já foi finalizada');
@@ -1056,41 +1105,23 @@ export class InspectionsService {
 
     const inspectionId = inspection.id;
 
-    // Validar evidências para itens NAO_CONFORME
-    const items = await this.inspectionItemsRepository.find({
-      where: { inspectionId },
-      relations: ['checklistItem', 'evidences'],
-    });
-
-    for (const item of items) {
-      if (item.answer === ChecklistAnswer.NAO_CONFORME) {
-        const checklistItem = await this.checklistItemsRepository.findOne({
-          where: { id: item.checklistItemId },
-        });
-
-        if (
-          checklistItem &&
-          checklistItem.requiresPhotoOnNonConformity &&
-          (!item.evidences || item.evidences.length === 0)
-        ) {
-          throw new BadRequestException(
-            `Item "${checklistItem.title}" requer foto de evidência quando não conforme`,
-          );
-        }
-      }
-    }
+    await this.assertNonConformItemsHaveRequiredEvidence(inspectionId);
 
     const scorePercent = await this.calculateFinalScorePercent(
       inspectionId,
       inspection.hasParalysisPenalty === true,
     );
 
+    const itemsForStatus = await this.inspectionItemsRepository.find({
+      where: { inspectionId },
+      select: ['answer'],
+    });
     const status = this.inspectionDomainService.resolveFinalStatus(
-      items,
+      itemsForStatus as InspectionItem[],
       inspection.module,
     );
+
     if (status === InspectionStatus.PENDENTE_AJUSTE) {
-      // Criar ou atualizar PendingAdjustment
       let pending = await this.pendingAdjustmentsRepository.findOne({
         where: { inspectionId },
       });
@@ -1106,14 +1137,13 @@ export class InspectionsService {
       await this.pendingAdjustmentsRepository.save(pending);
     }
 
-    // Atualizar vistoria
     await this.inspectionsRepository.update(inspectionId, {
       status,
       scorePercent,
       finalizedAt: new Date(),
     });
 
-    return this.findOne(inspectionId);
+    return this.findOneDetail(inspectionId);
   }
 
   async syncInspections(

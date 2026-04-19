@@ -49,6 +49,7 @@ describe('InspectionsService', () => {
       create: jest.fn(),
       save: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
     };
     signaturesRepository = {
       findOne: jest.fn(),
@@ -63,6 +64,7 @@ describe('InspectionsService', () => {
     };
     checklistItemsRepository = {
       findOne: jest.fn(),
+      find: jest.fn(),
     };
     teamsRepository = {
       findOne: jest.fn(),
