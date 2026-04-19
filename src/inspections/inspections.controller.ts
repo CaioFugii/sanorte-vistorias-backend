@@ -80,7 +80,7 @@ export class InspectionsController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.inspectionsService.findOne(id);
+    return this.inspectionsService.findOneDetail(id);
   }
 
   @Put(':id')

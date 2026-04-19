@@ -1148,7 +1148,80 @@ Exemplo de item em `data`:
 
 - Auth: JWT
 - `:id` aceita `id` ou `externalId`
-- Response 200: `Inspection` completo com relações
+- Response 200: objeto **enxuto** pensado para a tela de detalhe + PDF (menos RAM no dyno que o modelo antigo com checklist/itens aninhados no grafo).
+
+**Raiz**
+
+| Campo | Uso |
+|--------|-----|
+| `id`, `externalId` | Identificação; `serverId` === `id` (UUID interno para PUT/POST que exigem id do servidor) |
+| `checklistId` | Abrir checklist no cache da UI |
+| `status`, `module`, `hasParalysisPenalty` | Estado e chips |
+| `serviceOrderId`, `serviceOrder` | `serviceOrder.osNumber` para título da OS quando houver OS |
+| `updatedAt` | Fallback de “última alteração” ao montar views |
+| `serviceDescription`, `locationDescription`, `createdAt`, `finalizedAt`, `scorePercent` | PDF / resumo |
+| `team`, `checklist` | Opcionais `{ name }` para enriquecer PDF; nomes também vêm do cache por `checklistId` / equipe |
+
+**`items[]`** — `id`, `checklistItemId`, `answer`, `notes`, `updatedAt`, `resolutionEvidencePath` (para PDF quando existir). Sem objeto `checklistItem` aninhado.
+
+**`evidences[]`** — `id`, `inspectionItemId` (ou `null`), `fileName`, `mimeType`, `url` e/ou `dataUrl` (quando a mídia está como data URL), opcionais `cloudinaryPublicId`, `bytes`, `size`, `format`, `width`, `height`, `createdAt`.
+
+**`signatures[]`** — ordem por `signedAt`; use o primeiro item conforme regra do app: `id`, `signerName`, `signedAt`, imagem via `url` / `dataUrl` / `cloudinaryPublicId`.
+
+Exemplo (truncado):
+
+```json
+{
+  "id": "uuid",
+  "externalId": null,
+  "serverId": "uuid",
+  "checklistId": "uuid",
+  "status": "RASCUNHO",
+  "module": "QUALIDADE",
+  "hasParalysisPenalty": false,
+  "serviceOrderId": "uuid",
+  "serviceDescription": "Vistoria",
+  "locationDescription": "Bloco A",
+  "createdAt": "2026-04-19T12:00:00.000Z",
+  "finalizedAt": null,
+  "updatedAt": "2026-04-19T14:00:00.000Z",
+  "scorePercent": 88.5,
+  "team": { "name": "Equipe 1" },
+  "checklist": { "name": "Checklist QLT" },
+  "serviceOrder": { "osNumber": "12345" },
+  "items": [
+    {
+      "id": "uuid",
+      "checklistItemId": "uuid",
+      "answer": "CONFORME",
+      "notes": null,
+      "updatedAt": "2026-04-19T13:00:00.000Z",
+      "resolutionEvidencePath": null
+    }
+  ],
+  "evidences": [
+    {
+      "id": "uuid",
+      "inspectionItemId": "uuid",
+      "fileName": "foto.jpg",
+      "mimeType": "image/jpeg",
+      "url": "https://res.cloudinary.com/...",
+      "cloudinaryPublicId": "quality/evidences/x",
+      "bytes": 1200,
+      "size": 1200,
+      "createdAt": "2026-04-19T13:00:00.000Z"
+    }
+  ],
+  "signatures": [
+    {
+      "id": "uuid",
+      "signerName": "João",
+      "signedAt": "2026-04-19T13:00:00.000Z",
+      "url": "https://res.cloudinary.com/..."
+    }
+  ]
+}
+```
 
 ### PUT /inspections/:id
 

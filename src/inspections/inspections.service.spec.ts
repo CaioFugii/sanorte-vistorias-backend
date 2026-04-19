@@ -91,6 +91,7 @@ describe('InspectionsService', () => {
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
+      {} as any,
       teamsRepository as any,
       serviceOrderRepository as any,
       cloudinaryService as any,

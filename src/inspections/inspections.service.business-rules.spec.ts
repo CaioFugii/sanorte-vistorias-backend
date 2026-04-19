@@ -87,6 +87,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       signaturesRepository as any,
       pendingAdjustmentsRepository as any,
       checklistItemsRepository as any,
+      {} as any,
       teamsRepository as any,
       serviceOrderRepository as any,
       {

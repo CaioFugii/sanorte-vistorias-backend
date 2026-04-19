@@ -131,7 +131,7 @@ Authorization: Bearer <token>
 - `POST /inspections` (FISCAL/GESTOR)
 - `GET /inspections` (GESTOR/ADMIN; não lista `RASCUNHO`)
 - `GET /inspections/mine` (FISCAL)
-- `GET /inspections/:id` (autenticado)
+- `GET /inspections/:id` (autenticado; resposta enxuta para detalhe/PDF)
 - `PUT /inspections/:id` (autenticado; regra por status/role)
 - `PUT /inspections/:id/items` (autenticado)
 - `POST /inspections/:id/evidences` (multipart)

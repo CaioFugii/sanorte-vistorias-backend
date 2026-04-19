@@ -29,6 +29,12 @@ import {
 } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { InspectionMineListItem } from './dto/inspection-mine-list-item.dto';
+import {
+  InspectionDetailEvidenceDto,
+  InspectionDetailItemDto,
+  InspectionDetailResponseDto,
+  InspectionDetailSignatureDto,
+} from './dto/inspection-detail-response.dto';
 import { InspectionDomainService } from './inspection-domain.service';
 import {
   SyncInspectionDto,
@@ -55,6 +61,8 @@ export class InspectionsService {
     private pendingAdjustmentsRepository: Repository<PendingAdjustment>,
     @InjectRepository(ChecklistItem)
     private checklistItemsRepository: Repository<ChecklistItem>,
+    @InjectRepository(Checklist)
+    private checklistsRepository: Repository<Checklist>,
     @InjectRepository(Team)
     private teamsRepository: Repository<Team>,
     @InjectRepository(ServiceOrder)
@@ -387,13 +395,6 @@ export class InspectionsService {
   }
 
   private toInspectionMineListItem(inspection: Inspection): InspectionMineListItem {
-    const rawScore = inspection.scorePercent as unknown;
-    let scorePercent: number | null = null;
-    if (rawScore !== undefined && rawScore !== null && rawScore !== '') {
-      const n = Number(rawScore);
-      scorePercent = Number.isFinite(n) ? n : null;
-    }
-
     return {
       id: inspection.id,
       externalId: inspection.externalId ?? null,
@@ -402,7 +403,7 @@ export class InspectionsService {
       locationDescription: inspection.locationDescription ?? null,
       status: inspection.status,
       hasParalysisPenalty: inspection.hasParalysisPenalty === true,
-      scorePercent,
+      scorePercent: this.normalizeScorePercent(inspection.scorePercent),
       finalizedAt: inspection.finalizedAt ?? null,
       createdAt: inspection.createdAt,
       serviceOrder: inspection.serviceOrder
@@ -439,6 +440,204 @@ export class InspectionsService {
     }
 
     return inspection;
+  }
+
+  /**
+   * `GET /inspections/:id` — payload mínimo para tela e PDF (sem checklist/items aninhados no item).
+   * Uso interno (finalize, sync, etc.) continua em `findOne()`.
+   */
+  async findOneDetail(id: string): Promise<InspectionDetailResponseDto> {
+    const base = await this.inspectionsRepository.findOne({
+      where: [{ id }, { externalId: id }],
+      select: {
+        id: true,
+        externalId: true,
+        checklistId: true,
+        teamId: true,
+        serviceOrderId: true,
+        status: true,
+        module: true,
+        hasParalysisPenalty: true,
+        serviceDescription: true,
+        locationDescription: true,
+        createdAt: true,
+        finalizedAt: true,
+        updatedAt: true,
+        scorePercent: true,
+      },
+    });
+
+    if (!base) {
+      throw new NotFoundException('Vistoria não encontrada');
+    }
+
+    const inspectionId = base.id;
+
+    const [itemRows, evidenceRows, signatureRows, team, checklist, serviceOrder] =
+      await Promise.all([
+        this.inspectionItemsRepository.find({
+          where: { inspectionId },
+          select: {
+            id: true,
+            checklistItemId: true,
+            answer: true,
+            notes: true,
+            updatedAt: true,
+            resolutionEvidencePath: true,
+          },
+          order: { createdAt: 'ASC' },
+        }),
+        this.evidencesRepository.find({
+          where: { inspectionId },
+          select: {
+            id: true,
+            inspectionItemId: true,
+            fileName: true,
+            mimeType: true,
+            filePath: true,
+            url: true,
+            cloudinaryPublicId: true,
+            bytes: true,
+            size: true,
+            format: true,
+            width: true,
+            height: true,
+            createdAt: true,
+          },
+          order: { createdAt: 'ASC' },
+        }),
+        this.signaturesRepository.find({
+          where: { inspectionId },
+          select: {
+            id: true,
+            signerName: true,
+            signedAt: true,
+            url: true,
+            imagePath: true,
+            cloudinaryPublicId: true,
+          },
+          order: { signedAt: 'ASC' },
+        }),
+        base.teamId
+          ? this.teamsRepository.findOne({
+              where: { id: base.teamId },
+              select: { name: true },
+            })
+          : Promise.resolve(null),
+        this.checklistsRepository.findOne({
+          where: { id: base.checklistId },
+          select: { name: true },
+        }),
+        base.serviceOrderId
+          ? this.serviceOrderRepository.findOne({
+              where: { id: base.serviceOrderId },
+              select: { osNumber: true },
+            })
+          : Promise.resolve(null),
+      ]);
+
+    const items: InspectionDetailItemDto[] = itemRows.map((row) => ({
+      id: row.id,
+      checklistItemId: row.checklistItemId,
+      answer: row.answer ?? null,
+      notes: row.notes ?? null,
+      updatedAt: row.updatedAt,
+      resolutionEvidencePath: row.resolutionEvidencePath ?? null,
+    }));
+
+    const evidences: InspectionDetailEvidenceDto[] = evidenceRows.map((ev) =>
+      this.mapEvidenceDetail(ev),
+    );
+
+    const signatures: InspectionDetailSignatureDto[] = signatureRows.map((sig) =>
+      this.mapSignatureDetail(sig),
+    );
+
+    return {
+      id: base.id,
+      externalId: base.externalId ?? null,
+      serverId: base.id,
+      checklistId: base.checklistId,
+      status: base.status,
+      module: base.module,
+      hasParalysisPenalty: base.hasParalysisPenalty === true,
+      serviceOrderId: base.serviceOrderId ?? null,
+      serviceDescription: base.serviceDescription ?? null,
+      locationDescription: base.locationDescription ?? null,
+      createdAt: base.createdAt,
+      finalizedAt: base.finalizedAt ?? null,
+      updatedAt: base.updatedAt,
+      scorePercent: this.normalizeScorePercent(base.scorePercent),
+      team: team?.name != null ? { name: team.name } : null,
+      checklist: checklist?.name != null ? { name: checklist.name } : null,
+      serviceOrder: serviceOrder?.osNumber != null
+        ? { osNumber: serviceOrder.osNumber }
+        : null,
+      items,
+      evidences,
+      signatures,
+    };
+  }
+
+  private normalizeScorePercent(raw: unknown): number | null {
+    if (raw === undefined || raw === null || raw === '') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  private splitPublicUrlAndDataUrl(
+    stored: string | null | undefined,
+  ): { url: string | null; dataUrl: string | null } {
+    const s = stored?.trim();
+    if (!s) return { url: null, dataUrl: null };
+    if (s.startsWith('data:')) return { url: null, dataUrl: s };
+    return { url: s, dataUrl: null };
+  }
+
+  private mapEvidenceDetail(ev: Evidence): InspectionDetailEvidenceDto {
+    const primary =
+      (ev.url && String(ev.url).trim()) ||
+      (ev.filePath && String(ev.filePath).trim()) ||
+      null;
+    const { url, dataUrl } = this.splitPublicUrlAndDataUrl(primary);
+
+    const bytesVal = ev.bytes ?? ev.size;
+    return {
+      id: ev.id,
+      inspectionItemId: ev.inspectionItemId ?? null,
+      fileName: ev.fileName,
+      mimeType: ev.mimeType,
+      url,
+      ...(dataUrl ? { dataUrl } : {}),
+      ...(ev.cloudinaryPublicId
+        ? { cloudinaryPublicId: ev.cloudinaryPublicId }
+        : {}),
+      ...(bytesVal != null ? { bytes: bytesVal } : {}),
+      size: ev.size,
+      ...(ev.format != null ? { format: ev.format } : {}),
+      ...(ev.width != null ? { width: ev.width } : {}),
+      ...(ev.height != null ? { height: ev.height } : {}),
+      createdAt: ev.createdAt,
+    };
+  }
+
+  private mapSignatureDetail(sig: Signature): InspectionDetailSignatureDto {
+    const primary =
+      (sig.url && String(sig.url).trim()) ||
+      (sig.imagePath && String(sig.imagePath).trim()) ||
+      null;
+    const { url, dataUrl } = this.splitPublicUrlAndDataUrl(primary);
+
+    return {
+      id: sig.id,
+      signerName: sig.signerName,
+      signedAt: sig.signedAt,
+      ...(url ? { url } : {}),
+      ...(dataUrl ? { dataUrl } : {}),
+      ...(sig.cloudinaryPublicId
+        ? { cloudinaryPublicId: sig.cloudinaryPublicId }
+        : {}),
+    };
   }
 
   /**
