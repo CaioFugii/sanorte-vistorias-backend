@@ -640,6 +640,25 @@ export class InspectionsService {
     };
   }
 
+  /** Para `PUT .../items`: só o necessário para regras + nota — não usar `findOne()` com grafo inteiro. */
+  private async findInspectionCoreForUpdateItems(
+    id: string,
+  ): Promise<
+    Pick<
+      Inspection,
+      'id' | 'status' | 'module' | 'hasParalysisPenalty'
+    >
+  > {
+    const inspection = await this.inspectionsRepository.findOne({
+      where: [{ id }, { externalId: id }],
+      select: ['id', 'status', 'module', 'hasParalysisPenalty'],
+    });
+    if (!inspection) {
+      throw new NotFoundException('Vistoria não encontrada');
+    }
+    return inspection;
+  }
+
   /**
    * Carrega só id/status/dono — necessário para uploads de evidência.
    * Não usar `findOne` aqui: ele puxa checklist inteiro, todos os items, todas as evidências etc.;
@@ -790,7 +809,7 @@ export class InspectionsService {
     userId: string,
     userRole: UserRole,
   ): Promise<InspectionItem[]> {
-    const inspection = await this.findOne(id);
+    const inspection = await this.findInspectionCoreForUpdateItems(id);
 
     if (
       userRole === UserRole.FISCAL &&
@@ -808,16 +827,22 @@ export class InspectionsService {
         notes: item.notes,
       });
       const updated = await this.inspectionItemsRepository.findOne({
-        where: { id: item.inspectionItemId },
+        where: {
+          id: item.inspectionItemId,
+          inspectionId: inspection.id,
+        },
       });
       if (updated) updatedItems.push(updated);
     }
 
     const refreshedItems = await this.inspectionItemsRepository.find({
       where: { inspectionId: inspection.id },
+      select: ['id', 'answer'],
     });
     const baseScorePercent =
-      this.inspectionDomainService.calculateScorePercent(refreshedItems);
+      this.inspectionDomainService.calculateScorePercent(
+        refreshedItems as InspectionItem[],
+      );
     const scorePercent = this.inspectionDomainService.applyParalysisPenalty(
       baseScorePercent,
       inspection.hasParalysisPenalty === true,

@@ -274,6 +274,12 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: true,
     } as Inspection;
 
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.FINALIZADA,
+      module: ModuleType.QUALIDADE,
+      hasParalysisPenalty: true,
+    });
     jest.spyOn(service, 'findOne').mockResolvedValue(inspection);
     inspectionItemsRepository.findOne.mockResolvedValue({
       id: 'item-1',
@@ -311,6 +317,12 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: false,
     } as Inspection;
 
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.PENDENTE_AJUSTE,
+      module: ModuleType.QUALIDADE,
+      hasParalysisPenalty: false,
+    });
     jest.spyOn(service, 'findOne').mockResolvedValue(inspection);
     inspectionItemsRepository.findOne.mockResolvedValue({
       id: 'item-1',
@@ -355,6 +367,12 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: false,
     } as Inspection;
 
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.FINALIZADA,
+      module: ModuleType.REMOTO,
+      hasParalysisPenalty: false,
+    });
     jest.spyOn(service, 'findOne').mockResolvedValue(inspection);
     inspectionItemsRepository.findOne.mockResolvedValue({
       id: 'item-1',
