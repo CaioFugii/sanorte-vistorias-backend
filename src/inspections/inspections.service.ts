@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DataSource } from 'typeorm';
+import { Repository, In, DataSource, Brackets } from 'typeorm';
 import {
   Inspection,
   InspectionItem,
@@ -364,11 +364,19 @@ export class InspectionsService {
       });
     }
 
-    applyContractScopeFilter(
-      query,
-      allowedContractIds,
-      'serviceOrder.contractId',
-    );
+    if (allowedContractIds !== null) {
+      if (allowedContractIds.length === 0) {
+        query.andWhere('serviceOrder.id IS NULL');
+      } else {
+        query.andWhere(
+          new Brackets((qb) => {
+            qb.where('serviceOrder.contractId IN (:...allowedContractIds)', {
+              allowedContractIds,
+            }).orWhere('serviceOrder.id IS NULL');
+          }),
+        );
+      }
+    }
 
     const [entities, total] = await query
       .skip(skip)
