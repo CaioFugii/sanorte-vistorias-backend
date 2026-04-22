@@ -481,8 +481,15 @@ export class InspectionsService {
 
     const inspectionId = base.id;
 
-    const [itemRows, evidenceRows, signatureRows, team, checklist, serviceOrder] =
-      await Promise.all([
+    const [
+      itemRows,
+      evidenceRows,
+      signatureRows,
+      team,
+      checklist,
+      serviceOrder,
+      checklistItemRows,
+    ] = await Promise.all([
         this.inspectionItemsRepository.find({
           where: { inspectionId },
           select: {
@@ -542,11 +549,22 @@ export class InspectionsService {
               select: { osNumber: true },
             })
           : Promise.resolve(null),
+        this.checklistItemsRepository.find({
+          where: { checklistId: base.checklistId },
+          select: { id: true, title: true },
+        }),
       ]);
+
+    const checklistTitleById = new Map(
+      checklistItemRows.map((row) => [row.id, row.title] as const),
+    );
 
     const items: InspectionDetailItemDto[] = itemRows.map((row) => ({
       id: row.id,
       checklistItemId: row.checklistItemId,
+      checklistItem: {
+        title: checklistTitleById.get(row.checklistItemId) ?? null,
+      },
       answer: row.answer ?? null,
       notes: row.notes ?? null,
       updatedAt: row.updatedAt,

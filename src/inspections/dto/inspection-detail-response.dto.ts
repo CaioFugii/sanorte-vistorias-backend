@@ -4,6 +4,9 @@ import { ModuleType, InspectionStatus, ChecklistAnswer } from '../../common/enum
 export interface InspectionDetailItemDto {
   id: string;
   checklistItemId: string;
+  checklistItem: {
+    title: string | null;
+  };
   answer: ChecklistAnswer | null;
   notes: string | null;
   updatedAt: Date;
