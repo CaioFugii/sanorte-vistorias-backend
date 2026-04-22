@@ -36,6 +36,10 @@ Authorization: Bearer <token>
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
   - anexos e assinatura: `POST /inspections/:id/evidences`, `DELETE /inspections/:id/evidences/:evidenceId`, `POST /inspections/:id/signature`
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
+- Relatórios dinâmicos:
+  - tipos e schema: `GET /reports/types`, `GET /reports/types/:code/fields`
+  - upload de imagens/assinaturas: `POST /reports/files`
+  - persistência e detalhe: `POST /reports/records`, `GET /reports/records/:id`
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
 - Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist` (todas aceitam filtro opcional `contractId`; ver `Dashboards`)
@@ -85,6 +89,12 @@ Authorization: Bearer <token>
   - disponível apenas para GESTOR/ADMIN.
   - remove penalidade e recalcula nota (correção de erro).
 - `POST /inspections/:id/finalize`: assinatura é opcional; para itens não conformes com obrigatoriedade, evidência é exigida.
+- Relatórios dinâmicos (`/reports`):
+  - backend não gera PDF; frontend gera o PDF com base nos dados estruturados retornados.
+  - `POST /reports/files` aceita apenas imagem (`image/*`) e salva metadados/referências em `report_files`.
+  - `POST /reports/records` valida `formData` conforme o schema do tipo (`report_type_fields`).
+  - campos `image`/`signature` no `formData` devem referenciar uploads realizados em `/reports/files`.
+  - o `formData` persistido substitui IDs de arquivo por objetos estruturados com metadados de storage.
 
 ### Máquina de status da vistoria (visão frontend)
 
@@ -188,6 +198,12 @@ Content-Type: application/json
 
 ```json
 ["PENDENTE", "RESOLVIDA"]
+```
+
+### ReportFieldType
+
+```json
+["text", "textarea", "number", "date", "datetime", "select", "radio", "checkbox", "image", "signature"]
 ```
 
 ## Paginação
@@ -466,6 +482,98 @@ Resposta paginada:
   "resolutionEvidencePath": "https://...",
   "createdAt": "2026-02-19T12:00:00.000Z",
   "updatedAt": "2026-02-19T12:00:00.000Z"
+}
+```
+
+### ReportType
+
+```json
+{
+  "id": "uuid",
+  "code": "VISTORIA_OBRA",
+  "name": "Vistoria de Obra",
+  "description": "Relatório padrão para vistorias de obra.",
+  "version": 1,
+  "active": true,
+  "createdAt": "2026-02-19T12:00:00.000Z",
+  "updatedAt": "2026-02-19T12:00:00.000Z"
+}
+```
+
+### ReportTypeField
+
+```json
+{
+  "id": "uuid",
+  "reportTypeId": "uuid",
+  "fieldKey": "fotosGerais",
+  "label": "Fotos Gerais",
+  "type": "image",
+  "required": false,
+  "order": 4,
+  "placeholder": null,
+  "helpText": null,
+  "options": null,
+  "defaultValue": null,
+  "multiple": true,
+  "createdAt": "2026-02-19T12:00:00.000Z",
+  "updatedAt": "2026-02-19T12:00:00.000Z"
+}
+```
+
+### ReportFile
+
+```json
+{
+  "id": "uuid",
+  "reportRecordId": "uuid",
+  "reportTypeId": "uuid",
+  "fieldKey": "fotosGerais",
+  "originalName": "foto-1.jpg",
+  "mimeType": "image/jpeg",
+  "size": 120031,
+  "url": "https://res.cloudinary.com/.../image/upload/...jpg",
+  "storageProvider": "cloudinary",
+  "storageKey": "quality/reports/images/abc123",
+  "publicId": "quality/reports/images/abc123",
+  "createdBy": "uuid",
+  "createdAt": "2026-02-19T12:00:00.000Z"
+}
+```
+
+### ReportRecord
+
+```json
+{
+  "id": "uuid",
+  "reportTypeId": "uuid",
+  "userId": "uuid",
+  "schemaVersion": 1,
+  "formData": {
+    "nomeResponsavel": "Carlos",
+    "dataVistoria": "2026-04-22",
+    "fotosGerais": [
+      {
+        "id": "uuid-file",
+        "url": "https://res.cloudinary.com/.../image/upload/...jpg",
+        "storageProvider": "cloudinary",
+        "storageKey": "quality/reports/images/abc123",
+        "publicId": "quality/reports/images/abc123",
+        "originalName": "foto.jpg",
+        "mimeType": "image/jpeg",
+        "size": 120031
+      }
+    ]
+  },
+  "createdAt": "2026-02-19T12:00:00.000Z",
+  "updatedAt": "2026-02-19T12:00:00.000Z",
+  "reportType": {
+    "id": "uuid",
+    "code": "VISTORIA_OBRA",
+    "name": "Vistoria de Obra",
+    "version": 1
+  },
+  "files": []
 }
 ```
 
@@ -1469,6 +1577,225 @@ Request JSON:
 
 Response 200: `Inspection` com `status = RESOLVIDA`
 
+## Reports (Relatórios dinâmicos)
+
+### GET /reports/types
+
+- Auth: JWT
+- Response: lista de tipos de relatório ativos (`report_types`), ordenada por nome
+
+Response 200:
+
+```json
+[
+  {
+    "id": "uuid",
+    "code": "RELATORIO_OCORRENCIA",
+    "name": "Relatório de Ocorrência",
+    "description": "Relatório para registro de ocorrências em campo.",
+    "version": 1,
+    "active": true,
+    "createdAt": "2026-02-19T12:00:00.000Z",
+    "updatedAt": "2026-02-19T12:00:00.000Z"
+  }
+]
+```
+
+### GET /reports/types/:code/fields
+
+- Auth: JWT
+- Path:
+  - `code`: código do tipo de relatório (ex.: `VISTORIA_OBRA`)
+- Response: schema dinâmico do formulário (`report_type_fields`) ordenado por `order`
+
+Response 200:
+
+```json
+[
+  {
+    "id": "uuid",
+    "reportTypeId": "uuid",
+    "fieldKey": "nomeResponsavel",
+    "label": "Nome do Responsável",
+    "type": "text",
+    "required": true,
+    "order": 1,
+    "placeholder": "Digite o nome do responsável",
+    "helpText": null,
+    "options": null,
+    "defaultValue": null,
+    "multiple": false,
+    "createdAt": "2026-02-19T12:00:00.000Z",
+    "updatedAt": "2026-02-19T12:00:00.000Z"
+  },
+  {
+    "id": "uuid",
+    "reportTypeId": "uuid",
+    "fieldKey": "fotosGerais",
+    "label": "Fotos Gerais",
+    "type": "image",
+    "required": false,
+    "order": 4,
+    "placeholder": null,
+    "helpText": null,
+    "options": null,
+    "defaultValue": null,
+    "multiple": true,
+    "createdAt": "2026-02-19T12:00:00.000Z",
+    "updatedAt": "2026-02-19T12:00:00.000Z"
+  }
+]
+```
+
+### POST /reports/files
+
+- Auth: JWT
+- Request JSON: não se aplica (`multipart/form-data` com campo `file`)
+- Body multipart:
+  - `file` (obrigatório): imagem (`image/*`), máximo 10MB
+  - `reportTypeCode` (obrigatório): código do tipo de relatório
+  - `fieldKey` (obrigatório): chave do campo `image`/`signature` daquele tipo
+  - `reportRecordId` (opcional): UUID do registro já criado, para anexação direta
+- Regras:
+  - só aceita upload para campos do tipo `image` ou `signature`
+  - valida se `fieldKey` pertence ao `reportTypeCode`
+  - salva somente metadados e referências de storage (`cloudinary`) em `report_files`
+
+Response 201:
+
+```json
+{
+  "id": "uuid",
+  "reportRecordId": null,
+  "reportTypeId": "uuid",
+  "fieldKey": "fotosGerais",
+  "originalName": "foto-1.jpg",
+  "mimeType": "image/jpeg",
+  "size": 120031,
+  "url": "https://res.cloudinary.com/.../image/upload/...jpg",
+  "storageProvider": "cloudinary",
+  "storageKey": "quality/reports/images/abc123",
+  "publicId": "quality/reports/images/abc123",
+  "createdBy": "uuid",
+  "createdAt": "2026-02-19T12:00:00.000Z"
+}
+```
+
+### POST /reports/records
+
+- Auth: JWT
+- Request JSON:
+  - `reportTypeCode` (obrigatório)
+  - `formData` (obrigatório, objeto)
+- Regras de validação:
+  - valida presença de obrigatórios, tipos e opções conforme `report_type_fields`
+  - rejeita chaves fora do schema definido para o tipo
+  - campos `image`/`signature` recebem IDs de uploads feitos em `POST /reports/files`
+  - no persistir, os IDs são substituídos no `formData` por objetos estruturados com metadados de arquivo
+
+Request JSON (exemplo):
+
+```json
+{
+  "reportTypeCode": "VISTORIA_OBRA",
+  "formData": {
+    "nomeResponsavel": "Carlos",
+    "dataVistoria": "2026-04-22",
+    "observacoes": "Tudo conforme",
+    "fotosGerais": ["uuid-file-1", "uuid-file-2"],
+    "assinaturaResponsavel": "uuid-file-3"
+  }
+}
+```
+
+Response 201:
+
+```json
+{
+  "id": "uuid",
+  "reportTypeId": "uuid",
+  "userId": "uuid",
+  "schemaVersion": 1,
+  "formData": {
+    "nomeResponsavel": "Carlos",
+    "dataVistoria": "2026-04-22",
+    "observacoes": "Tudo conforme",
+    "fotosGerais": [
+      {
+        "id": "uuid-file-1",
+        "url": "https://res.cloudinary.com/.../image/upload/...jpg",
+        "storageProvider": "cloudinary",
+        "storageKey": "quality/reports/images/abc123",
+        "publicId": "quality/reports/images/abc123",
+        "originalName": "foto-1.jpg",
+        "mimeType": "image/jpeg",
+        "size": 120031
+      }
+    ],
+    "assinaturaResponsavel": {
+      "id": "uuid-file-3",
+      "url": "https://res.cloudinary.com/.../image/upload/...png",
+      "storageProvider": "cloudinary",
+      "storageKey": "quality/reports/signatures/def456",
+      "publicId": "quality/reports/signatures/def456",
+      "originalName": "assinatura.png",
+      "mimeType": "image/png",
+      "size": 43021
+    }
+  },
+  "createdAt": "2026-04-22T18:00:00.000Z",
+  "updatedAt": "2026-04-22T18:00:00.000Z",
+  "reportType": {
+    "id": "uuid",
+    "code": "VISTORIA_OBRA",
+    "name": "Vistoria de Obra",
+    "description": "Relatório padrão para vistorias de obra.",
+    "version": 1,
+    "active": true,
+    "createdAt": "2026-04-20T10:00:00.000Z",
+    "updatedAt": "2026-04-20T10:00:00.000Z"
+  },
+  "files": []
+}
+```
+
+### GET /reports/records/:id
+
+- Auth: JWT
+- Path:
+  - `id`: UUID do registro de relatório
+- Regras de acesso:
+  - `ADMIN` e `GESTOR` podem consultar qualquer registro
+  - `FISCAL` pode consultar apenas registros criados por ele
+- Response 200: `ReportRecord` com `reportType` e `files` relacionados
+
+Response 200:
+
+```json
+{
+  "id": "uuid",
+  "reportTypeId": "uuid",
+  "userId": "uuid",
+  "schemaVersion": 1,
+  "formData": {
+    "nomeResponsavel": "Carlos"
+  },
+  "createdAt": "2026-04-22T18:00:00.000Z",
+  "updatedAt": "2026-04-22T18:00:00.000Z",
+  "reportType": {
+    "id": "uuid",
+    "code": "VISTORIA_OBRA",
+    "name": "Vistoria de Obra",
+    "description": "Relatório padrão para vistorias de obra.",
+    "version": 1,
+    "active": true,
+    "createdAt": "2026-04-20T10:00:00.000Z",
+    "updatedAt": "2026-04-20T10:00:00.000Z"
+  },
+  "files": []
+}
+```
+
 ## Sync
 
 ### POST /sync/inspections
@@ -1932,6 +2259,7 @@ Response 200:
 - Resolver itens não conformes e pendências
 - Listar apenas as próprias vistorias (`/inspections/mine`)
 - Todos os dados listados são restringidos aos contratos vinculados ao usuário
+- Relatórios dinâmicos: listar tipos/schema, subir arquivos e criar/consultar próprios registros (`/reports/*`)
 
 ### GESTOR
 
@@ -1941,12 +2269,14 @@ Response 200:
 - Resolver itens não conformes e pendências
 - Acessar listagem geral de vistorias
 - Dados operacionais e dashboards limitados aos contratos vinculados ao usuário
+- Relatórios dinâmicos: acesso completo de leitura (`/reports/records/:id`) e criação/upload (`/reports/*`)
 
 ### ADMIN
 
 - Todas as permissões operacionais do GESTOR
 - Importar OS via Excel (`POST /service-orders/import`)
 - CRUD de usuários, contratos/cidades, equipes, colaboradores e checklists
+- Relatórios dinâmicos: acesso completo de leitura e operação (`/reports/*`)
 
 ## Erros comuns
 
@@ -1986,3 +2316,10 @@ Mensagens relevantes do domínio:
 - `Resolva todos os itens não conformes antes de resolver a vistoria. Use POST /inspections/:id/items/:itemId/resolve para cada item.`
 - `Item do checklist não encontrado`
 - `Assets must be uploaded before sync`
+- `Tipo de relatório não encontrado ou inativo`
+- `fieldKey inválido para o tipo de relatório`
+- `Upload permitido apenas para campos do tipo image ou signature`
+- `Campo não permitido no formulário: <fieldKey>`
+- `Campo obrigatório não informado: <fieldKey>`
+- `Um ou mais arquivos de imagem/assinatura são inválidos para este relatório`
+- `Você não tem acesso a este relatório`
