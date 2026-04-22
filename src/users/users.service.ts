@@ -32,6 +32,43 @@ export class UsersService {
     });
   }
 
+  async findOneForAuth(
+    id: string,
+  ): Promise<
+    (Pick<User, 'id' | 'name' | 'email' | 'role'> & {
+      contracts: Pick<Contract, 'id' | 'name'>[];
+    }) | null
+  > {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    const contracts = await this.contractsRepository
+      .createQueryBuilder('contract')
+      .innerJoin('user_contracts', 'user_contracts', 'user_contracts.contract_id = contract.id')
+      .where('user_contracts.user_id = :userId', { userId: id })
+      .select(['contract.id', 'contract.name'])
+      .getMany();
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      contracts,
+    };
+  }
+
   async findAll(
     page: number = 1,
     limit: number = 10,
