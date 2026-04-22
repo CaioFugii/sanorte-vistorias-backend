@@ -6,8 +6,8 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
-import { ReportTypeField } from '@/entities/report-type-field.entity';
-import { ReportRecord } from '@/entities/report-record.entity';
+import { ReportTypeField } from './report-type-field.entity';
+import { ReportRecord } from './report-record.entity';
 
 @Entity('report_types')
 export class ReportType {

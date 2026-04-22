@@ -8,9 +8,9 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
-import { ReportType } from '@/entities/report-type.entity';
-import { ReportFile } from '@/entities/report-file.entity';
-import { User } from '@/entities/user.entity';
+import { ReportType } from './report-type.entity';
+import { ReportFile } from './report-file.entity';
+import { User } from './user.entity';
 
 @Entity('report_records')
 export class ReportRecord {

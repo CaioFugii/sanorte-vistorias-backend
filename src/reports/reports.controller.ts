@@ -12,12 +12,12 @@ import {
   FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@/common/decorators/current-user.decorator';
-import { createTempDiskStorage } from '@/common/multer/temp-disk.storage';
-import { CreateReportRecordDto } from '@/reports/dto/create-report-record.dto';
-import { UploadReportFileDto } from '@/reports/dto/upload-report-file.dto';
-import { ReportsService } from '@/reports/reports.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { createTempDiskStorage } from '../common/multer/temp-disk.storage';
+import { CreateReportRecordDto } from './dto/create-report-record.dto';
+import { UploadReportFileDto } from './dto/upload-report-file.dto';
+import { ReportsService } from './reports.service';
 
 @Controller('reports')
 @UseGuards(JwtAuthGuard)
