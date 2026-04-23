@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
+import { ReportOrientation } from '../common/enums';
 import { ReportTypeField } from './report-type-field.entity';
 import { ReportRecord } from './report-record.entity';
 
@@ -28,6 +29,14 @@ export class ReportType {
 
   @Column({ default: true })
   active: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: ReportOrientation,
+    enumName: 'report_orientation_enum',
+    default: ReportOrientation.RETRATO,
+  })
+  orientation: ReportOrientation;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
