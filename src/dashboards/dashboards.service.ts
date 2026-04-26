@@ -284,8 +284,8 @@ export class DashboardsService {
       .groupBy('inspection.teamId')
       .addGroupBy('team.name')
       .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
-      .andWhere('inspection.createdAt >= :from', { from: filters.from })
-      .andWhere('inspection.createdAt <= :to', { to: toLimit });
+      .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
+      .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
 
     if (filters.module) {
       qb.andWhere('inspection.module = :module', { module: filters.module });
@@ -362,8 +362,8 @@ export class DashboardsService {
       })
       .andWhere('inspection.teamId = :teamId', { teamId })
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
-      .andWhere('inspection.createdAt >= :from', { from: filters.from })
-      .andWhere('inspection.createdAt <= :to', { to: toLimit });
+      .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
+      .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
 
     if (filters.module) {
       qb.andWhere('inspection.module = :module', { module: filters.module });
@@ -411,9 +411,9 @@ export class DashboardsService {
   }): Promise<QualityByServiceResponseDto> {
     this.validateDateRange(filters.from, filters.to);
 
-    const monthExpr = `to_char(timezone('${DASHBOARD_TIMEZONE}', COALESCE(inspection.finalizedAt, inspection.createdAt)), 'YYYY-MM')`;
+    const monthExpr = `to_char(timezone('${DASHBOARD_TIMEZONE}', serviceOrder.fim_execucao), 'YYYY-MM')`;
     const serviceLabelExpr = `COALESCE(NULLIF(checklistSector.name, ''), NULLIF(serviceOrderSector.name, ''), NULLIF(inspection.serviceDescription, ''), 'SEM_SERVICO')`;
-    const dayExpr = `DATE(timezone('${DASHBOARD_TIMEZONE}', COALESCE(inspection.finalizedAt, inspection.createdAt)))`;
+    const dayExpr = `DATE(timezone('${DASHBOARD_TIMEZONE}', serviceOrder.fim_execucao))`;
 
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')

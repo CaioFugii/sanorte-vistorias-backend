@@ -49,6 +49,5 @@ export function getDatabaseConfig(
       path.join(__dirname, '../database/migrations/*.js'), // Para produção (compilado)
     ],
     synchronize: false,
-    logging: configService.get('NODE_ENV') === 'development',
   };
 }
