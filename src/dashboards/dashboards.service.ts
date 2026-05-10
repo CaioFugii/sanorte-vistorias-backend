@@ -200,6 +200,13 @@ export class DashboardsService {
     applyContractScopeFilter(qb, allowedContractIds, 'serviceOrder.contractId');
   }
 
+  private applyTemporaryExcludedModulesFilter(qb: any): void {
+    // TEMPORARIO: dashboards devem ignorar OBRAS_INVESTIMENTO
+    qb.andWhere('inspection.module != :excludedDashboardModule', {
+      excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
+    });
+  }
+
   async getSummary(filters: {
     user?: any;
     from: string;
@@ -234,6 +241,7 @@ export class DashboardsService {
       qb.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
     }
 
+    this.applyTemporaryExcludedModulesFilter(qb);
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const row = await qb.getRawOne<{
@@ -298,6 +306,7 @@ export class DashboardsService {
       qb.andWhere('inspection.module = :module', { module: filters.module });
     }
 
+    this.applyTemporaryExcludedModulesFilter(qb);
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
@@ -376,6 +385,7 @@ export class DashboardsService {
       qb.andWhere('inspection.module = :module', { module: filters.module });
     }
 
+    this.applyTemporaryExcludedModulesFilter(qb);
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const row = await qb.getRawOne<{
@@ -449,6 +459,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    this.applyTemporaryExcludedModulesFilter(qb);
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
@@ -559,6 +570,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    this.applyTemporaryExcludedModulesFilter(summaryQb);
     this.applyContractScope(summaryQb, filters.user, filters.contractId);
 
     const rankingQb = this.inspectionsRepository
@@ -585,6 +597,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    this.applyTemporaryExcludedModulesFilter(rankingQb);
     this.applyContractScope(rankingQb, filters.user, filters.contractId);
 
     const [summaryRow, rankingRows] = await Promise.all([
@@ -719,6 +732,10 @@ export class DashboardsService {
       .addOrderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
       .addOrderBy('collaborator.name', 'ASC');
 
+    this.applyTemporaryExcludedModulesFilter(currentSummaryQb);
+    this.applyTemporaryExcludedModulesFilter(previousSummaryQb);
+    this.applyTemporaryExcludedModulesFilter(teamRankingQb);
+    this.applyTemporaryExcludedModulesFilter(collaboratorsQb);
     this.applyContractScope(currentSummaryQb, filters.user, filters.contractId);
     this.applyContractScope(
       previousSummaryQb,
@@ -867,6 +884,7 @@ export class DashboardsService {
       .addOrderBy('COUNT(inspection.id)', 'DESC')
       .limit(limit);
 
+    this.applyTemporaryExcludedModulesFilter(qb);
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
@@ -959,6 +977,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    this.applyTemporaryExcludedModulesFilter(qb);
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{

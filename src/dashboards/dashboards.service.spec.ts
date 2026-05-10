@@ -116,6 +116,12 @@ describe('DashboardsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
     });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module != :excludedDashboardModule',
+      {
+        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
+      },
+    );
   });
 
   it('deve filtrar por contractId quando informado', async () => {
@@ -202,6 +208,18 @@ describe('DashboardsService', () => {
         teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
       },
     );
+    expect(summaryQb.andWhere).toHaveBeenCalledWith(
+      'inspection.module != :excludedDashboardModule',
+      {
+        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
+      },
+    );
+    expect(rankingQb.andWhere).toHaveBeenCalledWith(
+      'inspection.module != :excludedDashboardModule',
+      {
+        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
+      },
+    );
     expect(summaryQb.where).toHaveBeenCalledWith(
       'inspection.status IN (:...qualityStatuses)',
       {
@@ -262,6 +280,12 @@ describe('DashboardsService', () => {
       'inspection.inspectionScope = :inspectionScope',
       {
         inspectionScope: InspectionScope.COLLABORATOR,
+      },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module != :excludedDashboardModule',
+      {
+        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
       },
     );
     expect(qb.setParameter).toHaveBeenCalledWith('lowScoreThreshold', 70);
@@ -351,6 +375,12 @@ describe('DashboardsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
     });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module != :excludedDashboardModule',
+      {
+        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
+      },
+    );
     expect(qb.setParameter).toHaveBeenCalledWith(
       'nonConformAnswer',
       'NAO_CONFORME',
