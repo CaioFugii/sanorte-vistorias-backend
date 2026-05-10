@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
@@ -30,7 +34,10 @@ export class ServiceOrdersService {
     private readonly serviceOrderImportParser: ServiceOrderImportParserService,
   ) {}
 
-  private parseFimExecucaoBoundary(value: string, boundary: 'start' | 'end'): Date {
+  private parseFimExecucaoBoundary(
+    value: string,
+    boundary: 'start' | 'end',
+  ): Date {
     const trimmed = value?.trim();
     if (!trimmed) {
       throw new BadRequestException(
@@ -66,7 +73,10 @@ export class ServiceOrdersService {
    * Rejects when the span from `from` through `to` exceeds 2 calendar years:
    * `to` must not be after the end (UTC) of the day that is exactly 2 years after `from`.
    */
-  private assertFimExecucaoRangeAtMostTwoYears(fromDate: Date, toDate: Date): void {
+  private assertFimExecucaoRangeAtMostTwoYears(
+    fromDate: Date,
+    toDate: Date,
+  ): void {
     if (fromDate.getTime() > toDate.getTime()) {
       throw new BadRequestException('from deve ser anterior ou igual a to.');
     }
@@ -112,7 +122,9 @@ export class ServiceOrdersService {
     }
 
     if (from || to) {
-      const fromDate = from ? this.parseFimExecucaoBoundary(from, 'start') : undefined;
+      const fromDate = from
+        ? this.parseFimExecucaoBoundary(from, 'start')
+        : undefined;
       const toDate = to ? this.parseFimExecucaoBoundary(to, 'end') : undefined;
 
       if (fromDate && toDate) {

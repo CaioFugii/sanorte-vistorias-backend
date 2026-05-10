@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddChecklistInspectionScopeColumn1700000018000
-  implements MigrationInterface
-{
+export class AddChecklistInspectionScopeColumn1700000018000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DO $$

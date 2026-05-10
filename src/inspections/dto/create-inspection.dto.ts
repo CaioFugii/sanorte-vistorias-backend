@@ -19,7 +19,9 @@ export class CreateInspectionDto {
 
   @ValidateIf((o: CreateInspectionDto) => !!o.teamId)
   @IsUUID('4', { message: 'teamId deve ser um UUID válido' })
-  @ValidateIf((o: CreateInspectionDto) => o.module !== ModuleType.SEGURANCA_TRABALHO)
+  @ValidateIf(
+    (o: CreateInspectionDto) => o.module !== ModuleType.SEGURANCA_TRABALHO,
+  )
   @IsNotEmpty({
     message: 'teamId é obrigatório para criar uma nova vistoria.',
   })
@@ -36,11 +38,19 @@ export class CreateInspectionDto {
     message:
       'serviceOrderId é obrigatório. Informe o ID de uma OS cadastrada na tabela de ordens de serviço.',
   })
-  @ValidateIf((o: CreateInspectionDto) => o.module !== ModuleType.SEGURANCA_TRABALHO)
+  @ValidateIf(
+    (o: CreateInspectionDto) =>
+      o.module !== ModuleType.SEGURANCA_TRABALHO &&
+      o.module !== ModuleType.OBRAS_INVESTIMENTO,
+  )
   @IsNotEmpty({
     message: 'serviceOrderId é obrigatório para criar uma nova vistoria.',
   })
   serviceOrderId?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'investmentWorkId deve ser um UUID válido' })
+  investmentWorkId?: string;
 
   @IsOptional()
   @IsString()

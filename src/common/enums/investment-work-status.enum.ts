@@ -1,0 +1,6 @@
+export enum InvestmentWorkStatus {
+  EM_ANDAMENTO = 'EM_ANDAMENTO',
+  PARALISADA = 'PARALISADA',
+  FINALIZADA = 'FINALIZADA',
+  CANCELADA = 'CANCELADA',
+}

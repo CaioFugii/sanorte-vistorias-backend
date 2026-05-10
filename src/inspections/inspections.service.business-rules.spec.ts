@@ -1,10 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InspectionsService } from './inspections.service';
-import {
-  Inspection,
-  InspectionItem,
-  PendingAdjustment,
-} from '../entities';
+import { Inspection, InspectionItem, PendingAdjustment } from '../entities';
 import {
   InspectionStatus,
   ChecklistAnswer,
@@ -25,6 +21,7 @@ describe('InspectionsService - Regras de Negócio', () => {
   let evidencesRepository: any;
   let teamsRepository: any;
   let serviceOrderRepository: any;
+  let investmentWorkRepository: any;
   let dataSource: any;
 
   const mockInspection: Partial<Inspection> = {
@@ -81,6 +78,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       findOne: jest.fn().mockResolvedValue({ id: 'service-order-id' }),
       update: jest.fn(),
     };
+    investmentWorkRepository = {
+      findOne: jest.fn(),
+    };
     dataSource = { getRepository: jest.fn() };
 
     service = new InspectionsService(
@@ -93,6 +93,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       {} as any,
       teamsRepository as any,
       serviceOrderRepository as any,
+      investmentWorkRepository as any,
       {
         uploadImage: jest.fn(),
         uploadImageFromPath: jest.fn(),
@@ -135,7 +136,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       status: InspectionStatus.FINALIZADA,
     } as Inspection);
 
-    await expect(service.remove('test-id')).rejects.toThrow(BadRequestException);
+    await expect(service.remove('test-id')).rejects.toThrow(
+      BadRequestException,
+    );
     expect(inspectionsRepository.delete).not.toHaveBeenCalled();
   });
 
@@ -199,7 +202,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       ...mockInspection,
       module: ModuleType.SEGURANCA_TRABALHO,
     });
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
     inspectionItemsRepository.find.mockImplementation((opts: any) => {
       if (opts?.where?.answer === ChecklistAnswer.NAO_CONFORME) {
         return Promise.resolve([
@@ -235,7 +240,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       ...mockInspection,
       module: ModuleType.REMOTO,
     });
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
     inspectionItemsRepository.find.mockImplementation((opts: any) => {
       if (opts?.where?.answer === ChecklistAnswer.NAO_CONFORME) {
         return Promise.resolve([
@@ -267,7 +274,9 @@ describe('InspectionsService - Regras de Negócio', () => {
   });
 
   it('deve permitir finalizar sem assinatura (assinatura é opcional)', async () => {
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
     inspectionItemsRepository.find.mockImplementation((opts: any) => {
       if (opts?.where?.answer === ChecklistAnswer.NAO_CONFORME) {
         return Promise.resolve([]);
@@ -568,7 +577,9 @@ describe('InspectionsService - Regras de Negócio', () => {
 
   it('deve permitir criar vistoria REMOTO sem serviceDescription', async () => {
     inspectionsRepository.create.mockImplementation((payload: any) => payload);
-    inspectionsRepository.save.mockResolvedValue({ id: 'inspection-remote-id' });
+    inspectionsRepository.save.mockResolvedValue({
+      id: 'inspection-remote-id',
+    });
     dataSource.getRepository.mockReturnValue({
       findOne: jest.fn().mockResolvedValue(null),
     });

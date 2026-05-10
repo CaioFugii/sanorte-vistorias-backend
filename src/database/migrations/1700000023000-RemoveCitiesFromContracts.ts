@@ -1,10 +1,10 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RemoveCitiesFromContracts1700000023000
-  implements MigrationInterface
-{
+export class RemoveCitiesFromContracts1700000023000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_contract_cities_city_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_contract_cities_city_id"`,
+    );
     await queryRunner.query(`
       ALTER TABLE "contract_cities"
       DROP CONSTRAINT IF EXISTS "FK_contract_cities_city"

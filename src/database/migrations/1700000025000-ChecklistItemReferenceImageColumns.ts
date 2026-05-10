@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class ChecklistItemReferenceImageColumns1700000025000
-  implements MigrationInterface
-{
+export class ChecklistItemReferenceImageColumns1700000025000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "checklist_items"

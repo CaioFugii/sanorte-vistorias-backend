@@ -29,7 +29,9 @@ export class TeamContractsRelation1700000022000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_team_contracts_contract_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_team_contracts_contract_id"`,
+    );
     await queryRunner.query(`
       ALTER TABLE "team_contracts"
       DROP CONSTRAINT IF EXISTS "FK_team_contracts_contract"

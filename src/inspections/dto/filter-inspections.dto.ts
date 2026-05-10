@@ -5,8 +5,11 @@ import {
   IsDateString,
   IsString,
 } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ModuleType, InspectionStatus, InspectionScope } from '../../common/enums';
+import {
+  ModuleType,
+  InspectionStatus,
+  InspectionScope,
+} from '../../common/enums';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 export class FilterInspectionsDto extends PaginationQueryDto {
@@ -43,4 +46,8 @@ export class FilterInspectionsDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   osNumber?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'investmentWorkId must be a valid UUID' })
+  investmentWorkId?: string;
 }

@@ -1,9 +1,5 @@
 import { DashboardsService } from './dashboards.service';
-import {
-  InspectionScope,
-  InspectionStatus,
-  ModuleType,
-} from '../common/enums';
+import { InspectionScope, InspectionStatus, ModuleType } from '../common/enums';
 
 function createMockQueryBuilder({
   rawOne,
@@ -84,8 +80,9 @@ describe('DashboardsService', () => {
     expect(result.period).toEqual(['2025-08', '2025-09', '2025-10', '2025-11']);
     expect(result.services).toHaveLength(2);
 
-    const esgoto = result.services.find((serviceItem) =>
-      serviceItem.serviceLabel === 'ESGOTO');
+    const esgoto = result.services.find(
+      (serviceItem) => serviceItem.serviceLabel === 'ESGOTO',
+    );
     expect(esgoto).toBeDefined();
     expect(esgoto?.serviceKey).toBe('esgoto');
     expect(esgoto?.series).toEqual([

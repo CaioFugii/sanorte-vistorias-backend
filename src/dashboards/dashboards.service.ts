@@ -60,11 +60,16 @@ function toDateOnlyString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function getPreviousPeriod(from: string, to: string): { from: string; to: string } {
+function getPreviousPeriod(
+  from: string,
+  to: string,
+): { from: string; to: string } {
   const currentFrom = new Date(`${from}T00:00:00.000Z`);
   const currentTo = new Date(`${to}T00:00:00.000Z`);
   const inclusiveDays =
-    Math.floor((currentTo.getTime() - currentFrom.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    Math.floor(
+      (currentTo.getTime() - currentFrom.getTime()) / (1000 * 60 * 60 * 24),
+    ) + 1;
 
   const previousTo = new Date(currentFrom);
   previousTo.setUTCDate(previousTo.getUTCDate() - 1);
@@ -88,7 +93,9 @@ function serviceKeyFromLabel(label: string): string {
 }
 
 function periodMonths(from: string, to: string): string[] {
-  const [fromYear, fromMonth] = from.split('-').map((value) => parseInt(value, 10));
+  const [fromYear, fromMonth] = from
+    .split('-')
+    .map((value) => parseInt(value, 10));
   const [toYear, toMonth] = to.split('-').map((value) => parseInt(value, 10));
   const start = new Date(Date.UTC(fromYear, fromMonth - 1, 1));
   const end = new Date(Date.UTC(toYear, toMonth - 1, 1));
@@ -463,7 +470,9 @@ export class DashboardsService {
       }
       byService.get(row.serviceLabel)!.set(row.month, {
         qualityPercent:
-          row.qualityPercent != null ? roundTo2(parseFloat(row.qualityPercent)) : 0,
+          row.qualityPercent != null
+            ? roundTo2(parseFloat(row.qualityPercent))
+            : 0,
         inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
       });
     }
@@ -483,7 +492,9 @@ export class DashboardsService {
         const lastIndex = Math.max(series.length - 1, 0);
         const previous = series[previousIndex];
         const current = series[lastIndex];
-        const deltaPoints = roundTo2(current.qualityPercent - previous.qualityPercent);
+        const deltaPoints = roundTo2(
+          current.qualityPercent - previous.qualityPercent,
+        );
         const growthPercent =
           previous.qualityPercent === 0
             ? current.qualityPercent === 0
@@ -709,7 +720,11 @@ export class DashboardsService {
       .addOrderBy('collaborator.name', 'ASC');
 
     this.applyContractScope(currentSummaryQb, filters.user, filters.contractId);
-    this.applyContractScope(previousSummaryQb, filters.user, filters.contractId);
+    this.applyContractScope(
+      previousSummaryQb,
+      filters.user,
+      filters.contractId,
+    );
     this.applyContractScope(teamRankingQb, filters.user, filters.contractId);
     this.applyContractScope(collaboratorsQb, filters.user, filters.contractId);
 
@@ -782,11 +797,16 @@ export class DashboardsService {
       to: filters.to,
       teamIds,
       summary: {
-        averagePercent: roundTo2(parseFloat(currentSummaryRow?.averagePercent ?? '0')),
+        averagePercent: roundTo2(
+          parseFloat(currentSummaryRow?.averagePercent ?? '0'),
+        ),
         previousAveragePercent: roundTo2(
           parseFloat(previousSummaryRow?.averagePercent ?? '0'),
         ),
-        inspectionsCount: parseInt(currentSummaryRow?.inspectionsCount ?? '0', 10),
+        inspectionsCount: parseInt(
+          currentSummaryRow?.inspectionsCount ?? '0',
+          10,
+        ),
         pendingAdjustmentsCount: parseInt(
           currentSummaryRow?.pendingAdjustmentsCount ?? '0',
           10,
@@ -867,7 +887,9 @@ export class DashboardsService {
         const inspectionsCount = parseInt(row.inspectionsCount ?? '0', 10);
         const badScoresCount = parseInt(row.badScoresCount ?? '0', 10);
         const badScoreRatePercent =
-          inspectionsCount > 0 ? roundTo2((badScoresCount / inspectionsCount) * 100) : 0;
+          inspectionsCount > 0
+            ? roundTo2((badScoresCount / inspectionsCount) * 100)
+            : 0;
 
         return {
           collaboratorId: row.collaboratorId,
@@ -896,7 +918,8 @@ export class DashboardsService {
     const toLimit = toEndOfDay(filters.to);
     const limitPerChecklist = Math.min(
       Math.max(
-        filters.limitPerChecklist ?? DEFAULT_NON_CONFORMITIES_LIMIT_PER_CHECKLIST,
+        filters.limitPerChecklist ??
+          DEFAULT_NON_CONFORMITIES_LIMIT_PER_CHECKLIST,
         1,
       ),
       MAX_NON_CONFORMITIES_LIMIT_PER_CHECKLIST,
@@ -965,10 +988,15 @@ export class DashboardsService {
 
     for (const row of rows) {
       const checklistId = row.checklistId;
-      const nonConformitiesCount = parseInt(row.nonConformitiesCount ?? '0', 10);
+      const nonConformitiesCount = parseInt(
+        row.nonConformitiesCount ?? '0',
+        10,
+      );
       const answersCount = parseInt(row.answersCount ?? '0', 10);
       const nonConformityRatePercent =
-        answersCount > 0 ? roundTo2((nonConformitiesCount / answersCount) * 100) : 0;
+        answersCount > 0
+          ? roundTo2((nonConformitiesCount / answersCount) * 100)
+          : 0;
 
       if (!checklistsMap.has(checklistId)) {
         checklistsMap.set(checklistId, {

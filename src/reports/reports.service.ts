@@ -43,7 +43,9 @@ export class ReportsService {
       where: { code: code.trim(), active: true },
     });
     if (!reportType) {
-      throw new NotFoundException('Tipo de relatório não encontrado ou inativo');
+      throw new NotFoundException(
+        'Tipo de relatório não encontrado ou inativo',
+      );
     }
     return reportType;
   }

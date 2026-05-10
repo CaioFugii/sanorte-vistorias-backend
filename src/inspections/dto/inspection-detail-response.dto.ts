@@ -1,4 +1,8 @@
-import { ModuleType, InspectionStatus, ChecklistAnswer } from '../../common/enums';
+import {
+  ModuleType,
+  InspectionStatus,
+  ChecklistAnswer,
+} from '../../common/enums';
 
 /** Item de checklist na vistoria — sem checklistItem aninhado. */
 export interface InspectionDetailItemDto {
@@ -64,6 +68,7 @@ export interface InspectionDetailResponseDto {
   team: { name: string } | null;
   checklist: { name: string } | null;
   serviceOrder: { osNumber: string } | null;
+  investmentWork: { id: string; name: string } | null;
   items: InspectionDetailItemDto[];
   evidences: InspectionDetailEvidenceDto[];
   signatures: InspectionDetailSignatureDto[];

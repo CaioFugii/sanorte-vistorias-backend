@@ -18,8 +18,8 @@ export function getDatabaseConfig(
         password: url.password,
         database: url.pathname.slice(1), // Remove a barra inicial
         ssl: {
-                  rejectUnauthorized: false, // Necessário para Heroku Postgres
-                },
+          rejectUnauthorized: false, // Necessário para Heroku Postgres
+        },
         // ssl:
         //   process.env.NODE_ENV === 'production'
         //     ? {

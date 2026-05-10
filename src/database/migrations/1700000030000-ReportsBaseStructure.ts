@@ -221,7 +221,9 @@ export class ReportsBaseStructure1700000030000 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE IF EXISTS "report_files" CASCADE`);
     await queryRunner.query(`DROP TABLE IF EXISTS "report_records" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "report_type_fields" CASCADE`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "report_type_fields" CASCADE`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "report_types" CASCADE`);
     await queryRunner.query(`DROP TYPE IF EXISTS "report_field_type_enum"`);
   }

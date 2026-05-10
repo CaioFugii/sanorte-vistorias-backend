@@ -117,7 +117,10 @@ export class TeamsService {
 
   async update(
     id: string,
-    teamData: Partial<Team> & { collaboratorIds?: string[]; contractIds: string[] },
+    teamData: Partial<Team> & {
+      collaboratorIds?: string[];
+      contractIds: string[];
+    },
   ): Promise<Team> {
     if (!Array.isArray(teamData.contractIds)) {
       throw new BadRequestException('contractIds é obrigatório');
@@ -153,7 +156,10 @@ export class TeamsService {
     if (nextIsContractor === undefined) {
       nextIsContractor = team.isContractor;
     }
-    this.validateCollaboratorsForContractorTeam(nextIsContractor, collaboratorIds);
+    this.validateCollaboratorsForContractorTeam(
+      nextIsContractor,
+      collaboratorIds,
+    );
 
     if (collaboratorIds !== undefined) {
       team.collaborators = await this.resolveCollaborators(collaboratorIds);

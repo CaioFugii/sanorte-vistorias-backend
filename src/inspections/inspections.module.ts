@@ -14,6 +14,7 @@ import {
   Team,
   ChecklistSection,
   ServiceOrder,
+  InvestmentWork,
 } from '../entities';
 import { InspectionDomainService } from './inspection-domain.service';
 import { SyncController } from './sync.controller';
@@ -33,6 +34,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
       Team,
       ChecklistSection,
       ServiceOrder,
+      InvestmentWork,
     ]),
     CloudinaryModule,
   ],

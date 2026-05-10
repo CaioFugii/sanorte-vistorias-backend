@@ -11,6 +11,7 @@ import {
 import { UserRole } from '../common/enums';
 import { Inspection } from './inspection.entity';
 import { Contract } from './contract.entity';
+import { InvestmentWork } from './investment-work.entity';
 
 @Entity('users')
 export class User {
@@ -40,6 +41,9 @@ export class User {
 
   @OneToMany(() => Inspection, (inspection) => inspection.createdBy)
   inspections: Inspection[];
+
+  @OneToMany(() => InvestmentWork, (investmentWork) => investmentWork.createdBy)
+  investmentWorks: InvestmentWork[];
 
   @ManyToMany(() => Contract, (contract) => contract.users)
   @JoinTable({

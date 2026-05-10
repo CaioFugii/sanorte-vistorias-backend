@@ -13,7 +13,7 @@ export class ModuleTypeEnumNewValues1700000008000 implements MigrationInterface 
     `);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(): Promise<void> {
     // PostgreSQL não permite remover valores de ENUM diretamente.
     // Os valores permanecem no tipo; remoção exigiria recriar o tipo e
     // alterar todas as colunas que o utilizam.

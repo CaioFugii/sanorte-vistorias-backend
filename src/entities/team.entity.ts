@@ -11,6 +11,7 @@ import {
 import { Collaborator } from './collaborator.entity';
 import { Inspection } from './inspection.entity';
 import { Contract } from './contract.entity';
+import { InvestmentWork } from './investment-work.entity';
 
 @Entity('teams')
 export class Team {
@@ -42,6 +43,9 @@ export class Team {
 
   @OneToMany(() => Inspection, (inspection) => inspection.team)
   inspections: Inspection[];
+
+  @OneToMany(() => InvestmentWork, (investmentWork) => investmentWork.team)
+  investmentWorks: InvestmentWork[];
 
   @ManyToMany(() => Contract, (contract) => contract.teams)
   @JoinTable({

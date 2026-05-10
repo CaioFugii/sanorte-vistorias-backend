@@ -6,3 +6,4 @@ export * from './checklist-answer.enum';
 export * from './pending-status.enum';
 export * from './report-field-type.enum';
 export * from './report-orientation.enum';
+export * from './investment-work-status.enum';

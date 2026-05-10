@@ -46,8 +46,9 @@ Authorization: Bearer <token>
 ### Regras críticas que impactam UI
 
 - Nova vistoria (`POST /inspections` e sync):
-  - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
-  - para `SEGURANCA_TRABALHO`, `serviceOrderId` é opcional.
+  - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
+  - para `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional.
+  - quando `module = OBRAS_INVESTIMENTO` e `serviceOrderId` não for enviado, `investmentWorkId` passa a ser obrigatório.
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
 - `GET /inspections` (GESTOR/ADMIN) não retorna `RASCUNHO`.
@@ -176,7 +177,7 @@ Content-Type: application/json
 ### ModuleType
 
 ```json
-["QUALIDADE", "SEGURANCA_TRABALHO", "OBRAS_INVESTIMENTO", "OBRAS_GLOBAL", "CANTEIRO"]
+["OBRAS_INVESTIMENTO", "OBRAS_GLOBAL", "CANTEIRO", "QUALIDADE", "CAMPO", "SEGURANCA_TRABALHO", "REMOTO", "POS_OBRA"]
 ```
 
 ### InspectionStatus
@@ -195,6 +196,12 @@ Content-Type: application/json
 
 ```json
 ["PENDENTE", "RESOLVIDA"]
+```
+
+### InvestmentWorkStatus
+
+```json
+["EM_ANDAMENTO", "PARALISADA", "FINALIZADA", "CANCELADA"]
 ```
 
 ### ReportFieldType
@@ -365,6 +372,30 @@ Resposta paginada:
 }
 ```
 
+### InvestmentWork
+
+```json
+{
+  "id": "uuid",
+  "contractId": "uuid",
+  "createdByUserId": "uuid",
+  "workName": "Ampliação Rede Bairro Norte",
+  "startDate": "2026-05-10",
+  "expectedEndDate": "2026-08-10",
+  "address": "Rua Exemplo, 123",
+  "district": "Bairro Norte",
+  "basin": "Bacia 01",
+  "service": "Implantação de rede coletora",
+  "teamId": "uuid",
+  "materialNetwork": "PVC DN 150",
+  "singularities": "Travessia em avenida de grande fluxo",
+  "status": "EM_ANDAMENTO",
+  "active": true,
+  "createdAt": "2026-05-10T12:00:00.000Z",
+  "updatedAt": "2026-05-10T12:00:00.000Z"
+}
+```
+
 ### Inspection
 
 ```json
@@ -375,10 +406,15 @@ Resposta paginada:
   "checklistId": "uuid",
   "teamId": "uuid",
   "serviceOrderId": "uuid",
+  "investmentWorkId": "uuid",
   "serviceOrder": {
     "id": "uuid",
     "osNumber": "OS-001",
     "address": "Rua Exemplo, 123"
+  },
+  "investmentWork": {
+    "id": "uuid",
+    "workName": "Obra X"
   },
   "serviceDescription": "string",
   "locationDescription": "string",
@@ -1169,16 +1205,74 @@ Response 200:
 }
 ```
 
+## Investment Works (Obras de Investimento)
+
+### GET /investment-works
+
+- Auth: JWT + ADMIN ou GESTOR ou FISCAL
+- Query:
+  - `page`, `limit`
+  - `status` (`EM_ANDAMENTO` | `PARALISADA` | `FINALIZADA` | `CANCELADA`)
+  - `contractId` (UUID)
+  - `search` (busca parcial em obra, endereço, bairro e serviço)
+  - `active` (`true` | `false`)
+- Response 200: paginação de `InvestmentWork` com `team` e `contract`
+- Escopo: `ADMIN` vê todos; `GESTOR`/`FISCAL` ficam limitados aos contratos vinculados
+
+### GET /investment-works/:id
+
+- Auth: JWT + ADMIN ou GESTOR ou FISCAL
+- Response 200:
+  - dados da obra (`InvestmentWork`)
+  - `inspectionStats.total`
+  - `inspectionStats.averageScorePercent`
+  - `inspectionStats.averagePercentual`
+  - `inspectionStats.lastInspections` (até 5 últimas)
+  - `inspectionStats.pendingTotal`
+
+### POST /investment-works
+
+- Auth: JWT + ADMIN ou GESTOR
+- Validações:
+  - `workName`, `startDate`, `expectedEndDate`, `address`, `district`, `basin`, `service`, `teamId`, `materialNetwork`, `contractId` obrigatórios
+  - `expectedEndDate` não pode ser menor que `startDate`
+  - contrato deve existir e estar no escopo do usuário
+  - equipe deve existir, estar ativa e estar vinculada ao contrato informado
+- `singularities` e `status` são opcionais
+
+### PUT /investment-works/:id
+
+- Auth: JWT + ADMIN ou GESTOR
+- Atualização parcial (PATCH-like por `PUT`)
+- Mantém as mesmas validações de contrato, equipe e datas quando os campos relevantes forem enviados
+
+### DELETE /investment-works/:id
+
+- Auth: JWT + ADMIN ou GESTOR
+- Regra: bloqueia exclusão quando houver inspeções vinculadas e retorna:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Não é possível remover obra com inspeções vinculadas",
+  "error": "Bad Request"
+}
+```
+
 ## Inspections
 
 ### POST /inspections
 
 - Auth: JWT + FISCAL ou GESTOR
 - Regras:
-  - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
-  - para `SEGURANCA_TRABALHO`, `serviceOrderId` é opcional.
+  - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
+  - para `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional.
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
+  - `investmentWorkId` é opcional, mas só pode ser enviado quando `module = OBRAS_INVESTIMENTO`.
+  - quando `module = OBRAS_INVESTIMENTO` e `serviceOrderId` não for enviado, `investmentWorkId` é obrigatório.
+  - quando ambos forem enviados (`serviceOrderId` e `investmentWorkId`), OS e obra devem pertencer ao mesmo contrato.
+  - para `investmentWorkId` informado: a obra deve existir, estar ativa, não estar cancelada e dentro do escopo de contrato do usuário.
   - `inspectionScope` aceita `TEAM` (padrão) e `COLLABORATOR`.
   - quando `module = SEGURANCA_TRABALHO` e `inspectionScope = COLLABORATOR`, deve ser enviado exatamente 1 colaborador em `collaboratorIds`, com cadastro existente na plataforma.
 
@@ -1216,6 +1310,7 @@ Observação importante para UI (FISCAL):
   - `teamId`
   - `status`
   - `osNumber` (busca parcial por número da OS; ex.: `?osNumber=OS-001`)
+  - `investmentWorkId` (UUID da obra de investimento)
   - `page`, `limit`
 - Response: paginação de `Inspection` com relação `serviceOrder`
 - Regra: esta listagem não retorna vistorias com status `RASCUNHO`
@@ -1263,6 +1358,7 @@ Exemplo de item em `data`:
 | `checklistId` | Abrir checklist no cache da UI |
 | `status`, `module`, `hasParalysisPenalty` | Estado e chips |
 | `serviceOrderId`, `serviceOrder` | `serviceOrder.osNumber` para título da OS quando houver OS |
+| `investmentWork` | quando existir vínculo, retorna `{ id, name }` da obra de investimento |
 | `updatedAt` | Fallback de “última alteração” ao montar views |
 | `serviceDescription`, `locationDescription`, `createdAt`, `finalizedAt`, `scorePercent` | PDF / resumo |
 | `team`, `checklist` | Opcionais `{ name }` para enriquecer PDF; nomes também vêm do cache por `checklistId` / equipe |
@@ -1294,6 +1390,7 @@ Exemplo (truncado):
   "team": { "name": "Equipe 1" },
   "checklist": { "name": "Checklist QLT" },
   "serviceOrder": { "osNumber": "12345" },
+  "investmentWork": { "id": "uuid", "name": "Obra X" },
   "items": [
     {
       "id": "uuid",

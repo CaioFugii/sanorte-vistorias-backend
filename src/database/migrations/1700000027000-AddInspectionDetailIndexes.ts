@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddInspectionDetailIndexes1700000027000
-  implements MigrationInterface
-{
+export class AddInspectionDetailIndexes1700000027000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS "IDX_inspection_items_inspection_created_at"

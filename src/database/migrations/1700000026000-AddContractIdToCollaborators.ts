@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddContractIdToCollaborators1700000026000
-  implements MigrationInterface
-{
+export class AddContractIdToCollaborators1700000026000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE "collaborators"
@@ -23,7 +21,9 @@ export class AddContractIdToCollaborators1700000026000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "IDX_collaborators_contract_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_collaborators_contract_id"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "collaborators"

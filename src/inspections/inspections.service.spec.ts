@@ -20,6 +20,7 @@ describe('InspectionsService', () => {
   let checklistItemsRepository: any;
   let teamsRepository: any;
   let serviceOrderRepository: any;
+  let investmentWorkRepository: any;
   let dataSource: any;
   let cloudinaryService: {
     uploadImage: jest.Mock;
@@ -74,6 +75,9 @@ describe('InspectionsService', () => {
       findOne: jest.fn(),
       update: jest.fn(),
     };
+    investmentWorkRepository = {
+      findOne: jest.fn(),
+    };
 
     cloudinaryService = {
       uploadImage: jest.fn(),
@@ -96,6 +100,7 @@ describe('InspectionsService', () => {
       {} as any,
       teamsRepository as any,
       serviceOrderRepository as any,
+      investmentWorkRepository as any,
       cloudinaryService as any,
       dataSource as any,
       new InspectionDomainService(),

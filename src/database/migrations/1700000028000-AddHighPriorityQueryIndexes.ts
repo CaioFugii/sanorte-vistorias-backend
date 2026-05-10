@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddHighPriorityQueryIndexes1700000028000
-  implements MigrationInterface
-{
+export class AddHighPriorityQueryIndexes1700000028000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS "IDX_inspections_created_by_created_at"

@@ -18,6 +18,7 @@ import {
   Collaborator,
   Team,
   ServiceOrder,
+  InvestmentWork,
 } from '../entities';
 import {
   InspectionStatus,
@@ -26,6 +27,7 @@ import {
   InspectionScope,
   PendingStatus,
   UserRole,
+  InvestmentWorkStatus,
 } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { InspectionMineListItem } from './dto/inspection-mine-list-item.dto';
@@ -67,6 +69,8 @@ export class InspectionsService {
     private teamsRepository: Repository<Team>,
     @InjectRepository(ServiceOrder)
     private serviceOrderRepository: Repository<ServiceOrder>,
+    @InjectRepository(InvestmentWork)
+    private investmentWorkRepository: Repository<InvestmentWork>,
     private cloudinaryService: CloudinaryService,
     private dataSource: DataSource,
     private inspectionDomainService: InspectionDomainService,
@@ -79,6 +83,7 @@ export class InspectionsService {
       checklistId: string;
       teamId?: string;
       serviceOrderId?: string;
+      investmentWorkId?: string;
       serviceDescription?: string;
       locationDescription?: string;
       collaboratorIds?: string[];
@@ -96,9 +101,12 @@ export class InspectionsService {
     );
     const teamId = inspectionData.teamId ?? null;
     const serviceOrderId = inspectionData.serviceOrderId ?? null;
+    const investmentWorkId = inspectionData.investmentWorkId ?? null;
     const serviceDescription = this.normalizeServiceDescription(
       inspectionData.serviceDescription,
     );
+    const isInvestmentModule =
+      inspectionData.module === ModuleType.OBRAS_INVESTIMENTO;
 
     if (this.isTeamRequired(inspectionData.module) && !teamId) {
       throw new BadRequestException(
@@ -112,6 +120,18 @@ export class InspectionsService {
       );
     }
 
+    if (investmentWorkId && !isInvestmentModule) {
+      throw new BadRequestException(
+        'investmentWorkId só pode ser informado para o módulo OBRAS_INVESTIMENTO.',
+      );
+    }
+
+    if (isInvestmentModule && !serviceOrderId && !investmentWorkId) {
+      throw new BadRequestException(
+        'investmentWorkId é obrigatório para OBRAS_INVESTIMENTO quando serviceOrderId não for informado.',
+      );
+    }
+
     if (
       this.isServiceDescriptionRequired(inspectionData.module) &&
       !serviceDescription
@@ -119,6 +139,38 @@ export class InspectionsService {
       throw new BadRequestException(
         'serviceDescription é obrigatório para módulos diferentes de REMOTO.',
       );
+    }
+
+    let investmentWork: Pick<
+      InvestmentWork,
+      'id' | 'contractId' | 'active' | 'status'
+    > | null = null;
+    if (investmentWorkId) {
+      investmentWork = await this.investmentWorkRepository.findOne({
+        where: { id: investmentWorkId },
+        select: ['id', 'contractId', 'active', 'status'],
+      });
+      if (!investmentWork) {
+        throw new BadRequestException('Obra de investimento não encontrada.');
+      }
+      if (!investmentWork.active) {
+        throw new BadRequestException(
+          'Não é possível vincular inspeção a uma obra inativa.',
+        );
+      }
+      if (investmentWork.status === InvestmentWorkStatus.CANCELADA) {
+        throw new BadRequestException(
+          'Não é possível vincular inspeção a uma obra cancelada.',
+        );
+      }
+      if (
+        allowedContractIds !== null &&
+        !allowedContractIds.includes(investmentWork.contractId)
+      ) {
+        throw new ForbiddenException(
+          'Você não tem acesso ao contrato da obra de investimento informada.',
+        );
+      }
     }
 
     if (serviceOrderId) {
@@ -140,6 +192,15 @@ export class InspectionsService {
           'Você não tem acesso ao contrato desta ordem de serviço.',
         );
       }
+
+      if (
+        investmentWork &&
+        serviceOrder.contractId !== investmentWork.contractId
+      ) {
+        throw new BadRequestException(
+          'A ordem de serviço e a obra de investimento devem pertencer ao mesmo contrato.',
+        );
+      }
     }
 
     await this.validateCollaboratorsForContractorTeam(
@@ -157,6 +218,7 @@ export class InspectionsService {
       inspectionScope,
       teamId,
       serviceOrderId,
+      investmentWorkId,
       serviceDescription,
       createdByUserId: userId,
       status: InspectionStatus.RASCUNHO,
@@ -232,6 +294,7 @@ export class InspectionsService {
       teamId?: string;
       status?: InspectionStatus;
       osNumber?: string;
+      investmentWorkId?: string;
     },
     page: number = 1,
     limit: number = 10,
@@ -295,6 +358,11 @@ export class InspectionsService {
     if (filters.osNumber?.trim()) {
       query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
         osNumber: `%${filters.osNumber.trim()}%`,
+      });
+    }
+    if (filters.investmentWorkId) {
+      query.andWhere('inspection.investmentWorkId = :investmentWorkId', {
+        investmentWorkId: filters.investmentWorkId,
       });
     }
 
@@ -402,7 +470,9 @@ export class InspectionsService {
     };
   }
 
-  private toInspectionMineListItem(inspection: Inspection): InspectionMineListItem {
+  private toInspectionMineListItem(
+    inspection: Inspection,
+  ): InspectionMineListItem {
     return {
       id: inspection.id,
       externalId: inspection.externalId ?? null,
@@ -431,6 +501,7 @@ export class InspectionsService {
         'team',
         'team.collaborators',
         'serviceOrder',
+        'investmentWork',
         'createdBy',
         'items',
         'items.checklistItem',
@@ -463,6 +534,7 @@ export class InspectionsService {
         checklistId: true,
         teamId: true,
         serviceOrderId: true,
+        investmentWorkId: true,
         status: true,
         module: true,
         hasParalysisPenalty: true,
@@ -488,72 +560,79 @@ export class InspectionsService {
       team,
       checklist,
       serviceOrder,
+      investmentWork,
       checklistItemRows,
     ] = await Promise.all([
-        this.inspectionItemsRepository.find({
-          where: { inspectionId },
-          select: {
-            id: true,
-            checklistItemId: true,
-            answer: true,
-            notes: true,
-            updatedAt: true,
-            resolutionEvidencePath: true,
-          },
-          order: { createdAt: 'ASC' },
-        }),
-        this.evidencesRepository.find({
-          where: { inspectionId },
-          select: {
-            id: true,
-            inspectionItemId: true,
-            fileName: true,
-            mimeType: true,
-            filePath: true,
-            url: true,
-            cloudinaryPublicId: true,
-            bytes: true,
-            size: true,
-            format: true,
-            width: true,
-            height: true,
-            createdAt: true,
-          },
-          order: { createdAt: 'ASC' },
-        }),
-        this.signaturesRepository.find({
-          where: { inspectionId },
-          select: {
-            id: true,
-            signerName: true,
-            signedAt: true,
-            url: true,
-            imagePath: true,
-            cloudinaryPublicId: true,
-          },
-          order: { signedAt: 'ASC' },
-        }),
-        base.teamId
-          ? this.teamsRepository.findOne({
-              where: { id: base.teamId },
-              select: { name: true },
-            })
-          : Promise.resolve(null),
-        this.checklistsRepository.findOne({
-          where: { id: base.checklistId },
-          select: { name: true },
-        }),
-        base.serviceOrderId
-          ? this.serviceOrderRepository.findOne({
-              where: { id: base.serviceOrderId },
-              select: { osNumber: true },
-            })
-          : Promise.resolve(null),
-        this.checklistItemsRepository.find({
-          where: { checklistId: base.checklistId },
-          select: { id: true, title: true },
-        }),
-      ]);
+      this.inspectionItemsRepository.find({
+        where: { inspectionId },
+        select: {
+          id: true,
+          checklistItemId: true,
+          answer: true,
+          notes: true,
+          updatedAt: true,
+          resolutionEvidencePath: true,
+        },
+        order: { createdAt: 'ASC' },
+      }),
+      this.evidencesRepository.find({
+        where: { inspectionId },
+        select: {
+          id: true,
+          inspectionItemId: true,
+          fileName: true,
+          mimeType: true,
+          filePath: true,
+          url: true,
+          cloudinaryPublicId: true,
+          bytes: true,
+          size: true,
+          format: true,
+          width: true,
+          height: true,
+          createdAt: true,
+        },
+        order: { createdAt: 'ASC' },
+      }),
+      this.signaturesRepository.find({
+        where: { inspectionId },
+        select: {
+          id: true,
+          signerName: true,
+          signedAt: true,
+          url: true,
+          imagePath: true,
+          cloudinaryPublicId: true,
+        },
+        order: { signedAt: 'ASC' },
+      }),
+      base.teamId
+        ? this.teamsRepository.findOne({
+            where: { id: base.teamId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
+      this.checklistsRepository.findOne({
+        where: { id: base.checklistId },
+        select: { name: true },
+      }),
+      base.serviceOrderId
+        ? this.serviceOrderRepository.findOne({
+            where: { id: base.serviceOrderId },
+            select: { osNumber: true },
+          })
+        : Promise.resolve(null),
+      base.investmentWorkId
+        ? this.investmentWorkRepository.findOne({
+            where: { id: base.investmentWorkId },
+            select: { id: true, workName: true },
+          })
+        : Promise.resolve(null),
+      this.checklistItemsRepository.find({
+        where: { checklistId: base.checklistId },
+        select: { id: true, title: true },
+      }),
+    ]);
 
     const checklistTitleById = new Map(
       checklistItemRows.map((row) => [row.id, row.title] as const),
@@ -575,8 +654,8 @@ export class InspectionsService {
       this.mapEvidenceDetail(ev),
     );
 
-    const signatures: InspectionDetailSignatureDto[] = signatureRows.map((sig) =>
-      this.mapSignatureDetail(sig),
+    const signatures: InspectionDetailSignatureDto[] = signatureRows.map(
+      (sig) => this.mapSignatureDetail(sig),
     );
 
     return {
@@ -596,8 +675,15 @@ export class InspectionsService {
       scorePercent: this.normalizeScorePercent(base.scorePercent),
       team: team?.name != null ? { name: team.name } : null,
       checklist: checklist?.name != null ? { name: checklist.name } : null,
-      serviceOrder: serviceOrder?.osNumber != null
-        ? { osNumber: serviceOrder.osNumber }
+      serviceOrder:
+        serviceOrder?.osNumber != null
+          ? { osNumber: serviceOrder.osNumber }
+          : null,
+      investmentWork: investmentWork
+        ? {
+            id: investmentWork.id,
+            name: investmentWork.workName,
+          }
         : null,
       items,
       evidences,
@@ -611,9 +697,10 @@ export class InspectionsService {
     return Number.isFinite(n) ? n : null;
   }
 
-  private splitPublicUrlAndDataUrl(
-    stored: string | null | undefined,
-  ): { url: string | null; dataUrl: string | null } {
+  private splitPublicUrlAndDataUrl(stored: string | null | undefined): {
+    url: string | null;
+    dataUrl: string | null;
+  } {
     const s = stored?.trim();
     if (!s) return { url: null, dataUrl: null };
     if (s.startsWith('data:')) return { url: null, dataUrl: s };
@@ -670,10 +757,7 @@ export class InspectionsService {
   private async findInspectionCoreForUpdateItems(
     id: string,
   ): Promise<
-    Pick<
-      Inspection,
-      'id' | 'status' | 'module' | 'hasParalysisPenalty'
-    >
+    Pick<Inspection, 'id' | 'status' | 'module' | 'hasParalysisPenalty'>
   > {
     const inspection = await this.inspectionsRepository.findOne({
       where: [{ id }, { externalId: id }],
@@ -713,7 +797,8 @@ export class InspectionsService {
     }
 
     const serviceOrderUpdate: Partial<ServiceOrder> = {};
-    if (inspection.module === ModuleType.CAMPO) serviceOrderUpdate.field = false;
+    if (inspection.module === ModuleType.CAMPO)
+      serviceOrderUpdate.field = false;
     if (inspection.module === ModuleType.REMOTO)
       serviceOrderUpdate.remote = false;
     if (inspection.module === ModuleType.POS_OBRA)
@@ -788,7 +873,10 @@ export class InspectionsService {
       );
     }
 
-    if (this.isServiceDescriptionRequired(nextModule) && !nextServiceDescription) {
+    if (
+      this.isServiceDescriptionRequired(nextModule) &&
+      !nextServiceDescription
+    ) {
       throw new BadRequestException(
         'serviceDescription é obrigatório para módulos diferentes de REMOTO.',
       );
@@ -865,10 +953,9 @@ export class InspectionsService {
       where: { inspectionId: inspection.id },
       select: ['id', 'answer'],
     });
-    const baseScorePercent =
-      this.inspectionDomainService.calculateScorePercent(
-        refreshedItems as InspectionItem[],
-      );
+    const baseScorePercent = this.inspectionDomainService.calculateScorePercent(
+      refreshedItems as InspectionItem[],
+    );
     const scorePercent = this.inspectionDomainService.applyParalysisPenalty(
       baseScorePercent,
       inspection.hasParalysisPenalty === true,
@@ -881,11 +968,10 @@ export class InspectionsService {
       (inspection.status === InspectionStatus.FINALIZADA ||
         inspection.status === InspectionStatus.PENDENTE_AJUSTE)
     ) {
-      const nextStatus =
-        this.inspectionDomainService.resolveFinalStatus(
-          refreshedItems,
-          inspection.module,
-        );
+      const nextStatus = this.inspectionDomainService.resolveFinalStatus(
+        refreshedItems,
+        inspection.module,
+      );
       inspectionUpdates.status = nextStatus;
       await this.syncPendingAdjustmentByStatus(
         inspection.id,
@@ -1007,9 +1093,8 @@ export class InspectionsService {
     evidenceId: string,
     userRole?: UserRole,
   ): Promise<void> {
-    const inspection = await this.findInspectionCoreByIdOrExternalId(
-      inspectionId,
-    );
+    const inspection =
+      await this.findInspectionCoreByIdOrExternalId(inspectionId);
 
     if (
       userRole === UserRole.FISCAL &&
@@ -1102,9 +1187,7 @@ export class InspectionsService {
       where: { id: In(checklistIds) },
       select: ['id', 'title', 'requiresPhotoOnNonConformity'],
     });
-    const metaById = new Map(
-      checklistMetas.map((c) => [c.id, c] as const),
-    );
+    const metaById = new Map(checklistMetas.map((c) => [c.id, c] as const));
 
     for (const row of nonConformRows) {
       const meta = metaById.get(row.checklistItemId);
@@ -1203,10 +1286,7 @@ export class InspectionsService {
     for (const payload of inspections) {
       const externalId = payload?.externalId || '';
       try {
-        const result = await this.syncSingleInspection(
-          payload,
-          user,
-        );
+        const result = await this.syncSingleInspection(payload, user);
         results.push(result);
       } catch (error: any) {
         results.push({
@@ -1245,7 +1325,10 @@ export class InspectionsService {
     let status: 'CREATED' | 'UPDATED' = 'UPDATED';
 
     if (!inspection) {
-      if (this.isServiceOrderRequired(payload.module) && !payload.serviceOrderId) {
+      if (
+        this.isServiceOrderRequired(payload.module) &&
+        !payload.serviceOrderId
+      ) {
         throw new BadRequestException(
           'serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.',
         );
@@ -1257,6 +1340,7 @@ export class InspectionsService {
           checklistId: payload.checklistId,
           teamId: payload.teamId,
           serviceOrderId: payload.serviceOrderId,
+          investmentWorkId: payload.investmentWorkId,
           serviceDescription: payload.serviceDescription,
           locationDescription: payload.locationDescription,
           collaboratorIds: payload.collaboratorIds || [],
@@ -1302,7 +1386,10 @@ export class InspectionsService {
         );
       }
 
-      if (this.isServiceDescriptionRequired(nextModule) && !nextServiceDescription) {
+      if (
+        this.isServiceDescriptionRequired(nextModule) &&
+        !nextServiceDescription
+      ) {
         throw new BadRequestException(
           'serviceDescription é obrigatório para módulos diferentes de REMOTO.',
         );
@@ -1323,6 +1410,8 @@ export class InspectionsService {
         inspectionScope: nextInspectionScope,
         checklistId: payload.checklistId ?? inspection.checklistId,
         teamId: nextTeamId,
+        investmentWorkId:
+          payload.investmentWorkId ?? inspection.investmentWorkId,
         serviceDescription: nextServiceDescription,
         locationDescription:
           payload.locationDescription ?? inspection.locationDescription,
@@ -1529,7 +1618,10 @@ export class InspectionsService {
   }
 
   private isServiceOrderRequired(module: ModuleType): boolean {
-    return module !== ModuleType.SEGURANCA_TRABALHO;
+    return (
+      module !== ModuleType.SEGURANCA_TRABALHO &&
+      module !== ModuleType.OBRAS_INVESTIMENTO
+    );
   }
 
   private isTeamRequired(module: ModuleType): boolean {

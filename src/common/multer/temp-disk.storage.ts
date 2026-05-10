@@ -13,9 +13,7 @@ export function createTempDiskStorage(prefix: string) {
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname || '');
       const safe =
-        ext && /^\.[a-z0-9]+$/i.test(ext)
-          ? ext.slice(0, 12).toLowerCase()
-          : '';
+        ext && /^\.[a-z0-9]+$/i.test(ext) ? ext.slice(0, 12).toLowerCase() : '';
       cb(null, `${prefix}-${randomUUID()}${safe}`);
     },
   });

@@ -57,6 +57,7 @@ export class InspectionsController {
         teamId: filterDto.teamId,
         status: filterDto.status,
         osNumber: filterDto.osNumber,
+        investmentWorkId: filterDto.investmentWorkId,
       },
       filterDto.page || 1,
       filterDto.limit || 10,

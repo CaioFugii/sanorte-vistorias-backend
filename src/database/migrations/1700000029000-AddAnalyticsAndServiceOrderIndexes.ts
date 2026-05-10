@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddAnalyticsAndServiceOrderIndexes1700000029000
-  implements MigrationInterface
-{
+export class AddAnalyticsAndServiceOrderIndexes1700000029000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS "IDX_inspection_items_non_conform_checklist_item"

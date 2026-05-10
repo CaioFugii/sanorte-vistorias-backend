@@ -25,19 +25,21 @@ export class UsersService {
     });
   }
 
-  async findOne(id: string, withContracts: boolean = false): Promise<User | null> {
+  async findOne(
+    id: string,
+    withContracts: boolean = false,
+  ): Promise<User | null> {
     return this.usersRepository.findOne({
       where: { id },
       relations: withContracts ? ['contracts'] : [],
     });
   }
 
-  async findOneForAuth(
-    id: string,
-  ): Promise<
-    (Pick<User, 'id' | 'name' | 'email' | 'role'> & {
-      contracts: Pick<Contract, 'id' | 'name'>[];
-    }) | null
+  async findOneForAuth(id: string): Promise<
+    | (Pick<User, 'id' | 'name' | 'email' | 'role'> & {
+        contracts: Pick<Contract, 'id' | 'name'>[];
+      })
+    | null
   > {
     const user = await this.usersRepository.findOne({
       where: { id },
@@ -55,7 +57,11 @@ export class UsersService {
 
     const contracts = await this.contractsRepository
       .createQueryBuilder('contract')
-      .innerJoin('user_contracts', 'user_contracts', 'user_contracts.contract_id = contract.id')
+      .innerJoin(
+        'user_contracts',
+        'user_contracts',
+        'user_contracts.contract_id = contract.id',
+      )
       .where('user_contracts.user_id = :userId', { userId: id })
       .select(['contract.id', 'contract.name'])
       .getMany();
@@ -142,13 +148,18 @@ export class UsersService {
     const { contractIds, ...baseData } = userData;
     const contracts = await this.resolveContracts(contractIds);
 
-    const merged = this.usersRepository.merge(existing, baseData, { contracts });
+    const merged = this.usersRepository.merge(existing, baseData, {
+      contracts,
+    });
     await this.usersRepository.save(merged);
 
     return this.findOne(id, true);
   }
 
-  async updateContracts(id: string, contractIds: string[]): Promise<User | null> {
+  async updateContracts(
+    id: string,
+    contractIds: string[],
+  ): Promise<User | null> {
     const user = await this.findOne(id, true);
     if (!user) {
       return null;
@@ -175,7 +186,9 @@ export class UsersService {
     });
 
     if (contracts.length !== contractIds.length) {
-      throw new BadRequestException('Um ou mais contratos não foram encontrados');
+      throw new BadRequestException(
+        'Um ou mais contratos não foram encontrados',
+      );
     }
 
     return contracts;

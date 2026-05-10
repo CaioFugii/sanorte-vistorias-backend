@@ -20,6 +20,7 @@ import { Evidence } from './evidence.entity';
 import { Signature } from './signature.entity';
 import { PendingAdjustment } from './pending-adjustment.entity';
 import { ServiceOrder } from './service-order.entity';
+import { InvestmentWork } from './investment-work.entity';
 
 @Entity('inspections')
 export class Inspection {
@@ -63,6 +64,13 @@ export class Inspection {
   @ManyToOne(() => ServiceOrder, { nullable: true })
   @JoinColumn({ name: 'service_order_id' })
   serviceOrder: ServiceOrder | null;
+
+  @Column({ name: 'investment_work_id', nullable: true })
+  investmentWorkId: string | null;
+
+  @ManyToOne(() => InvestmentWork, { nullable: true })
+  @JoinColumn({ name: 'investment_work_id' })
+  investmentWork: InvestmentWork | null;
 
   @Column({ name: 'external_id', type: 'uuid', nullable: true, unique: true })
   externalId: string | null;
