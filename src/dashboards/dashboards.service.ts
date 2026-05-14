@@ -1099,10 +1099,7 @@ export class DashboardsService {
       .addSelect('checklistItem.title', 'checklistItemTitle')
       .addSelect(nonConformCountExpr, 'nonConformitiesCount')
       .addSelect(answersCountExpr, 'answersCount')
-      .addSelect(
-        'COUNT(DISTINCT inspectionItem.checklistId)',
-        'checklistsCount',
-      )
+      .addSelect('COUNT(DISTINCT inspection.checklistId)', 'checklistsCount')
       .where('inspection.status IN (:...qualityStatuses)', {
         qualityStatuses: QUALITY_RELEVANT_STATUSES,
       })

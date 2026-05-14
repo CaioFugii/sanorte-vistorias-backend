@@ -459,5 +459,9 @@ describe('DashboardsService', () => {
       'NAO_CONFORME',
     );
     expect(qb.limit).toHaveBeenCalledWith(2);
+    expect(qb.addSelect).toHaveBeenCalledWith(
+      'COUNT(DISTINCT inspection.checklistId)',
+      'checklistsCount',
+    );
   });
 });
