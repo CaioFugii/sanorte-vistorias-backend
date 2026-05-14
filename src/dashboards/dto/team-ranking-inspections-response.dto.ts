@@ -5,6 +5,7 @@ export class TeamRankingInspectionItemDto {
   inspectionId: string;
   serviceOrderId: string | null;
   serviceOrderNumber: string | null;
+  serviceOrderAddress: string | null;
   module: ModuleType;
   status: InspectionStatus;
   scorePercent: number;
