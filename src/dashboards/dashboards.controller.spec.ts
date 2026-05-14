@@ -62,6 +62,13 @@ describe('DashboardsController (integration)', () => {
       limitPerChecklist: 5,
       checklists: [],
     }),
+    getTopNonConformitiesByTeam: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      teamId: 'team-id',
+      limit: 10,
+      nonConformities: [],
+    }),
     getTeamPerformanceByTeams: jest.fn().mockResolvedValue({
       from: '2025-11-01',
       to: '2025-11-30',
@@ -131,6 +138,19 @@ describe('DashboardsController (integration)', () => {
       .get('/dashboards/non-conformities/by-checklist')
       .query({ from: '2025-11-01', to: '2025-11-30', limitPerChecklist: 3 })
       .set('x-role', 'GESTOR')
+      .expect(200);
+  });
+
+  it('deve permitir ADMIN no endpoint de não conformidades por equipe', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/non-conformities/by-team')
+      .query({
+        from: '2025-11-01',
+        to: '2025-11-30',
+        teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+        limit: 5,
+      })
+      .set('x-role', 'ADMIN')
       .expect(200);
   });
 });

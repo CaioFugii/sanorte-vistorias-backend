@@ -386,4 +386,78 @@ describe('DashboardsService', () => {
       'NAO_CONFORME',
     );
   });
+
+  it('deve retornar top não conformidades por equipe', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          checklistItemId: 'item-1',
+          checklistItemTitle: 'Uso correto de EPI',
+          nonConformitiesCount: '10',
+          answersCount: '40',
+          checklistsCount: '2',
+        },
+        {
+          checklistItemId: 'item-2',
+          checklistItemTitle: 'Sinalização da área',
+          nonConformitiesCount: '6',
+          answersCount: '30',
+          checklistsCount: '1',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTopNonConformitiesByTeam({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      module: ModuleType.CAMPO,
+      teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+      limit: 2,
+    });
+
+    expect(result).toEqual({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      module: ModuleType.CAMPO,
+      teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+      limit: 2,
+      nonConformities: [
+        {
+          checklistItemId: 'item-1',
+          checklistItemTitle: 'Uso correto de EPI',
+          nonConformitiesCount: 10,
+          answersCount: 40,
+          nonConformityRatePercent: 25,
+          checklistsCount: 2,
+        },
+        {
+          checklistItemId: 'item-2',
+          checklistItemTitle: 'Sinalização da área',
+          nonConformitiesCount: 6,
+          answersCount: 30,
+          nonConformityRatePercent: 20,
+          checklistsCount: 1,
+        },
+      ],
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
+      teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
+      module: ModuleType.CAMPO,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module != :excludedDashboardModule',
+      {
+        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
+      },
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'nonConformAnswer',
+      'NAO_CONFORME',
+    );
+    expect(qb.limit).toHaveBeenCalledWith(2);
+  });
 });

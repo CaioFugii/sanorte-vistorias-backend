@@ -21,6 +21,7 @@ import {
   CurrentMonthByServiceResponseDto,
   LowScoreCollaboratorsResponseDto,
   NonConformitiesByChecklistResponseDto,
+  NonConformitiesByTeamResponseDto,
   QualityByServiceResponseDto,
   TeamPerformanceByTeamsResponseDto,
 } from './dto';
@@ -44,6 +45,8 @@ const DEFAULT_LOW_SCORE_LIMIT = 15;
 const MAX_LOW_SCORE_LIMIT = 100;
 const DEFAULT_NON_CONFORMITIES_LIMIT_PER_CHECKLIST = 5;
 const MAX_NON_CONFORMITIES_LIMIT_PER_CHECKLIST = 20;
+const DEFAULT_NON_CONFORMITIES_LIMIT_BY_TEAM = 10;
+const MAX_NON_CONFORMITIES_LIMIT_BY_TEAM = 20;
 
 /** Converte uma data YYYY-MM-DD para o fim do dia (23:59:59.999) em UTC. */
 function toEndOfDay(dateStr: string): Date {
@@ -1065,6 +1068,94 @@ export class DashboardsService {
       teamId: filters.teamId,
       limitPerChecklist,
       checklists,
+    };
+  }
+
+  async getTopNonConformitiesByTeam(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    module?: ModuleType;
+    teamId: string;
+    limit?: number;
+    contractId?: string;
+  }): Promise<NonConformitiesByTeamResponseDto> {
+    this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
+    const limit = Math.min(
+      Math.max(filters.limit ?? DEFAULT_NON_CONFORMITIES_LIMIT_BY_TEAM, 1),
+      MAX_NON_CONFORMITIES_LIMIT_BY_TEAM,
+    );
+
+    const nonConformCountExpr = `SUM(CASE WHEN inspectionItem.answer = :nonConformAnswer THEN 1 ELSE 0 END)`;
+    const answersCountExpr = `SUM(CASE WHEN inspectionItem.answer IS NOT NULL THEN 1 ELSE 0 END)`;
+
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.items', 'inspectionItem')
+      .innerJoin('inspectionItem.checklistItem', 'checklistItem')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select('checklistItem.id', 'checklistItemId')
+      .addSelect('checklistItem.title', 'checklistItemTitle')
+      .addSelect(nonConformCountExpr, 'nonConformitiesCount')
+      .addSelect(answersCountExpr, 'answersCount')
+      .addSelect(
+        'COUNT(DISTINCT inspectionItem.checklistId)',
+        'checklistsCount',
+      )
+      .where('inspection.status IN (:...qualityStatuses)', {
+        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere('inspection.teamId = :teamId', { teamId: filters.teamId })
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: toLimit })
+      .setParameter('nonConformAnswer', ChecklistAnswer.NAO_CONFORME)
+      .groupBy('checklistItem.id')
+      .addGroupBy('checklistItem.title')
+      .having(`${nonConformCountExpr} > 0`)
+      .orderBy(nonConformCountExpr, 'DESC')
+      .addOrderBy('checklistItem.title', 'ASC')
+      .limit(limit);
+
+    if (filters.module) {
+      qb.andWhere('inspection.module = :module', { module: filters.module });
+    }
+
+    this.applyTemporaryExcludedModulesFilter(qb);
+    this.applyContractScope(qb, filters.user, filters.contractId);
+
+    const rows = await qb.getRawMany<{
+      checklistItemId: string;
+      checklistItemTitle: string;
+      nonConformitiesCount: string;
+      answersCount: string;
+      checklistsCount: string;
+    }>();
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      module: filters.module,
+      teamId: filters.teamId,
+      limit,
+      nonConformities: rows.map((row) => {
+        const nonConformitiesCount = parseInt(row.nonConformitiesCount ?? '0', 10);
+        const answersCount = parseInt(row.answersCount ?? '0', 10);
+        const checklistsCount = parseInt(row.checklistsCount ?? '0', 10);
+        const nonConformityRatePercent =
+          answersCount > 0
+            ? roundTo2((nonConformitiesCount / answersCount) * 100)
+            : 0;
+
+        return {
+          checklistItemId: row.checklistItemId,
+          checklistItemTitle: row.checklistItemTitle,
+          nonConformitiesCount,
+          answersCount,
+          nonConformityRatePercent,
+          checklistsCount,
+        };
+      }),
     };
   }
 }
