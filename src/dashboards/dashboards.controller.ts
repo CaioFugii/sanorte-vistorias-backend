@@ -12,6 +12,7 @@ import {
   NonConformitiesByChecklistQueryDto,
   NonConformitiesByTeamQueryDto,
   QualityByServiceQueryDto,
+  TeamRankingInspectionsQueryDto,
   TeamPerformanceByTeamsQueryDto,
 } from './dto';
 
@@ -40,6 +41,23 @@ export class DashboardsController {
       from: query.from,
       to: query.to,
       module: query.module,
+      contractId: query.contractId,
+    });
+  }
+
+  @Get('ranking/teams/:teamId/inspections')
+  getTeamRankingInspections(
+    @CurrentUser() user: any,
+    @Param('teamId') teamId: string,
+    @Query() query: TeamRankingInspectionsQueryDto,
+  ) {
+    return this.dashboardsService.getTeamRankingInspections(teamId, {
+      user,
+      from: query.from,
+      to: query.to,
+      metric: query.metric,
+      page: query.page,
+      limit: query.limit,
       contractId: query.contractId,
     });
   }

@@ -23,6 +23,8 @@ import {
   NonConformitiesByChecklistResponseDto,
   NonConformitiesByTeamResponseDto,
   QualityByServiceResponseDto,
+  TeamRankingInspectionsResponseDto,
+  TeamRankingMetric,
   TeamPerformanceByTeamsResponseDto,
 } from './dto';
 
@@ -452,6 +454,112 @@ export class DashboardsService {
       pendingCount: parseInt(row?.pendingCount ?? '0', 10),
       paralyzedCount,
       paralysisRatePercent,
+    };
+  }
+
+  async getTeamRankingInspections(
+    teamId: string,
+    filters: {
+      user?: any;
+      from: string;
+      to: string;
+      metric?: TeamRankingMetric;
+      page?: number;
+      limit?: number;
+      contractId?: string;
+    },
+  ): Promise<TeamRankingInspectionsResponseDto> {
+    const team = await this.teamRepository.findOne({ where: { id: teamId } });
+    if (!team) {
+      throw new NotFoundException('Equipe não encontrada');
+    }
+
+    this.validateDateRange(filters.from, filters.to);
+    const page = Math.max(filters.page ?? 1, 1);
+    const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
+    const skip = (page - 1) * limit;
+    const toLimit = toEndOfDay(filters.to);
+    const metric = filters.metric ?? TeamRankingMetric.AVERAGE;
+
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select('inspection.id', 'inspectionId')
+      .addSelect('inspection.serviceOrderId', 'serviceOrderId')
+      .addSelect('serviceOrder.osNumber', 'serviceOrderNumber')
+      .addSelect('inspection.module', 'module')
+      .addSelect('inspection.status', 'status')
+      .addSelect('inspection.scorePercent', 'scorePercent')
+      .addSelect('serviceOrder.fim_execucao', 'finishedAt')
+      .addSelect('inspection.createdAt', 'createdAt')
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .andWhere('inspection.teamId = :teamId', { teamId })
+      .andWhere('inspection.scorePercent IS NOT NULL')
+      .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
+      .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
+
+    const metricToModule = {
+      [TeamRankingMetric.POST_WORK]: ModuleType.POS_OBRA,
+      [TeamRankingMetric.REMOTE]: ModuleType.REMOTO,
+      [TeamRankingMetric.FIELD]: ModuleType.CAMPO,
+      [TeamRankingMetric.SAFETY_WORK]: ModuleType.SEGURANCA_TRABALHO,
+    };
+
+    if (metric !== TeamRankingMetric.AVERAGE) {
+      qb.andWhere('inspection.module = :module', {
+        module: metricToModule[metric],
+      });
+    }
+
+    this.applyTemporaryExcludedModulesFilter(qb);
+    this.applyContractScope(qb, filters.user, filters.contractId);
+
+    const [rows, total] = await Promise.all([
+      qb
+        .clone()
+        .orderBy('serviceOrder.fim_execucao', 'DESC', 'NULLS LAST')
+        .addOrderBy('inspection.createdAt', 'DESC')
+        .offset(skip)
+        .limit(limit)
+        .getRawMany<{
+          inspectionId: string;
+          serviceOrderId: string | null;
+          serviceOrderNumber: string | null;
+          module: ModuleType;
+          status: InspectionStatus;
+          scorePercent: string;
+          finishedAt: Date | null;
+          createdAt: Date;
+        }>(),
+      qb.clone().getCount(),
+    ]);
+
+    const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      teamId: team.id,
+      teamName: team.name,
+      metric,
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+      inspections: rows.map((row) => ({
+        inspectionId: row.inspectionId,
+        serviceOrderId: row.serviceOrderId,
+        serviceOrderNumber: row.serviceOrderNumber,
+        module: row.module,
+        status: row.status,
+        scorePercent: roundTo2(parseFloat(row.scorePercent ?? '0')),
+        finishedAt: row.finishedAt,
+        createdAt: row.createdAt,
+      })),
     };
   }
 

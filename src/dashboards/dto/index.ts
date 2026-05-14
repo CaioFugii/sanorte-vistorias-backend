@@ -9,5 +9,7 @@ export * from './non-conformities-by-team-query.dto';
 export * from './non-conformities-by-team-response.dto';
 export * from './quality-by-service-query.dto';
 export * from './quality-by-service-response.dto';
+export * from './team-ranking-inspections-query.dto';
+export * from './team-ranking-inspections-response.dto';
 export * from './team-performance-by-teams-query.dto';
 export * from './team-performance-by-teams-response.dto';

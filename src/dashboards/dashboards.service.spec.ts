@@ -4,11 +4,13 @@ import { InspectionScope, InspectionStatus, ModuleType } from '../common/enums';
 function createMockQueryBuilder({
   rawOne,
   rawMany,
+  count,
 }: {
   rawOne?: any;
   rawMany?: any[];
+  count?: number;
 }) {
-  return {
+  const qb: any = {
     leftJoin: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
@@ -18,13 +20,18 @@ function createMockQueryBuilder({
     having: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
     addGroupBy: jest.fn().mockReturnThis(),
+    offset: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
     setParameter: jest.fn().mockReturnThis(),
     getRawOne: jest.fn().mockResolvedValue(rawOne ?? null),
     getRawMany: jest.fn().mockResolvedValue(rawMany ?? []),
+    getCount: jest.fn().mockResolvedValue(count ?? 0),
   };
+
+  qb.clone = jest.fn().mockReturnValue(qb);
+  return qb;
 }
 
 describe('DashboardsService', () => {
@@ -521,5 +528,69 @@ describe('DashboardsService', () => {
       'safetyWorkModule',
       ModuleType.SEGURANCA_TRABALHO,
     );
+  });
+
+  it('deve retornar vistorias usadas na nota da equipe com paginação e métrica', async () => {
+    teamRepository.findOne.mockResolvedValue({
+      id: 'team-1',
+      name: 'Equipe Norte',
+    });
+
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          inspectionId: 'insp-1',
+          serviceOrderId: 'so-1',
+          serviceOrderNumber: 'OS-001',
+          module: ModuleType.CAMPO,
+          status: InspectionStatus.FINALIZADA,
+          scorePercent: '97.5',
+          finishedAt: new Date('2026-01-15T10:00:00.000Z'),
+          createdAt: new Date('2026-01-15T09:00:00.000Z'),
+        },
+      ],
+      count: 1,
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTeamRankingInspections('team-1', {
+      from: '2026-01-01',
+      to: '2026-01-31',
+      metric: 'field' as any,
+      page: 1,
+      limit: 20,
+    });
+
+    expect(result).toEqual({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      teamId: 'team-1',
+      teamName: 'Equipe Norte',
+      metric: 'field',
+      page: 1,
+      limit: 20,
+      total: 1,
+      totalPages: 1,
+      hasNext: false,
+      hasPrev: false,
+      inspections: [
+        {
+          inspectionId: 'insp-1',
+          serviceOrderId: 'so-1',
+          serviceOrderNumber: 'OS-001',
+          module: ModuleType.CAMPO,
+          status: InspectionStatus.FINALIZADA,
+          scorePercent: 97.5,
+          finishedAt: new Date('2026-01-15T10:00:00.000Z'),
+          createdAt: new Date('2026-01-15T09:00:00.000Z'),
+        },
+      ],
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
+      module: ModuleType.CAMPO,
+    });
+    expect(qb.offset).toHaveBeenCalledWith(0);
+    expect(qb.limit).toHaveBeenCalledWith(20);
   });
 });

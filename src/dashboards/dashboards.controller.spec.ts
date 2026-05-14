@@ -28,6 +28,20 @@ describe('DashboardsController (integration)', () => {
       pendingCount: 1,
     }),
     getTeamsRanking: jest.fn().mockResolvedValue([]),
+    getTeamRankingInspections: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      teamId: 'team-id',
+      teamName: 'Equipe',
+      metric: 'average',
+      page: 1,
+      limit: 20,
+      total: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrev: false,
+      inspections: [],
+    }),
     getTeamPerformance: jest.fn().mockResolvedValue({
       teamId: 'team-id',
       teamName: 'Equipe',
@@ -122,6 +136,20 @@ describe('DashboardsController (integration)', () => {
       .get('/dashboards/current-month-by-service')
       .query({ month: '2025-11' })
       .set('x-role', 'GESTOR')
+      .expect(200);
+  });
+
+  it('deve permitir ADMIN no endpoint de detalhamento de vistorias do ranking', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/ranking/teams/team-id/inspections')
+      .query({
+        from: '2025-11-01',
+        to: '2025-11-30',
+        metric: 'field',
+        page: 1,
+        limit: 20,
+      })
+      .set('x-role', 'ADMIN')
       .expect(200);
   });
 
