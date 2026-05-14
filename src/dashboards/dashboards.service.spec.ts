@@ -464,4 +464,62 @@ describe('DashboardsService', () => {
       'checklistsCount',
     );
   });
+
+  it('deve retornar ranking por equipe com percentuais por módulo', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          teamId: 'team-1',
+          teamName: 'Equipe Norte',
+          inspectionsCount: '5',
+          averagePercent: '89.44',
+          postWorkPercent: '90.5',
+          remotePercent: '88.2',
+          fieldPercent: '91.9',
+        safetyWorkPercent: '87.6',
+          pendingCount: '1',
+          paralyzedCount: '1',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTeamsRanking({
+      from: '2026-01-01',
+      to: '2026-01-31',
+    });
+
+    expect(result).toEqual([
+      {
+        teamId: 'team-1',
+        teamName: 'Equipe Norte',
+        averagePercent: 89.44,
+        inspectionsCount: 5,
+        postWorkPercent: 90.5,
+        remotePercent: 88.2,
+        fieldPercent: 91.9,
+        safetyWorkPercent: 87.6,
+        pendingCount: 1,
+        paralyzedCount: 1,
+        paralysisRatePercent: 20,
+      },
+    ]);
+
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'postWorkModule',
+      ModuleType.POS_OBRA,
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'remoteModule',
+      ModuleType.REMOTO,
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'fieldModule',
+      ModuleType.CAMPO,
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'safetyWorkModule',
+      ModuleType.SEGURANCA_TRABALHO,
+    );
+  });
 });

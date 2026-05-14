@@ -1921,6 +1921,10 @@ Response 200:
     "teamName": "Equipe Norte",
     "averagePercent": 95.1,
     "inspectionsCount": 12,
+    "postWorkPercent": 94.2,
+    "remotePercent": 96.5,
+    "fieldPercent": 93.8,
+    "safetyWorkPercent": 92.4,
     "pendingCount": 2,
     "paralyzedCount": 1,
     "paralysisRatePercent": 8.33
@@ -1930,6 +1934,10 @@ Response 200:
     "teamName": "Equipe Sul",
     "averagePercent": 90.2,
     "inspectionsCount": 10,
+    "postWorkPercent": 89.3,
+    "remotePercent": 91.7,
+    "fieldPercent": 90.1,
+    "safetyWorkPercent": 88.9,
     "pendingCount": 1,
     "paralyzedCount": 0,
     "paralysisRatePercent": 0
@@ -1939,6 +1947,10 @@ Response 200:
 
 - `paralyzedCount`: quantidade de vistorias com penalidade de paralisação no período.
 - `paralysisRatePercent`: percentual de vistorias paralisadas (paralyzedCount / inspectionsCount).
+- `postWorkPercent`: média (%) da equipe no módulo `POS_OBRA` no período (0 quando não houver vistoria no módulo).
+- `remotePercent`: média (%) da equipe no módulo `REMOTO` no período (0 quando não houver vistoria no módulo).
+- `fieldPercent`: média (%) da equipe no módulo `CAMPO` no período (0 quando não houver vistoria no módulo).
+- `safetyWorkPercent`: média (%) da equipe no módulo `SEGURANCA_TRABALHO` no período (0 quando não houver vistoria no módulo).
 
 ### GET /dashboards/teams/:teamId
 

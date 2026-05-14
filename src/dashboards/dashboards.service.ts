@@ -286,6 +286,22 @@ export class DashboardsService {
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect(
+        `AVG(CASE WHEN inspection.module = :postWorkModule THEN inspection.scorePercent ELSE NULL END)`,
+        'postWorkPercent',
+      )
+      .addSelect(
+        `AVG(CASE WHEN inspection.module = :remoteModule THEN inspection.scorePercent ELSE NULL END)`,
+        'remotePercent',
+      )
+      .addSelect(
+        `AVG(CASE WHEN inspection.module = :fieldModule THEN inspection.scorePercent ELSE NULL END)`,
+        'fieldPercent',
+      )
+      .addSelect(
+        `AVG(CASE WHEN inspection.module = :safetyWorkModule THEN inspection.scorePercent ELSE NULL END)`,
+        'safetyWorkPercent',
+      )
+      .addSelect(
         `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
         'pendingCount',
       )
@@ -298,6 +314,10 @@ export class DashboardsService {
       })
       .andWhere('inspection.teamId IS NOT NULL')
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .setParameter('postWorkModule', ModuleType.POS_OBRA)
+      .setParameter('remoteModule', ModuleType.REMOTO)
+      .setParameter('fieldModule', ModuleType.CAMPO)
+      .setParameter('safetyWorkModule', ModuleType.SEGURANCA_TRABALHO)
       .setParameter('noTeam', 'Sem equipe')
       .groupBy('inspection.teamId')
       .addGroupBy('team.name')
@@ -317,6 +337,10 @@ export class DashboardsService {
       teamName: string;
       inspectionsCount: string;
       averagePercent: string | null;
+      postWorkPercent: string | null;
+      remotePercent: string | null;
+      fieldPercent: string | null;
+      safetyWorkPercent: string | null;
       pendingCount: string;
       paralyzedCount: string;
     }>();
@@ -329,6 +353,12 @@ export class DashboardsService {
         averagePercentRaw != null
           ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
           : 0;
+      const postWorkPercent = roundTo2(parseFloat(row.postWorkPercent ?? '0'));
+      const remotePercent = roundTo2(parseFloat(row.remotePercent ?? '0'));
+      const fieldPercent = roundTo2(parseFloat(row.fieldPercent ?? '0'));
+      const safetyWorkPercent = roundTo2(
+        parseFloat(row.safetyWorkPercent ?? '0'),
+      );
       const paralysisRatePercent =
         inspectionsCount > 0
           ? Math.round((paralyzedCount / inspectionsCount) * 10000) / 100
@@ -339,6 +369,10 @@ export class DashboardsService {
         teamName: row.teamName,
         averagePercent,
         inspectionsCount,
+        postWorkPercent,
+        remotePercent,
+        fieldPercent,
+        safetyWorkPercent,
         pendingCount: parseInt(row.pendingCount, 10),
         paralyzedCount,
         paralysisRatePercent,
