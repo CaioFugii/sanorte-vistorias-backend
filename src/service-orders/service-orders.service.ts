@@ -34,6 +34,17 @@ export class ServiceOrdersService {
     private readonly serviceOrderImportParser: ServiceOrderImportParserService,
   ) {}
 
+  private buildImportKey(
+    osNumber: string,
+    sectorName: string,
+    resultado: string | null,
+  ): string {
+    if (sectorName === 'REPOSICAO') {
+      return `${osNumber}-${sectorName}-${(resultado ?? '').trim().toUpperCase()}`;
+    }
+    return `${osNumber}-${sectorName}`;
+  }
+
   private parseFimExecucaoBoundary(
     value: string,
     boundary: 'start' | 'end',
@@ -226,12 +237,12 @@ export class ServiceOrdersService {
 
     const cancelledPairs = new Map<
       string,
-      { osNumber: string; sectorId: string }
+      { osNumber: string; sectorId: string; serviceIdentifier: string }
     >();
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const { osNumber, sectorName, status } =
+      const { osNumber, sectorName, status, resultado } =
         this.serviceOrderImportParser.parseForCancellation(row);
 
       if (!osNumber || !sectorName || !status) continue;
@@ -241,9 +252,16 @@ export class ServiceOrdersService {
 
       if (status.toUpperCase() !== 'CANCELADA') continue;
 
-      const key = `${osNumber}-${sectorName}`;
+      const key = this.buildImportKey(osNumber, sectorName, resultado);
       if (!cancelledPairs.has(key)) {
-        cancelledPairs.set(key, { osNumber, sectorId: sector.id });
+        cancelledPairs.set(key, {
+          osNumber,
+          sectorId: sector.id,
+          serviceIdentifier:
+            sectorName === 'REPOSICAO'
+              ? (resultado ?? '').trim().toUpperCase()
+              : '',
+        });
       }
     }
 
@@ -253,6 +271,8 @@ export class ServiceOrdersService {
         where: pairs.map((p) => ({
           osNumber: p.osNumber,
           sectorId: p.sectorId,
+          contractId,
+          serviceIdentifier: p.serviceIdentifier,
         })),
         select: ['id'],
       });
@@ -315,11 +335,18 @@ export class ServiceOrdersService {
         );
         continue;
       }
-      if (seenOsNumbers.has(`${osNumber}-${sectorName}`)) {
+
+      const importKey = this.buildImportKey(osNumber, sectorName, resultado);
+      if (seenOsNumbers.has(importKey)) {
         result.skipped++;
         continue;
       }
-      seenOsNumbers.add(`${osNumber}-${sectorName}`);
+      seenOsNumbers.add(importKey);
+
+      const serviceIdentifier =
+        sectorName === 'REPOSICAO'
+          ? (resultado ?? '').trim().toUpperCase()
+          : '';
 
       try {
         await this.serviceOrderRepository
@@ -341,6 +368,7 @@ export class ServiceOrdersService {
             tempoExecucaoEfetivoSegundos,
             equipe,
             status,
+            serviceIdentifier,
           })
           .orUpdate(
             [
@@ -350,8 +378,9 @@ export class ServiceOrdersService {
               'fim_execucao',
               'tempo_execucao_efetivo',
               'tempo_execucao_efetivo_segundos',
+              'service_identifier',
             ],
-            ['os_number', 'sector_id'],
+            ['contract_id', 'os_number', 'sector_id', 'service_identifier'],
           )
           .execute();
         result.inserted++;

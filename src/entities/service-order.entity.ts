@@ -12,7 +12,12 @@ import { Sector } from './sector.entity';
 import { Contract } from './contract.entity';
 
 @Entity('service_orders')
-@Unique('UQ_os_number_sector_id', ['osNumber', 'sectorId'])
+@Unique('UQ_service_orders_contract_os_sector_service', [
+  'contractId',
+  'osNumber',
+  'sectorId',
+  'serviceIdentifier',
+])
 export class ServiceOrder {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -72,6 +77,9 @@ export class ServiceOrder {
 
   @Column({ type: 'text', nullable: true })
   status: string | null;
+
+  @Column({ name: 'service_identifier', type: 'text', default: '' })
+  serviceIdentifier: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

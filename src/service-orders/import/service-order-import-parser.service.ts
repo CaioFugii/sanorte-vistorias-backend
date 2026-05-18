@@ -73,10 +73,12 @@ export class ServiceOrderImportParserService {
     osNumber: string;
     sectorName: string | null;
     status: string;
+    resultado: string | null;
   } {
     const osNumberRaw = row['Número OS'];
     const familyRaw = row['Família'] ?? row['Familia'];
     const statusRaw = row['Status da OS'] ?? row['Status'];
+    const resultadoRaw = row['Resultado'] ?? 'N/A';
 
     return {
       osNumber: this.normalizeOsNumber(
@@ -86,6 +88,9 @@ export class ServiceOrderImportParserService {
         familyRaw as string | number | undefined,
       ),
       status: this.normalizeString(statusRaw as string | number | undefined),
+      resultado:
+        this.normalizeString(resultadoRaw as string | number | undefined) ||
+        null,
     };
   }
 
