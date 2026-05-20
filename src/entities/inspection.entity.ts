@@ -21,6 +21,7 @@ import { Signature } from './signature.entity';
 import { PendingAdjustment } from './pending-adjustment.entity';
 import { ServiceOrder } from './service-order.entity';
 import { InvestmentWork } from './investment-work.entity';
+import { Contract } from './contract.entity';
 
 @Entity('inspections')
 export class Inspection {
@@ -64,6 +65,13 @@ export class Inspection {
   @ManyToOne(() => ServiceOrder, { nullable: true })
   @JoinColumn({ name: 'service_order_id' })
   serviceOrder: ServiceOrder | null;
+
+  @Column({ name: 'contract_id', nullable: true })
+  contractId: string | null;
+
+  @ManyToOne(() => Contract, { nullable: true })
+  @JoinColumn({ name: 'contract_id' })
+  contract: Contract | null;
 
   @Column({ name: 'investment_work_id', nullable: true })
   investmentWorkId: string | null;

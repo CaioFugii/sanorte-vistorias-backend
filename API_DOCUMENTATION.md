@@ -48,6 +48,8 @@ Authorization: Bearer <token>
 - Nova vistoria (`POST /inspections` e sync):
   - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
   - para `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional.
+  - quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
+  - quando `serviceOrderId` for enviado, o backend ignora `contractId` do payload e usa o contrato da OS.
   - quando `module = OBRAS_INVESTIMENTO` e `serviceOrderId` não for enviado, `investmentWorkId` passa a ser obrigatório.
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
@@ -134,14 +136,15 @@ Authorization: Bearer <token>
 ### Integração offline (resumo operacional)
 
 - Use `externalId` para idempotência no `POST /sync/inspections`.
-- No sync, `serviceOrderId` é obrigatório para criar nova vistoria quando o módulo não é `SEGURANCA_TRABALHO`.
+- No sync, `serviceOrderId` é obrigatório para criar nova vistoria quando o módulo não é `SEGURANCA_TRABALHO` nem `OBRAS_INVESTIMENTO`.
+- No sync, quando `serviceOrderId` não for enviado, `contractId` deve ser enviado.
 - Não enviar `dataUrl` em evidências no sync (assets devem ser enviados antes).
 - Se precisar aplicar penalidade de paralisação no sync, envie `paralyze.reason`.
 - `GET /inspections/:id` aceita `id` do servidor **ou** `externalId`, o que simplifica reconciliação de dados locais.
 
 ### Checklist para novas funcionalidades no frontend
 
-- Ao criar vistoria: buscar lista de OS em `GET /service-orders` e permitir seleção (campo obrigatório).
+- Ao criar vistoria: buscar lista de OS em `GET /service-orders` e permitir seleção; quando a vistoria não tiver OS, enviar `contractId` manualmente.
 - Confirmar role do usuário e esconder ações não permitidas.
 - Aplicar filtros corretos por contexto de tela (ex.: `sectorId`).
 - Considerar transições de status automáticas após `PUT /inspections/:id/items`.
@@ -404,9 +407,14 @@ Resposta paginada:
   "externalId": "uuid",
   "module": "QUALIDADE",
   "checklistId": "uuid",
+  "contractId": "uuid",
   "teamId": "uuid",
   "serviceOrderId": "uuid",
   "investmentWorkId": "uuid",
+  "contract": {
+    "id": "uuid",
+    "name": "CONTRATO_NORTE"
+  },
   "serviceOrder": {
     "id": "uuid",
     "osNumber": "OS-001",
@@ -1267,6 +1275,8 @@ Response 200:
 - Regras:
   - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
   - para `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional.
+  - quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
+  - quando `serviceOrderId` for enviado, o backend usa automaticamente o `contractId` da OS.
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
   - `investmentWorkId` é opcional, mas só pode ser enviado quando `module = OBRAS_INVESTIMENTO`.
@@ -1283,6 +1293,7 @@ Request JSON:
   "module": "SEGURANCA_TRABALHO",
   "inspectionScope": "COLLABORATOR",
   "checklistId": "uuid",
+  "contractId": "uuid",
   "serviceDescription": "Inspeção semanal",
   "locationDescription": "Canteiro principal",
   "collaboratorIds": ["uuid-1"],
@@ -1315,7 +1326,7 @@ Observação importante para UI (FISCAL):
 - Response: paginação de DTO **enxuto de listagem** (sem `items`, `checklist`, `createdBy`, `collaborators` e sem qualquer `passwordHash`)
 - Regra: esta listagem não retorna vistorias com status `RASCUNHO`
 - Regra: se `status=RASCUNHO` for informado, o retorno é vazio (`data: []`)
-- Escopo: `GESTOR` vê apenas vistorias de OS vinculadas aos seus contratos
+- Escopo: `GESTOR` vê apenas vistorias vinculadas aos seus contratos (via `inspection.contractId`), inclusive quando não há OS
 
 Contrato por item (`InspectionListDTO`):
 
@@ -1349,7 +1360,7 @@ Contrato por item (`InspectionListDTO`):
   - `externalId` sempre vem preenchido; quando não existir no banco, retorna fallback com `id` interno.
   - `serviceOrder` e `team` podem ser `null`.
   - `investmentWork` pode ser `null`; quando preenchido, retorna `{ id, name, workName }`.
-- Escopo: além de `createdByUserId`, aplica contrato permitido da OS
+- Escopo: além de `createdByUserId`, aplica contrato permitido da vistoria (`inspection.contractId`)
 
 Exemplo de item em `data`:
 
@@ -1792,6 +1803,7 @@ Request JSON:
       "module": "SEGURANCA_TRABALHO",
       "inspectionScope": "COLLABORATOR",
       "checklistId": "uuid",
+      "contractId": "uuid",
       "serviceDescription": "Vistoria offline",
       "locationDescription": "Frente A",
       "collaboratorIds": ["uuid-1"],
@@ -1856,7 +1868,8 @@ Response 200:
 Regras importantes:
 
 - `externalId` é obrigatório.
-- `serviceOrderId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO` (OS deve estar cadastrada via `POST /service-orders/import`).
+- `serviceOrderId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO` e `module != OBRAS_INVESTIMENTO` (OS deve estar cadastrada via `POST /service-orders/import`).
+- Quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
 - `teamId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO`.
 - `inspectionScope` aceita `TEAM` (padrão) e `COLLABORATOR`.
 - Para `module = SEGURANCA_TRABALHO` e `inspectionScope = COLLABORATOR`, enviar exatamente 1 colaborador em `collaboratorIds`, com cadastro existente na plataforma.
@@ -2361,7 +2374,7 @@ Response 200:
 
 ### FISCAL
 
-- Criar vistoria (exige `serviceOrderId` de OS cadastrada)
+- Criar vistoria (exige `serviceOrderId` para módulos que pedem OS; quando não houver OS, exige `contractId`)
 - Editar vistoria apenas em `RASCUNHO`
 - Paralisar vistoria
 - Finalizar vistoria
@@ -2372,7 +2385,7 @@ Response 200:
 
 ### GESTOR
 
-- Criar/editar/finalizar vistorias (exige `serviceOrderId` ao criar)
+- Criar/editar/finalizar vistorias (exige `serviceOrderId` para módulos que pedem OS; quando não houver OS, exige `contractId`)
 - Importar OS via Excel (`POST /service-orders/import`)
 - Paralisar e remover penalidade de paralisação (unparalyze)
 - Resolver itens não conformes e pendências
@@ -2402,8 +2415,11 @@ Formato padrão:
 Mensagens relevantes do domínio:
 
 - `serviceOrderId é obrigatório. Informe o ID de uma OS cadastrada na tabela de ordens de serviço.`
+- `contractId é obrigatório quando serviceOrderId não for informado.`
 - `Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.`
 - `serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.`
+- `Não foi possível determinar o contractId da vistoria.`
+- `Você não tem acesso ao contrato informado para esta vistoria.`
 - `contractIds é obrigatório`
 - `Um ou mais contratos não foram encontrados`
 - `contractId é obrigatório na importação`

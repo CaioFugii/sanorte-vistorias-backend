@@ -54,6 +54,7 @@ export type SyncInspectionDto = {
   checklistId: string;
   teamId?: string;
   serviceOrderId?: string;
+  contractId?: string;
   investmentWorkId?: string;
   serviceDescription?: string;
   locationDescription?: string;

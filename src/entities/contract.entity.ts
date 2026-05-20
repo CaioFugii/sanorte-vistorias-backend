@@ -12,6 +12,7 @@ import { ServiceOrder } from './service-order.entity';
 import { Team } from './team.entity';
 import { Collaborator } from './collaborator.entity';
 import { InvestmentWork } from './investment-work.entity';
+import { Inspection } from './inspection.entity';
 
 @Entity('contracts')
 export class Contract {
@@ -41,4 +42,7 @@ export class Contract {
 
   @OneToMany(() => InvestmentWork, (investmentWork) => investmentWork.contract)
   investmentWorks: InvestmentWork[];
+
+  @OneToMany(() => Inspection, (inspection) => inspection.contract)
+  inspections: Inspection[];
 }

@@ -48,6 +48,15 @@ export class CreateInspectionDto {
   })
   serviceOrderId?: string;
 
+  @ValidateIf((o: CreateInspectionDto) => !!o.contractId)
+  @IsUUID('4', { message: 'contractId deve ser um UUID válido' })
+  @ValidateIf((o: CreateInspectionDto) => !o.serviceOrderId)
+  @IsNotEmpty({
+    message:
+      'contractId é obrigatório quando serviceOrderId não for informado.',
+  })
+  contractId?: string;
+
   @IsOptional()
   @IsUUID('4', { message: 'investmentWorkId deve ser um UUID válido' })
   investmentWorkId?: string;

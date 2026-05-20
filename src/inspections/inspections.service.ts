@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DataSource, Brackets } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import {
   Inspection,
   InspectionItem,
@@ -46,7 +46,6 @@ import {
 } from './dto/sync-inspections.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import {
-  applyContractScopeFilter,
   getAllowedContractIds,
 } from '../common/auth/contract-scope.util';
 
@@ -85,6 +84,7 @@ export class InspectionsService {
       checklistId: string;
       teamId?: string;
       serviceOrderId?: string;
+      contractId?: string;
       investmentWorkId?: string;
       serviceDescription?: string;
       locationDescription?: string;
@@ -103,6 +103,7 @@ export class InspectionsService {
     );
     const teamId = inspectionData.teamId ?? null;
     const serviceOrderId = inspectionData.serviceOrderId ?? null;
+    const providedContractId = inspectionData.contractId ?? null;
     const investmentWorkId = inspectionData.investmentWorkId ?? null;
     const serviceDescription = this.normalizeServiceDescription(
       inspectionData.serviceDescription,
@@ -119,6 +120,12 @@ export class InspectionsService {
     if (this.isServiceOrderRequired(inspectionData.module) && !serviceOrderId) {
       throw new BadRequestException(
         'serviceOrderId é obrigatório. Informe uma OS válida cadastrada na tabela de ordens de serviço.',
+      );
+    }
+
+    if (!serviceOrderId && !providedContractId) {
+      throw new BadRequestException(
+        'contractId é obrigatório quando serviceOrderId não for informado.',
       );
     }
 
@@ -147,6 +154,7 @@ export class InspectionsService {
       InvestmentWork,
       'id' | 'contractId' | 'active' | 'status'
     > | null = null;
+    let resolvedContractId: string | null = null;
     if (investmentWorkId) {
       investmentWork = await this.investmentWorkRepository.findOne({
         where: { id: investmentWorkId },
@@ -203,6 +211,25 @@ export class InspectionsService {
           'A ordem de serviço e a obra de investimento devem pertencer ao mesmo contrato.',
         );
       }
+
+      resolvedContractId = serviceOrder.contractId;
+    } else {
+      resolvedContractId = providedContractId;
+    }
+
+    if (!resolvedContractId) {
+      throw new BadRequestException(
+        'Não foi possível determinar o contractId da vistoria.',
+      );
+    }
+
+    if (
+      allowedContractIds !== null &&
+      !allowedContractIds.includes(resolvedContractId)
+    ) {
+      throw new ForbiddenException(
+        'Você não tem acesso ao contrato informado para esta vistoria.',
+      );
     }
 
     await this.validateCollaboratorsForContractorTeam(
@@ -220,6 +247,7 @@ export class InspectionsService {
       inspectionScope,
       teamId,
       serviceOrderId,
+      contractId: resolvedContractId,
       investmentWorkId,
       serviceDescription,
       createdByUserId: userId,
@@ -378,11 +406,15 @@ export class InspectionsService {
       });
     }
 
-    applyContractScopeFilter(
-      query,
-      allowedContractIds,
-      'serviceOrder.contractId',
-    );
+    if (allowedContractIds !== null) {
+      if (allowedContractIds.length === 0) {
+        query.andWhere('1 = 0');
+      } else {
+        query.andWhere('inspection.contractId IN (:...allowedContractIds)', {
+          allowedContractIds,
+        });
+      }
+    }
 
     query.skip(skip).take(limit).orderBy('inspection.createdAt', 'DESC');
 
@@ -451,15 +483,11 @@ export class InspectionsService {
 
     if (allowedContractIds !== null) {
       if (allowedContractIds.length === 0) {
-        query.andWhere('serviceOrder.id IS NULL');
+        query.andWhere('1 = 0');
       } else {
-        query.andWhere(
-          new Brackets((qb) => {
-            qb.where('serviceOrder.contractId IN (:...allowedContractIds)', {
-              allowedContractIds,
-            }).orWhere('serviceOrder.id IS NULL');
-          }),
-        );
+        query.andWhere('inspection.contractId IN (:...allowedContractIds)', {
+          allowedContractIds,
+        });
       }
     }
 
@@ -543,10 +571,6 @@ export class InspectionsService {
     return inspection;
   }
 
-  /**
-   * `GET /inspections/:id` — payload mínimo para tela e PDF (sem checklist/items aninhados no item).
-   * Uso interno (finalize, sync, etc.) continua em `findOne()`.
-   */
   async findOneDetail(id: string): Promise<InspectionDetailResponseDto> {
     const base = await this.inspectionsRepository.findOne({
       where: [{ id }, { externalId: id }],
@@ -1371,6 +1395,7 @@ export class InspectionsService {
           checklistId: payload.checklistId,
           teamId: payload.teamId,
           serviceOrderId: payload.serviceOrderId,
+          contractId: payload.contractId,
           investmentWorkId: payload.investmentWorkId,
           serviceDescription: payload.serviceDescription,
           locationDescription: payload.locationDescription,
