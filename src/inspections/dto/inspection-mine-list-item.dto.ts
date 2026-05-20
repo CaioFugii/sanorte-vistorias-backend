@@ -1,20 +1,7 @@
-import { ModuleType, InspectionStatus } from '../../common/enums';
+import { InspectionListItemDto } from './inspection-list-item.dto';
 
 /**
- * Campos expostos em `GET /inspections/mine` (lista do fiscal).
- * Mantém só o necessário para tabela, filtros e navegação no app.
+ * Alias de compatibilidade para a listagem "minhas vistorias".
+ * Mantém consumo legado sem duplicar contrato.
  */
-export interface InspectionMineListItem {
-  id: string;
-  externalId: string | null;
-  module: ModuleType;
-  serviceDescription: string | null;
-  locationDescription: string | null;
-  status: InspectionStatus;
-  hasParalysisPenalty: boolean;
-  scorePercent: number | null;
-  finalizedAt: Date | null;
-  createdAt: Date;
-  /** Apenas `osNumber` quando há OS vinculada */
-  serviceOrder: { osNumber: string } | null;
-}
+export type InspectionMineListItem = InspectionListItemDto;

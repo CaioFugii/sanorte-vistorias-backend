@@ -1312,25 +1312,49 @@ Observação importante para UI (FISCAL):
   - `osNumber` (busca parcial por número da OS; ex.: `?osNumber=OS-001`)
   - `investmentWorkId` (UUID da obra de investimento)
   - `page`, `limit`
-- Response: paginação de `Inspection` com relação `serviceOrder`
+- Response: paginação de DTO **enxuto de listagem** (sem `items`, `checklist`, `createdBy`, `collaborators` e sem qualquer `passwordHash`)
 - Regra: esta listagem não retorna vistorias com status `RASCUNHO`
 - Regra: se `status=RASCUNHO` for informado, o retorno é vazio (`data: []`)
 - Escopo: `GESTOR` vê apenas vistorias de OS vinculadas aos seus contratos
+
+Contrato por item (`InspectionListDTO`):
+
+```json
+{
+  "externalId": "string",
+  "module": "CAMPO|REMOTO|POS_OBRA|OBRAS_INVESTIMENTO|SEGURANCA_TRABALHO",
+  "serviceDescription": "string",
+  "locationDescription": "string",
+  "status": "string",
+  "scorePercent": 95.5,
+  "hasParalysisPenalty": false,
+  "finalizedAt": "2026-02-19T12:00:00.000Z",
+  "createdAt": "2026-02-19T12:00:00.000Z",
+  "team": { "name": "Equipe A" },
+  "serviceOrder": { "osNumber": "OS-001" },
+  "investmentWork": {
+    "id": "uuid",
+    "name": "Ampliação Rede Bairro Norte",
+    "workName": "Ampliação Rede Bairro Norte"
+  }
+}
+```
 
 ### GET /inspections/mine
 
 - Auth: JWT + FISCAL
 - Query: `page`, `limit`, `osNumber` (busca parcial por número da OS), `inspectionScope`
-- Response: paginação **enxuta** apenas com campos usados na listagem do app (menos payload e menos memória no servidor). Cada item inclui:
-  - `id`, `externalId` (pelo menos um sempre presente conforme fluxo do app), `module`, `serviceDescription`, `locationDescription`, `status`, `hasParalysisPenalty`, `scorePercent` (`null` → exibir “N/A”), `finalizedAt`, `createdAt`
-  - `serviceOrder`: objeto `{ "osNumber": "..." }` ou `null` se não houver OS vinculada
+- Response: paginação do mesmo DTO enxuto de `GET /inspections` (`InspectionListDTO`)
+- Regras de serialização:
+  - `externalId` sempre vem preenchido; quando não existir no banco, retorna fallback com `id` interno.
+  - `serviceOrder` e `team` podem ser `null`.
+  - `investmentWork` pode ser `null`; quando preenchido, retorna `{ id, name, workName }`.
 - Escopo: além de `createdByUserId`, aplica contrato permitido da OS
 
 Exemplo de item em `data`:
 
 ```json
 {
-  "id": "uuid",
   "externalId": "uuid-offline",
   "module": "QUALIDADE",
   "serviceDescription": "Vistoria de campo",
@@ -1340,6 +1364,7 @@ Exemplo de item em `data`:
   "scorePercent": 92.5,
   "finalizedAt": null,
   "createdAt": "2026-04-19T12:00:00.000Z",
+  "team": { "name": "Equipe A" },
   "serviceOrder": { "osNumber": "1234567" }
 }
 ```
@@ -1359,6 +1384,7 @@ Exemplo de item em `data`:
 | `status`, `module`, `hasParalysisPenalty` | Estado e chips |
 | `serviceOrderId`, `serviceOrder` | `serviceOrder.osNumber` para título da OS quando houver OS |
 | `investmentWork` | quando existir vínculo, retorna `{ id, name }` da obra de investimento |
+| `createdBy` | usuário criador da vistoria, no formato `{ name }` |
 | `updatedAt` | Fallback de “última alteração” ao montar views |
 | `serviceDescription`, `locationDescription`, `createdAt`, `finalizedAt`, `scorePercent` | PDF / resumo |
 | `team`, `checklist` | Opcionais `{ name }` para enriquecer PDF; nomes também vêm do cache por `checklistId` / equipe |
@@ -1391,6 +1417,7 @@ Exemplo (truncado):
   "checklist": { "name": "Checklist QLT" },
   "serviceOrder": { "osNumber": "12345" },
   "investmentWork": { "id": "uuid", "name": "Obra X" },
+  "createdBy": { "name": "Fiscal A" },
   "items": [
     {
       "id": "uuid",

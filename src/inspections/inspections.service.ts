@@ -19,6 +19,7 @@ import {
   Team,
   ServiceOrder,
   InvestmentWork,
+  User,
 } from '../entities';
 import {
   InspectionStatus,
@@ -31,6 +32,7 @@ import {
 } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { InspectionMineListItem } from './dto/inspection-mine-list-item.dto';
+import { InspectionListItemDto } from './dto/inspection-list-item.dto';
 import {
   InspectionDetailEvidenceDto,
   InspectionDetailItemDto,
@@ -299,7 +301,7 @@ export class InspectionsService {
     page: number = 1,
     limit: number = 10,
     userScope?: any,
-  ): Promise<PaginatedResponseDto<Inspection>> {
+  ): Promise<PaginatedResponseDto<InspectionListItemDto>> {
     const allowedContractIds = getAllowedContractIds(userScope);
     if (filters.status === InspectionStatus.RASCUNHO) {
       return {
@@ -319,14 +321,24 @@ export class InspectionsService {
 
     const query = this.inspectionsRepository
       .createQueryBuilder('inspection')
-      .leftJoinAndSelect('inspection.checklist', 'checklist')
-      .leftJoinAndSelect('inspection.team', 'team')
-      .leftJoinAndSelect('inspection.serviceOrder', 'serviceOrder')
-      .leftJoinAndSelect('inspection.createdBy', 'createdBy')
-      .leftJoinAndSelect('inspection.items', 'items')
-      .leftJoinAndSelect('items.checklistItem', 'checklistItem')
-      .leftJoinAndSelect('checklistItem.section', 'checklistSection')
-      .leftJoinAndSelect('inspection.collaborators', 'collaborators')
+      .leftJoin('inspection.team', 'team')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .leftJoin('inspection.investmentWork', 'investmentWork')
+      .select([
+        'inspection.id',
+        'inspection.externalId',
+        'inspection.module',
+        'inspection.serviceDescription',
+        'inspection.locationDescription',
+        'inspection.status',
+        'inspection.hasParalysisPenalty',
+        'inspection.scorePercent',
+        'inspection.finalizedAt',
+        'inspection.createdAt',
+      ])
+      .addSelect(['team.name'])
+      .addSelect(['serviceOrder.osNumber'])
+      .addSelect(['investmentWork.id', 'investmentWork.workName'])
       .andWhere('inspection.status != :draftStatus', {
         draftStatus: InspectionStatus.RASCUNHO,
       });
@@ -374,7 +386,8 @@ export class InspectionsService {
 
     query.skip(skip).take(limit).orderBy('inspection.createdAt', 'DESC');
 
-    const [data, total] = await query.getManyAndCount();
+    const [entities, total] = await query.getManyAndCount();
+    const data = entities.map((row) => this.toInspectionListItem(row));
 
     const totalPages = Math.ceil(total / limit);
 
@@ -404,7 +417,9 @@ export class InspectionsService {
 
     const query = this.inspectionsRepository
       .createQueryBuilder('inspection')
+      .leftJoin('inspection.team', 'team')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .leftJoin('inspection.investmentWork', 'investmentWork')
       .select([
         'inspection.id',
         'inspection.externalId',
@@ -417,7 +432,9 @@ export class InspectionsService {
         'inspection.finalizedAt',
         'inspection.createdAt',
       ])
+      .addSelect(['team.name'])
       .addSelect(['serviceOrder.id', 'serviceOrder.osNumber'])
+      .addSelect(['investmentWork.id', 'investmentWork.workName'])
       .where('inspection.createdByUserId = :userId', { userId })
       .orderBy('inspection.createdAt', 'DESC');
 
@@ -452,7 +469,7 @@ export class InspectionsService {
       .getManyAndCount();
 
     const data: InspectionMineListItem[] = entities.map((row) =>
-      this.toInspectionMineListItem(row),
+      this.toInspectionListItem(row),
     );
 
     const totalPages = Math.ceil(total / limit);
@@ -470,12 +487,9 @@ export class InspectionsService {
     };
   }
 
-  private toInspectionMineListItem(
-    inspection: Inspection,
-  ): InspectionMineListItem {
+  private toInspectionListItem(inspection: Inspection): InspectionListItemDto {
     return {
-      id: inspection.id,
-      externalId: inspection.externalId ?? null,
+      externalId: inspection.externalId ?? inspection.id,
       module: inspection.module,
       serviceDescription: inspection.serviceDescription ?? null,
       locationDescription: inspection.locationDescription ?? null,
@@ -484,8 +498,16 @@ export class InspectionsService {
       scorePercent: this.normalizeScorePercent(inspection.scorePercent),
       finalizedAt: inspection.finalizedAt ?? null,
       createdAt: inspection.createdAt,
+      team: inspection.team?.name ? { name: inspection.team.name } : null,
       serviceOrder: inspection.serviceOrder
         ? { osNumber: inspection.serviceOrder.osNumber }
+        : null,
+      investmentWork: inspection.investmentWork
+        ? {
+            id: inspection.investmentWork.id,
+            name: inspection.investmentWork.workName ?? null,
+            workName: inspection.investmentWork.workName ?? null,
+          }
         : null,
     };
   }
@@ -532,6 +554,7 @@ export class InspectionsService {
         id: true,
         externalId: true,
         checklistId: true,
+        createdByUserId: true,
         teamId: true,
         serviceOrderId: true,
         investmentWorkId: true,
@@ -561,6 +584,7 @@ export class InspectionsService {
       checklist,
       serviceOrder,
       investmentWork,
+      createdBy,
       checklistItemRows,
     ] = await Promise.all([
       this.inspectionItemsRepository.find({
@@ -628,6 +652,12 @@ export class InspectionsService {
             select: { id: true, workName: true },
           })
         : Promise.resolve(null),
+      base.createdByUserId
+        ? this.dataSource.getRepository(User).findOne({
+            where: { id: base.createdByUserId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
       this.checklistItemsRepository.find({
         where: { checklistId: base.checklistId },
         select: { id: true, title: true },
@@ -685,6 +715,7 @@ export class InspectionsService {
             name: investmentWork.workName,
           }
         : null,
+      createdBy: createdBy?.name != null ? { name: createdBy.name } : null,
       items,
       evidences,
       signatures,

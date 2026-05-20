@@ -51,7 +51,6 @@ export interface InspectionDetailSignatureDto {
 export interface InspectionDetailResponseDto {
   id: string;
   externalId: string | null;
-  /** Sempre o UUID interno; usar em PUT/POST que exigem id de servidor */
   serverId: string;
   checklistId: string;
   status: InspectionStatus;
@@ -64,11 +63,11 @@ export interface InspectionDetailResponseDto {
   finalizedAt: Date | null;
   updatedAt: Date;
   scorePercent: number | null;
-  /** Opcional PDF / título — UI costuma usar cache do checklist por checklistId */
   team: { name: string } | null;
   checklist: { name: string } | null;
   serviceOrder: { osNumber: string } | null;
   investmentWork: { id: string; name: string } | null;
+  createdBy: { name: string } | null;
   items: InspectionDetailItemDto[];
   evidences: InspectionDetailEvidenceDto[];
   signatures: InspectionDetailSignatureDto[];

@@ -423,4 +423,119 @@ describe('InspectionsService', () => {
       service.removeEvidence('i1', 'e1', UserRole.FISCAL),
     ).rejects.toThrow(ForbiddenException);
   });
+
+  it('findAll deve retornar DTO enxuto para listagem', async () => {
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([
+        [
+          {
+            id: 'inspection-id',
+            externalId: null,
+            module: ModuleType.CAMPO,
+            serviceDescription: 'Servico',
+            locationDescription: 'Local',
+            status: InspectionStatus.FINALIZADA,
+            hasParalysisPenalty: false,
+            scorePercent: '98.5',
+            finalizedAt: null,
+            createdAt: new Date('2026-01-10T10:00:00.000Z'),
+            team: { name: 'Equipe A' },
+            serviceOrder: { osNumber: 'OS-1000' },
+            investmentWork: { id: 'iw-1', workName: 'Obra X' },
+          },
+        ],
+        1,
+      ]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const response = await service.findAll({}, 1, 10, { role: UserRole.ADMIN });
+
+    expect(response.meta.total).toBe(1);
+    expect(response.data[0]).toEqual({
+      externalId: 'inspection-id',
+      module: ModuleType.CAMPO,
+      serviceDescription: 'Servico',
+      locationDescription: 'Local',
+      status: InspectionStatus.FINALIZADA,
+      scorePercent: 98.5,
+      hasParalysisPenalty: false,
+      finalizedAt: null,
+      createdAt: new Date('2026-01-10T10:00:00.000Z'),
+      team: { name: 'Equipe A' },
+      serviceOrder: { osNumber: 'OS-1000' },
+      investmentWork: { id: 'iw-1', name: 'Obra X', workName: 'Obra X' },
+    });
+    expect((response.data[0] as any).items).toBeUndefined();
+    expect((response.data[0] as any).checklist).toBeUndefined();
+    expect((response.data[0] as any).createdBy).toBeUndefined();
+    expect((response.data[0] as any).collaborators).toBeUndefined();
+  });
+
+  it('findMine deve retornar DTO enxuto para listagem do fiscal', async () => {
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([
+        [
+          {
+            id: 'inspection-mine-id',
+            externalId: 'external-id-1',
+            module: ModuleType.REMOTO,
+            serviceDescription: null,
+            locationDescription: null,
+            status: InspectionStatus.RASCUNHO,
+            hasParalysisPenalty: true,
+            scorePercent: null,
+            finalizedAt: null,
+            createdAt: new Date('2026-01-11T10:00:00.000Z'),
+            team: null,
+            serviceOrder: null,
+            investmentWork: { id: 'iw-2', workName: 'Obra Y' },
+          },
+        ],
+        1,
+      ]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const response = await service.findMine(
+      'user-id',
+      1,
+      10,
+      undefined,
+      undefined,
+      { role: UserRole.ADMIN },
+    );
+
+    expect(response.meta.total).toBe(1);
+    expect(response.data[0]).toEqual({
+      externalId: 'external-id-1',
+      module: ModuleType.REMOTO,
+      serviceDescription: null,
+      locationDescription: null,
+      status: InspectionStatus.RASCUNHO,
+      scorePercent: null,
+      hasParalysisPenalty: true,
+      finalizedAt: null,
+      createdAt: new Date('2026-01-11T10:00:00.000Z'),
+      team: null,
+      serviceOrder: null,
+      investmentWork: { id: 'iw-2', name: 'Obra Y', workName: 'Obra Y' },
+    });
+    expect((response.data[0] as any).id).toBeUndefined();
+  });
 });
