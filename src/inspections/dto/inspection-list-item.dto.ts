@@ -21,4 +21,6 @@ export interface InspectionListItemDto {
     name: string | null;
     workName: string | null;
   } | null;
+  pendingItemsCount?: number;
+  pendingItemsPreview?: string[];
 }

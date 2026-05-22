@@ -1351,9 +1351,27 @@ Contrato por item (`InspectionListDTO`):
     "id": "uuid",
     "name": "Ampliação Rede Bairro Norte",
     "workName": "Ampliação Rede Bairro Norte"
-  }
+  },
+  "pendingItemsCount": 3,
+  "pendingItemsPreview": [
+    "Extintor vencido",
+    "Sinalização de saída ausente",
+    "Quadro elétrico sem identificação"
+  ]
 }
 ```
+
+Campos opcionais de pendências de ajuste na listagem:
+
+- `pendingItemsCount`:
+  - quantidade total de itens **não conformes pendentes** da vistoria;
+  - considera apenas itens com `answer = NAO_CONFORME` e `resolvedAt = null`;
+  - quando não houver pendências, retorna `0`.
+- `pendingItemsPreview`:
+  - lista com até `3` textos dos itens pendentes;
+  - usa ordem estável por criação do item (`inspection_items.createdAt ASC`);
+  - fallback de texto: `title` -> `description` -> `"Item sem descrição"`;
+  - quando não houver pendências, retorna `[]`.
 
 ### GET /inspections/mine
 

@@ -49,6 +49,11 @@ import {
   getAllowedContractIds,
 } from '../common/auth/contract-scope.util';
 
+type PendingItemsSummary = {
+  pendingItemsCount: number;
+  pendingItemsPreview: string[];
+};
+
 @Injectable()
 export class InspectionsService {
   constructor(
@@ -419,7 +424,19 @@ export class InspectionsService {
     query.skip(skip).take(limit).orderBy('inspection.createdAt', 'DESC');
 
     const [entities, total] = await query.getManyAndCount();
-    const data = entities.map((row) => this.toInspectionListItem(row));
+    const pendingSummaryByInspectionId =
+      await this.getPendingItemsSummaryByInspectionIds(
+        entities.map((inspection) => inspection.id),
+      );
+    const data = entities.map((row) =>
+      this.toInspectionListItem(
+        row,
+        pendingSummaryByInspectionId.get(row.id) ?? {
+          pendingItemsCount: 0,
+          pendingItemsPreview: [],
+        },
+      ),
+    );
 
     const totalPages = Math.ceil(total / limit);
 
@@ -515,7 +532,10 @@ export class InspectionsService {
     };
   }
 
-  private toInspectionListItem(inspection: Inspection): InspectionListItemDto {
+  private toInspectionListItem(
+    inspection: Inspection,
+    pendingSummary?: PendingItemsSummary,
+  ): InspectionListItemDto {
     return {
       externalId: inspection.externalId ?? inspection.id,
       module: inspection.module,
@@ -541,7 +561,81 @@ export class InspectionsService {
             workName: inspection.investmentWork.workName ?? null,
           }
         : null,
+      pendingItemsCount: pendingSummary?.pendingItemsCount ?? 0,
+      pendingItemsPreview: pendingSummary?.pendingItemsPreview ?? [],
     };
+  }
+
+  private async getPendingItemsSummaryByInspectionIds(
+    inspectionIds: string[],
+  ): Promise<Map<string, PendingItemsSummary>> {
+    if (inspectionIds.length === 0) {
+      return new Map<string, PendingItemsSummary>();
+    }
+
+    const rows: Array<{
+      inspectionId: string;
+      title: string | null;
+      description: string | null;
+    }> = await this.inspectionItemsRepository
+      .createQueryBuilder('inspectionItem')
+      .innerJoin('inspectionItem.checklistItem', 'checklistItem')
+      .select('inspectionItem.inspectionId', 'inspectionId')
+      .addSelect('checklistItem.title', 'title')
+      .addSelect('checklistItem.description', 'description')
+      .where('inspectionItem.inspectionId IN (:...inspectionIds)', {
+        inspectionIds,
+      })
+      .andWhere('inspectionItem.answer = :nonConformAnswer', {
+        nonConformAnswer: ChecklistAnswer.NAO_CONFORME,
+      })
+      .andWhere('inspectionItem.resolvedAt IS NULL')
+      .orderBy('inspectionItem.createdAt', 'ASC')
+      .addOrderBy('inspectionItem.id', 'ASC')
+      .getRawMany();
+
+    const summaryByInspectionId = new Map<string, PendingItemsSummary>();
+    for (const inspectionId of inspectionIds) {
+      summaryByInspectionId.set(inspectionId, {
+        pendingItemsCount: 0,
+        pendingItemsPreview: [],
+      });
+    }
+
+    for (const row of rows) {
+      const current = summaryByInspectionId.get(row.inspectionId) ?? {
+        pendingItemsCount: 0,
+        pendingItemsPreview: [],
+      };
+
+      current.pendingItemsCount += 1;
+      if (current.pendingItemsPreview.length < 3) {
+        current.pendingItemsPreview.push(
+          this.resolvePendingItemPreviewText(row.title, row.description),
+        );
+      }
+
+      summaryByInspectionId.set(row.inspectionId, current);
+    }
+
+    return summaryByInspectionId;
+  }
+
+  private resolvePendingItemPreviewText(
+    title: string | null,
+    description: string | null,
+  ): string {
+    const normalizedTitle = title?.trim();
+    if (normalizedTitle) {
+      return normalizedTitle;
+    }
+
+    const normalizedDescription = description?.trim();
+    if (normalizedDescription) {
+      return normalizedDescription;
+    }
+
+    return 'Item sem descrição';
   }
 
   async findOne(id: string): Promise<Inspection> {

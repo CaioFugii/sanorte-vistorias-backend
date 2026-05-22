@@ -42,6 +42,7 @@ describe('InspectionsService', () => {
       find: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
+      createQueryBuilder: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
     };
@@ -427,6 +428,37 @@ describe('InspectionsService', () => {
   });
 
   it('findAll deve retornar DTO enxuto para listagem', async () => {
+    const pendingQb: any = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        {
+          inspectionId: 'inspection-id',
+          title: 'Extintor vencido',
+          description: null,
+        },
+        {
+          inspectionId: 'inspection-id',
+          title: null,
+          description: 'Sinalização de saída ausente',
+        },
+        {
+          inspectionId: 'inspection-id',
+          title: 'Quadro elétrico sem identificação',
+          description: 'Descricao alternativa',
+        },
+        {
+          inspectionId: 'inspection-id',
+          title: null,
+          description: null,
+        },
+      ]),
+    };
     const qb: any = {
       leftJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
@@ -461,6 +493,7 @@ describe('InspectionsService', () => {
       ]),
     };
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+    inspectionItemsRepository.createQueryBuilder.mockReturnValue(pendingQb);
 
     const response = await service.findAll({}, 1, 10, { role: UserRole.ADMIN });
 
@@ -482,11 +515,66 @@ describe('InspectionsService', () => {
         resultado: 'EXECUTADO',
       },
       investmentWork: { id: 'iw-1', name: 'Obra X', workName: 'Obra X' },
+      pendingItemsCount: 4,
+      pendingItemsPreview: [
+        'Extintor vencido',
+        'Sinalização de saída ausente',
+        'Quadro elétrico sem identificação',
+      ],
     });
     expect((response.data[0] as any).items).toBeUndefined();
     expect((response.data[0] as any).checklist).toBeUndefined();
     expect((response.data[0] as any).createdBy).toBeUndefined();
     expect((response.data[0] as any).collaborators).toBeUndefined();
+  });
+
+  it('findAll deve retornar pendências zeradas quando não houver itens pendentes', async () => {
+    const pendingQb: any = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    };
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([
+        [
+          {
+            id: 'inspection-id-2',
+            externalId: 'ext-2',
+            module: ModuleType.CAMPO,
+            serviceDescription: null,
+            locationDescription: null,
+            status: InspectionStatus.PENDENTE_AJUSTE,
+            hasParalysisPenalty: false,
+            scorePercent: null,
+            finalizedAt: null,
+            createdAt: new Date('2026-01-10T10:00:00.000Z'),
+            team: null,
+            serviceOrder: null,
+            investmentWork: null,
+          },
+        ],
+        1,
+      ]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+    inspectionItemsRepository.createQueryBuilder.mockReturnValue(pendingQb);
+
+    const response = await service.findAll({}, 1, 10, { role: UserRole.ADMIN });
+
+    expect(response.data[0].pendingItemsCount).toBe(0);
+    expect(response.data[0].pendingItemsPreview).toEqual([]);
   });
 
   it('findMine deve retornar DTO enxuto para listagem do fiscal', async () => {
@@ -545,6 +633,8 @@ describe('InspectionsService', () => {
       team: null,
       serviceOrder: null,
       investmentWork: { id: 'iw-2', name: 'Obra Y', workName: 'Obra Y' },
+      pendingItemsCount: 0,
+      pendingItemsPreview: [],
     });
     expect((response.data[0] as any).id).toBeUndefined();
   });
