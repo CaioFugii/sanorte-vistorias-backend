@@ -10,11 +10,15 @@ export interface InspectionDetailItemDto {
   checklistItemId: string;
   checklistItem: {
     title: string | null;
+    description: string | null;
   };
   answer: ChecklistAnswer | null;
   notes: string | null;
   updatedAt: Date;
-  resolutionEvidencePath: string | null;
+  resolvedAt: Date | null;
+  resolvedBy?: { name: string } | null;
+  resolutionNotes?: string | null;
+  resolutionEvidencePath?: string | null;
 }
 
 /** Evidência para detalhe / PDF */

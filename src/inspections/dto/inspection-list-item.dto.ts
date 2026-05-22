@@ -11,7 +11,11 @@ export interface InspectionListItemDto {
   finalizedAt: Date | null;
   createdAt: Date;
   team: { name: string } | null;
-  serviceOrder: { osNumber: string } | null;
+  serviceOrder: {
+    osNumber: string;
+    fimExecucao: Date | null;
+    resultado: string | null;
+  } | null;
   investmentWork: {
     id: string;
     name: string | null;

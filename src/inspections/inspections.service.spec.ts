@@ -46,6 +46,7 @@ describe('InspectionsService', () => {
       update: jest.fn(),
     };
     evidencesRepository = {
+      find: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
@@ -53,6 +54,7 @@ describe('InspectionsService', () => {
       count: jest.fn(),
     };
     signaturesRepository = {
+      find: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
@@ -447,7 +449,11 @@ describe('InspectionsService', () => {
             finalizedAt: null,
             createdAt: new Date('2026-01-10T10:00:00.000Z'),
             team: { name: 'Equipe A' },
-            serviceOrder: { osNumber: 'OS-1000' },
+            serviceOrder: {
+              osNumber: 'OS-1000',
+              fimExecucao: new Date('2026-01-09T08:00:00.000Z'),
+              resultado: 'EXECUTADO',
+            },
             investmentWork: { id: 'iw-1', workName: 'Obra X' },
           },
         ],
@@ -470,7 +476,11 @@ describe('InspectionsService', () => {
       finalizedAt: null,
       createdAt: new Date('2026-01-10T10:00:00.000Z'),
       team: { name: 'Equipe A' },
-      serviceOrder: { osNumber: 'OS-1000' },
+      serviceOrder: {
+        osNumber: 'OS-1000',
+        fimExecucao: new Date('2026-01-09T08:00:00.000Z'),
+        resultado: 'EXECUTADO',
+      },
       investmentWork: { id: 'iw-1', name: 'Obra X', workName: 'Obra X' },
     });
     expect((response.data[0] as any).items).toBeUndefined();
@@ -537,5 +547,72 @@ describe('InspectionsService', () => {
       investmentWork: { id: 'iw-2', name: 'Obra Y', workName: 'Obra Y' },
     });
     expect((response.data[0] as any).id).toBeUndefined();
+  });
+
+  it('findOneDetail deve retornar checklistItem.description nos itens', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'inspection-id',
+      externalId: 'ext-1',
+      checklistId: 'checklist-1',
+      createdByUserId: 'user-1',
+      teamId: 'team-1',
+      serviceOrderId: 'so-1',
+      investmentWorkId: null,
+      status: InspectionStatus.RASCUNHO,
+      module: ModuleType.CAMPO,
+      hasParalysisPenalty: false,
+      serviceDescription: null,
+      locationDescription: null,
+      createdAt: new Date('2026-05-01T10:00:00.000Z'),
+      finalizedAt: null,
+      updatedAt: new Date('2026-05-01T10:05:00.000Z'),
+      scorePercent: null,
+    });
+    inspectionItemsRepository.find.mockResolvedValue([
+      {
+        id: 'item-1',
+        checklistItemId: 'check-item-1',
+        answer: ChecklistAnswer.CONFORME,
+        notes: null,
+        updatedAt: new Date('2026-05-01T10:01:00.000Z'),
+        resolvedAt: new Date('2026-05-01T10:02:00.000Z'),
+        resolvedByUserId: 'resolver-1',
+        resolutionNotes: 'Ajustado em campo',
+        resolutionEvidencePath: null,
+      },
+    ]);
+    evidencesRepository.find.mockResolvedValue([]);
+    signaturesRepository.find.mockResolvedValue([]);
+    teamsRepository.findOne.mockResolvedValue({ name: 'Equipe A' });
+    serviceOrderRepository.findOne.mockResolvedValue({ osNumber: 'OS-001' });
+    checklistItemsRepository.find.mockResolvedValue([
+      {
+        id: 'check-item-1',
+        title: 'Item de Checklist',
+        description: 'Descricao do item',
+      },
+    ]);
+    (service as any).checklistsRepository = {
+      findOne: jest.fn().mockResolvedValue({ name: 'Checklist A' }),
+    };
+    dataSource.getRepository.mockImplementation((entity: any) => {
+      if (entity === Inspection) return inspectionsRepository;
+      return {
+        findOne: jest.fn().mockResolvedValue({ name: 'Criador' }),
+        find: jest.fn().mockResolvedValue([{ id: 'resolver-1', name: 'Joao' }]),
+      };
+    });
+
+    const result = await service.findOneDetail('inspection-id');
+
+    expect(result.items[0].checklistItem).toEqual({
+      title: 'Item de Checklist',
+      description: 'Descricao do item',
+    });
+    expect(result.items[0].resolvedAt).toEqual(
+      new Date('2026-05-01T10:02:00.000Z'),
+    );
+    expect(result.items[0].resolvedBy).toEqual({ name: 'Joao' });
+    expect(result.items[0].resolutionNotes).toBe('Ajustado em campo');
   });
 });

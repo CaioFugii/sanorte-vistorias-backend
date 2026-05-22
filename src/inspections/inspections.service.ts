@@ -365,7 +365,7 @@ export class InspectionsService {
         'inspection.createdAt',
       ])
       .addSelect(['team.name'])
-      .addSelect(['serviceOrder.osNumber'])
+      .addSelect(['serviceOrder.osNumber', 'serviceOrder.fimExecucao', 'serviceOrder.resultado'])
       .addSelect(['investmentWork.id', 'investmentWork.workName'])
       .andWhere('inspection.status != :draftStatus', {
         draftStatus: InspectionStatus.RASCUNHO,
@@ -528,7 +528,11 @@ export class InspectionsService {
       createdAt: inspection.createdAt,
       team: inspection.team?.name ? { name: inspection.team.name } : null,
       serviceOrder: inspection.serviceOrder
-        ? { osNumber: inspection.serviceOrder.osNumber }
+        ? {
+            osNumber: inspection.serviceOrder.osNumber,
+            fimExecucao: inspection.serviceOrder.fimExecucao ?? null,
+            resultado: inspection.serviceOrder.resultado ?? null,
+          }
         : null,
       investmentWork: inspection.investmentWork
         ? {
@@ -619,6 +623,9 @@ export class InspectionsService {
           answer: true,
           notes: true,
           updatedAt: true,
+          resolvedAt: true,
+          resolvedByUserId: true,
+          resolutionNotes: true,
           resolutionEvidencePath: true,
         },
         order: { createdAt: 'ASC' },
@@ -684,23 +691,53 @@ export class InspectionsService {
         : Promise.resolve(null),
       this.checklistItemsRepository.find({
         where: { checklistId: base.checklistId },
-        select: { id: true, title: true },
+        select: { id: true, title: true, description: true },
       }),
     ]);
 
-    const checklistTitleById = new Map(
-      checklistItemRows.map((row) => [row.id, row.title] as const),
+    const checklistMetaById = new Map(
+      checklistItemRows.map(
+        (row) =>
+          [
+            row.id,
+            {
+              title: row.title ?? null,
+              description: row.description ?? null,
+            },
+          ] as const,
+      ),
+    );
+    const resolvedByUserIds = [
+      ...new Set(itemRows.map((row) => row.resolvedByUserId).filter(Boolean)),
+    ] as string[];
+    const resolvedByRows =
+      resolvedByUserIds.length > 0
+        ? await this.dataSource.getRepository(User).find({
+            where: { id: In(resolvedByUserIds) },
+            select: { id: true, name: true },
+          })
+        : [];
+    const resolvedByNameById = new Map(
+      resolvedByRows.map((row) => [row.id, row.name ?? null] as const),
     );
 
     const items: InspectionDetailItemDto[] = itemRows.map((row) => ({
       id: row.id,
       checklistItemId: row.checklistItemId,
       checklistItem: {
-        title: checklistTitleById.get(row.checklistItemId) ?? null,
+        title: checklistMetaById.get(row.checklistItemId)?.title ?? null,
+        description:
+          checklistMetaById.get(row.checklistItemId)?.description ?? null,
       },
       answer: row.answer ?? null,
       notes: row.notes ?? null,
       updatedAt: row.updatedAt,
+      resolvedAt: row.resolvedAt ?? null,
+      resolvedBy:
+        row.resolvedByUserId && resolvedByNameById.get(row.resolvedByUserId)
+          ? { name: resolvedByNameById.get(row.resolvedByUserId)! }
+          : null,
+      resolutionNotes: row.resolutionNotes ?? null,
       resolutionEvidencePath: row.resolutionEvidencePath ?? null,
     }));
 

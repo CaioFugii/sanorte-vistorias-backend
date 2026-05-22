@@ -1342,7 +1342,11 @@ Contrato por item (`InspectionListDTO`):
   "finalizedAt": "2026-02-19T12:00:00.000Z",
   "createdAt": "2026-02-19T12:00:00.000Z",
   "team": { "name": "Equipe A" },
-  "serviceOrder": { "osNumber": "OS-001" },
+  "serviceOrder": {
+    "osNumber": "OS-001",
+    "fimExecucao": "2026-02-18T17:30:00.000Z",
+    "resultado": "EXECUTADO"
+  },
   "investmentWork": {
     "id": "uuid",
     "name": "Ampliação Rede Bairro Norte",
@@ -1359,6 +1363,7 @@ Contrato por item (`InspectionListDTO`):
 - Regras de serialização:
   - `externalId` sempre vem preenchido; quando não existir no banco, retorna fallback com `id` interno.
   - `serviceOrder` e `team` podem ser `null`.
+  - quando `serviceOrder` existir, retorna `{ osNumber, fimExecucao, resultado }`.
   - `investmentWork` pode ser `null`; quando preenchido, retorna `{ id, name, workName }`.
 - Escopo: além de `createdByUserId`, aplica contrato permitido da vistoria (`inspection.contractId`)
 
@@ -1376,7 +1381,11 @@ Exemplo de item em `data`:
   "finalizedAt": null,
   "createdAt": "2026-04-19T12:00:00.000Z",
   "team": { "name": "Equipe A" },
-  "serviceOrder": { "osNumber": "1234567" }
+  "serviceOrder": {
+    "osNumber": "1234567",
+    "fimExecucao": "2026-04-18T15:10:00.000Z",
+    "resultado": "EXECUTADO"
+  }
 }
 ```
 

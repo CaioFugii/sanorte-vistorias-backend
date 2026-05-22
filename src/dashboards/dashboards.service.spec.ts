@@ -1,5 +1,6 @@
 import { DashboardsService } from './dashboards.service';
 import { InspectionScope, InspectionStatus, ModuleType } from '../common/enums';
+import { TeamRankingMetric } from './dto';
 
 function createMockQueryBuilder({
   rawOne,
@@ -106,6 +107,43 @@ describe('DashboardsService', () => {
     });
   });
 
+  it('deve aplicar módulos padrão do setor de qualidade quando module não for informado', async () => {
+    const qb = createMockQueryBuilder({});
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getQualityByService({
+      from: '2025-01-01',
+      to: '2025-01-31',
+      sector: 'QUALITY' as any,
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [
+          ModuleType.CAMPO,
+          ModuleType.POS_OBRA,
+          ModuleType.REMOTO,
+          ModuleType.OBRAS_INVESTIMENTO,
+        ],
+      },
+    );
+  });
+
+  it('deve validar module incompatível com setor', async () => {
+    const qb = createMockQueryBuilder({});
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await expect(
+      service.getQualityByService({
+        from: '2025-01-01',
+        to: '2025-01-31',
+        sector: 'SAFETY_WORK' as any,
+        module: ModuleType.CAMPO,
+      }),
+    ).rejects.toThrow('module inválido para o setor SAFETY_WORK');
+  });
+
   it('deve aplicar filtros de module e teamId nas consultas de qualidade', async () => {
     const qb = createMockQueryBuilder({});
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
@@ -113,6 +151,7 @@ describe('DashboardsService', () => {
     await service.getQualityByService({
       from: '2025-01-01',
       to: '2025-01-31',
+      sector: 'QUALITY' as any,
       module: ModuleType.CAMPO,
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
     });
@@ -123,12 +162,6 @@ describe('DashboardsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
     });
-    expect(qb.andWhere).toHaveBeenCalledWith(
-      'inspection.module != :excludedDashboardModule',
-      {
-        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
-      },
-    );
   });
 
   it('deve filtrar por contractId quando informado', async () => {
@@ -144,8 +177,11 @@ describe('DashboardsService', () => {
     });
 
     expect(qb.andWhere).toHaveBeenCalledWith(
-      'serviceOrder.contractId = :dashboardContractId',
-      { dashboardContractId: contractId },
+      expect.stringContaining('inspection.module = :dashboardSafetyModuleContract'),
+      expect.objectContaining({
+        dashboardSafetyModuleContract: ModuleType.SEGURANCA_TRABALHO,
+        dashboardContractId: contractId,
+      }),
     );
   });
 
@@ -172,6 +208,7 @@ describe('DashboardsService', () => {
 
     const result = await service.getCurrentMonthByService({
       month: '2025-12',
+      sector: 'QUALITY' as any,
       module: ModuleType.CAMPO,
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
     });
@@ -215,18 +252,6 @@ describe('DashboardsService', () => {
         teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
       },
     );
-    expect(summaryQb.andWhere).toHaveBeenCalledWith(
-      'inspection.module != :excludedDashboardModule',
-      {
-        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
-      },
-    );
-    expect(rankingQb.andWhere).toHaveBeenCalledWith(
-      'inspection.module != :excludedDashboardModule',
-      {
-        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
-      },
-    );
     expect(summaryQb.where).toHaveBeenCalledWith(
       'inspection.status IN (:...qualityStatuses)',
       {
@@ -258,6 +283,7 @@ describe('DashboardsService', () => {
     const result = await service.getLowScoreCollaborators({
       from: '2026-01-01',
       to: '2026-01-31',
+      sector: 'SAFETY_WORK' as any,
       lowScoreThreshold: 70,
       limit: 20,
     });
@@ -290,9 +316,9 @@ describe('DashboardsService', () => {
       },
     );
     expect(qb.andWhere).toHaveBeenCalledWith(
-      'inspection.module != :excludedDashboardModule',
+      'inspection.module IN (:...dashboardSectorModules)',
       {
-        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
+        dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO],
       },
     );
     expect(qb.setParameter).toHaveBeenCalledWith('lowScoreThreshold', 70);
@@ -333,6 +359,7 @@ describe('DashboardsService', () => {
     const result = await service.getTopNonConformitiesByChecklist({
       from: '2026-01-01',
       to: '2026-01-31',
+      sector: 'QUALITY' as any,
       module: ModuleType.CAMPO,
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
       limitPerChecklist: 1,
@@ -382,12 +409,6 @@ describe('DashboardsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
     });
-    expect(qb.andWhere).toHaveBeenCalledWith(
-      'inspection.module != :excludedDashboardModule',
-      {
-        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
-      },
-    );
     expect(qb.setParameter).toHaveBeenCalledWith(
       'nonConformAnswer',
       'NAO_CONFORME',
@@ -418,6 +439,7 @@ describe('DashboardsService', () => {
     const result = await service.getTopNonConformitiesByTeam({
       from: '2026-01-01',
       to: '2026-01-31',
+      sector: 'QUALITY' as any,
       module: ModuleType.CAMPO,
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
       limit: 2,
@@ -455,12 +477,6 @@ describe('DashboardsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
       module: ModuleType.CAMPO,
     });
-    expect(qb.andWhere).toHaveBeenCalledWith(
-      'inspection.module != :excludedDashboardModule',
-      {
-        excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
-      },
-    );
     expect(qb.setParameter).toHaveBeenCalledWith(
       'nonConformAnswer',
       'NAO_CONFORME',
@@ -494,6 +510,7 @@ describe('DashboardsService', () => {
     const result = await service.getTeamsRanking({
       from: '2026-01-01',
       to: '2026-01-31',
+      sector: 'QUALITY' as any,
     });
 
     expect(result).toEqual([
@@ -528,6 +545,148 @@ describe('DashboardsService', () => {
       'safetyWorkModule',
       ModuleType.SEGURANCA_TRABALHO,
     );
+  });
+
+  it('deve usar data e contrato da inspection no summary quando module for SEGURANCA_TRABALHO', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '0',
+        pendingCount: '0',
+        averagePercent: null,
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getSummary({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'SAFETY_WORK' as any,
+      module: ModuleType.SEGURANCA_TRABALHO,
+      contractId: 'contract-1',
+      user: {
+        role: 'GESTOR',
+        contracts: [{ id: 'contract-1' }, { id: 'contract-2' }],
+      },
+    });
+
+    const andWhereCalls = qb.andWhere.mock.calls;
+    expect(
+      andWhereCalls.some(
+        ([sql]: [string, any]) =>
+          sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from'),
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql]: [string, any]) =>
+          sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt) <= :to'),
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.contractId = :dashboardContractId') &&
+          params?.dashboardContractId === 'contract-1',
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.contractId IN (:...allowedContractIds)') &&
+          Array.isArray(params?.allowedContractIds),
+      ),
+    ).toBe(true);
+  });
+
+  it('deve usar regra híbrida no summary quando module não for informado', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '0',
+        pendingCount: '0',
+        averagePercent: null,
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getSummary({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+      contractId: 'contract-1',
+      user: {
+        role: 'GESTOR',
+        contracts: [{ id: 'contract-1' }, { id: 'contract-2' }],
+      },
+    });
+
+    const andWhereCalls = qb.andWhere.mock.calls;
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.module = :dashboardSafetyModulePeriod') &&
+          sql.includes('inspection.module != :dashboardSafetyModulePeriod') &&
+          params?.dashboardSafetyModulePeriod === ModuleType.SEGURANCA_TRABALHO,
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.module = :dashboardSafetyModuleContract') &&
+          sql.includes('inspection.contractId = :dashboardContractId') &&
+          sql.includes('serviceOrder.contractId = :dashboardContractId') &&
+          params?.dashboardSafetyModuleContract === ModuleType.SEGURANCA_TRABALHO &&
+          params?.dashboardContractId === 'contract-1',
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.module = :dashboardSafetyModuleAllowedContracts') &&
+          sql.includes('inspection.contractId IN (:...dashboardAllowedContractIds)') &&
+          sql.includes('serviceOrder.contractId IN (:...dashboardAllowedContractIds)') &&
+          params?.dashboardSafetyModuleAllowedContracts ===
+            ModuleType.SEGURANCA_TRABALHO &&
+          Array.isArray(params?.dashboardAllowedContractIds),
+      ),
+    ).toBe(true);
+  });
+
+  it('deve usar regra híbrida de contrato em não conformidades por checklist quando module não for informado', async () => {
+    const qb = createMockQueryBuilder({ rawMany: [] });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getTopNonConformitiesByChecklist({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+      user: {
+        role: 'GESTOR',
+        contracts: [{ id: 'contract-1' }, { id: 'contract-2' }],
+      },
+      contractId: 'contract-1',
+    });
+
+    const andWhereCalls = qb.andWhere.mock.calls;
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.module = :dashboardSafetyModuleContract') &&
+          sql.includes('inspection.contractId = :dashboardContractId') &&
+          sql.includes('serviceOrder.contractId = :dashboardContractId') &&
+          params?.dashboardSafetyModuleContract === ModuleType.SEGURANCA_TRABALHO,
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.module = :dashboardSafetyModuleAllowedContracts') &&
+          sql.includes('inspection.contractId IN (:...dashboardAllowedContractIds)') &&
+          sql.includes('serviceOrder.contractId IN (:...dashboardAllowedContractIds)') &&
+          params?.dashboardSafetyModuleAllowedContracts ===
+            ModuleType.SEGURANCA_TRABALHO &&
+          Array.isArray(params?.dashboardAllowedContractIds),
+      ),
+    ).toBe(true);
   });
 
   it('deve retornar vistorias usadas na nota da equipe com paginação e métrica', async () => {
@@ -594,5 +753,66 @@ describe('DashboardsService', () => {
     });
     expect(qb.offset).toHaveBeenCalledWith(0);
     expect(qb.limit).toHaveBeenCalledWith(20);
+  });
+
+  it('deve usar data e contrato da inspection no ranking inspections quando métrica for safetyWork', async () => {
+    teamRepository.findOne.mockResolvedValue({
+      id: 'team-1',
+      name: 'Equipe Norte',
+    });
+
+    const qb = createMockQueryBuilder({
+      rawMany: [],
+      count: 0,
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getTeamRankingInspections('team-1', {
+      from: '2026-04-20',
+      to: '2026-05-20',
+      metric: TeamRankingMetric.SAFETY_WORK,
+      page: 1,
+      limit: 20,
+      contractId: 'contract-1',
+      user: {
+        role: 'GESTOR',
+        contracts: [{ id: 'contract-1' }, { id: 'contract-2' }],
+      },
+    });
+
+    const andWhereCalls = qb.andWhere.mock.calls;
+    expect(
+      andWhereCalls.some(
+        ([sql]: [string, any]) =>
+          sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from'),
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql]: [string, any]) =>
+          sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt) <= :to'),
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.contractId = :dashboardContractId') &&
+          params?.dashboardContractId === 'contract-1',
+      ),
+    ).toBe(true);
+    expect(
+      andWhereCalls.some(
+        ([sql, params]: [string, any]) =>
+          sql.includes('inspection.contractId IN (:...allowedContractIds)') &&
+          Array.isArray(params?.allowedContractIds),
+      ),
+    ).toBe(true);
+    expect(qb.orderBy).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'CASE WHEN inspection.module = :dashboardSafetyModuleFinishedAt',
+      ),
+      'DESC',
+      'NULLS LAST',
+    );
   });
 });

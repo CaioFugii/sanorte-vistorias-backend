@@ -49,6 +49,14 @@ const DEFAULT_NON_CONFORMITIES_LIMIT_PER_CHECKLIST = 5;
 const MAX_NON_CONFORMITIES_LIMIT_PER_CHECKLIST = 20;
 const DEFAULT_NON_CONFORMITIES_LIMIT_BY_TEAM = 10;
 const MAX_NON_CONFORMITIES_LIMIT_BY_TEAM = 20;
+type DashboardSector = 'QUALITY' | 'SAFETY_WORK';
+const QUALITY_DASHBOARD_MODULES = [
+  ModuleType.CAMPO,
+  ModuleType.POS_OBRA,
+  ModuleType.REMOTO,
+  ModuleType.OBRAS_INVESTIMENTO,
+];
+const SAFETY_WORK_DASHBOARD_MODULES = [ModuleType.SEGURANCA_TRABALHO];
 
 /** Converte uma data YYYY-MM-DD para o fim do dia (23:59:59.999) em UTC. */
 function toEndOfDay(dateStr: string): Date {
@@ -180,15 +188,49 @@ export class DashboardsService {
     return Array.from(new Set(teamIds));
   }
 
+  private getSectorModules(sector?: DashboardSector): ModuleType[] | undefined {
+    if (sector === 'QUALITY') {
+      return QUALITY_DASHBOARD_MODULES;
+    }
+    if (sector === 'SAFETY_WORK') {
+      return SAFETY_WORK_DASHBOARD_MODULES;
+    }
+    return undefined;
+  }
+
+  private resolvePeriodModule(
+    module?: ModuleType,
+    sector?: DashboardSector,
+  ): ModuleType | undefined {
+    if (module) {
+      return module;
+    }
+    if (sector === 'SAFETY_WORK') {
+      return ModuleType.SEGURANCA_TRABALHO;
+    }
+    return undefined;
+  }
+
   private applyQualityFilters(
     qb: any,
     filters: {
+      sector?: DashboardSector;
       module?: ModuleType;
       teamId?: string;
     },
   ): void {
+    const sectorModules = this.getSectorModules(filters.sector);
     if (filters.module) {
+      if (sectorModules && !sectorModules.includes(filters.module)) {
+        throw new BadRequestException(
+          `module inválido para o setor ${filters.sector}. Valores aceitos: ${sectorModules.join(', ')}`,
+        );
+      }
       qb.andWhere('inspection.module = :module', { module: filters.module });
+    } else if (sectorModules) {
+      qb.andWhere('inspection.module IN (:...dashboardSectorModules)', {
+        dashboardSectorModules: sectorModules,
+      });
     }
     if (filters.teamId) {
       qb.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
@@ -205,17 +247,137 @@ export class DashboardsService {
     applyContractScopeFilter(qb, allowedContractIds, 'serviceOrder.contractId');
   }
 
-  private applyTemporaryExcludedModulesFilter(qb: any): void {
-    // TEMPORARIO: dashboards devem ignorar OBRAS_INVESTIMENTO
-    qb.andWhere('inspection.module != :excludedDashboardModule', {
-      excludedDashboardModule: ModuleType.OBRAS_INVESTIMENTO,
-    });
+  private applyDashboardPeriodFilter(
+    qb: any,
+    filters: {
+      from: string;
+      to: Date;
+      module?: ModuleType;
+    },
+  ): void {
+    if (filters.module === ModuleType.SEGURANCA_TRABALHO) {
+      qb.andWhere(
+        'COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from',
+        {
+          from: filters.from,
+        },
+      );
+      qb.andWhere(
+        'COALESCE(inspection.finalizedAt, inspection.createdAt) <= :to',
+        {
+          to: filters.to,
+        },
+      );
+      return;
+    }
+
+    if (filters.module) {
+      qb.andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from });
+      qb.andWhere('serviceOrder.fim_execucao <= :to', { to: filters.to });
+      return;
+    }
+
+    qb.andWhere(
+      `(
+        (
+          inspection.module = :dashboardSafetyModulePeriod
+          AND COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from
+          AND COALESCE(inspection.finalizedAt, inspection.createdAt) <= :to
+        )
+        OR
+        (
+          inspection.module != :dashboardSafetyModulePeriod
+          AND serviceOrder.fim_execucao >= :from
+          AND serviceOrder.fim_execucao <= :to
+        )
+      )`,
+      {
+        from: filters.from,
+        to: filters.to,
+        dashboardSafetyModulePeriod: ModuleType.SEGURANCA_TRABALHO,
+      },
+    );
+  }
+
+  private applyDashboardContractScope(
+    qb: any,
+    filters: {
+      user?: any;
+      contractId?: string;
+      module?: ModuleType;
+    },
+  ): void {
+    const contractColumn =
+      filters.module === ModuleType.SEGURANCA_TRABALHO
+        ? 'inspection.contractId'
+        : 'serviceOrder.contractId';
+
+    if (!filters.module) {
+      if (filters.contractId) {
+        qb.andWhere(
+          `(
+            (
+              inspection.module = :dashboardSafetyModuleContract
+              AND inspection.contractId = :dashboardContractId
+            )
+            OR
+            (
+              inspection.module != :dashboardSafetyModuleContract
+              AND serviceOrder.contractId = :dashboardContractId
+            )
+          )`,
+          {
+            dashboardSafetyModuleContract: ModuleType.SEGURANCA_TRABALHO,
+            dashboardContractId: filters.contractId,
+          },
+        );
+      }
+
+      const allowedContractIds = getAllowedContractIds(filters.user);
+      if (allowedContractIds === null) {
+        return;
+      }
+
+      if (allowedContractIds.length === 0) {
+        qb.andWhere('1 = 0');
+        return;
+      }
+
+      qb.andWhere(
+        `(
+          (
+            inspection.module = :dashboardSafetyModuleAllowedContracts
+            AND inspection.contractId IN (:...dashboardAllowedContractIds)
+          )
+          OR
+          (
+            inspection.module != :dashboardSafetyModuleAllowedContracts
+            AND serviceOrder.contractId IN (:...dashboardAllowedContractIds)
+          )
+        )`,
+        {
+          dashboardSafetyModuleAllowedContracts: ModuleType.SEGURANCA_TRABALHO,
+          dashboardAllowedContractIds: allowedContractIds,
+        },
+      );
+      return;
+    }
+
+    if (filters.contractId) {
+      qb.andWhere(`${contractColumn} = :dashboardContractId`, {
+        dashboardContractId: filters.contractId,
+      });
+    }
+
+    const allowedContractIds = getAllowedContractIds(filters.user);
+    applyContractScopeFilter(qb, allowedContractIds, contractColumn);
   }
 
   async getSummary(filters: {
     user?: any;
     from: string;
     to: string;
+    sector?: DashboardSector;
     module?: ModuleType;
     teamId?: string;
     contractId?: string;
@@ -235,19 +397,25 @@ export class DashboardsService {
         draft: InspectionStatus.RASCUNHO,
       })
       .andWhere('inspection.teamId IS NOT NULL')
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
-      .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
-      .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
 
-    if (filters.module) {
-      qb.andWhere('inspection.module = :module', { module: filters.module });
-    }
-    if (filters.teamId) {
-      qb.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
-    }
+    this.applyQualityFilters(qb, {
+      sector: filters.sector,
+      module: filters.module,
+      teamId: filters.teamId,
+    });
 
-    this.applyTemporaryExcludedModulesFilter(qb);
-    this.applyContractScope(qb, filters.user, filters.contractId);
+    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    this.applyDashboardPeriodFilter(qb, {
+      from: filters.from,
+      to: toLimit,
+      module: periodModule,
+    });
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
 
     const row = await qb.getRawOne<{
       inspectionsCount: string;
@@ -274,6 +442,7 @@ export class DashboardsService {
     user?: any;
     from: string;
     to: string;
+    sector?: DashboardSector;
     module?: ModuleType;
     contractId?: string;
   }) {
@@ -323,16 +492,24 @@ export class DashboardsService {
       .setParameter('noTeam', 'Sem equipe')
       .groupBy('inspection.teamId')
       .addGroupBy('team.name')
-      .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
-      .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
-      .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
+      .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST');
 
-    if (filters.module) {
-      qb.andWhere('inspection.module = :module', { module: filters.module });
-    }
+    this.applyQualityFilters(qb, {
+      sector: filters.sector,
+      module: filters.module,
+    });
 
-    this.applyTemporaryExcludedModulesFilter(qb);
-    this.applyContractScope(qb, filters.user, filters.contractId);
+    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    this.applyDashboardPeriodFilter(qb, {
+      from: filters.from,
+      to: toLimit,
+      module: periodModule,
+    });
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
 
     const rows = await qb.getRawMany<{
       teamId: string;
@@ -388,6 +565,7 @@ export class DashboardsService {
       user?: any;
       from: string;
       to: string;
+      sector?: DashboardSector;
       module?: ModuleType;
       contractId?: string;
     },
@@ -420,11 +598,10 @@ export class DashboardsService {
       .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
       .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
 
-    if (filters.module) {
-      qb.andWhere('inspection.module = :module', { module: filters.module });
-    }
-
-    this.applyTemporaryExcludedModulesFilter(qb);
+    this.applyQualityFilters(qb, {
+      sector: filters.sector,
+      module: filters.module,
+    });
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const row = await qb.getRawOne<{
@@ -463,6 +640,7 @@ export class DashboardsService {
       user?: any;
       from: string;
       to: string;
+      sector?: DashboardSector;
       metric?: TeamRankingMetric;
       page?: number;
       limit?: number;
@@ -480,6 +658,7 @@ export class DashboardsService {
     const skip = (page - 1) * limit;
     const toLimit = toEndOfDay(filters.to);
     const metric = filters.metric ?? TeamRankingMetric.AVERAGE;
+    const finishedAtExpr = `CASE WHEN inspection.module = :dashboardSafetyModuleFinishedAt THEN COALESCE(inspection.finalizedAt, inspection.createdAt) ELSE serviceOrder.fim_execucao END`;
 
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -491,15 +670,17 @@ export class DashboardsService {
       .addSelect('inspection.module', 'module')
       .addSelect('inspection.status', 'status')
       .addSelect('inspection.scorePercent', 'scorePercent')
-      .addSelect('serviceOrder.fim_execucao', 'finishedAt')
+      .addSelect(finishedAtExpr, 'finishedAt')
       .addSelect('inspection.createdAt', 'createdAt')
       .where('inspection.status != :draft', {
         draft: InspectionStatus.RASCUNHO,
       })
       .andWhere('inspection.teamId = :teamId', { teamId })
       .andWhere('inspection.scorePercent IS NOT NULL')
-      .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
-      .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
+      .setParameter(
+        'dashboardSafetyModuleFinishedAt',
+        ModuleType.SEGURANCA_TRABALHO,
+      );
 
     const metricToModule = {
       [TeamRankingMetric.POST_WORK]: ModuleType.POS_OBRA,
@@ -514,13 +695,30 @@ export class DashboardsService {
       });
     }
 
-    this.applyTemporaryExcludedModulesFilter(qb);
-    this.applyContractScope(qb, filters.user, filters.contractId);
+    const metricModule =
+      metric !== TeamRankingMetric.AVERAGE ? metricToModule[metric] : undefined;
+
+    this.applyQualityFilters(qb, {
+      sector: filters.sector,
+      module: metricModule,
+    });
+    const periodModule = this.resolvePeriodModule(metricModule, filters.sector);
+
+    this.applyDashboardPeriodFilter(qb, {
+      from: filters.from,
+      to: toLimit,
+      module: periodModule,
+    });
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
 
     const [rows, total] = await Promise.all([
       qb
         .clone()
-        .orderBy('serviceOrder.fim_execucao', 'DESC', 'NULLS LAST')
+        .orderBy(finishedAtExpr, 'DESC', 'NULLS LAST')
         .addOrderBy('inspection.createdAt', 'DESC')
         .offset(skip)
         .limit(limit)
@@ -570,6 +768,7 @@ export class DashboardsService {
     user?: any;
     from: string;
     to: string;
+    sector?: DashboardSector;
     module?: ModuleType;
     teamId?: string;
     contractId?: string;
@@ -604,11 +803,15 @@ export class DashboardsService {
       .addOrderBy(serviceLabelExpr, 'ASC');
 
     this.applyQualityFilters(qb, {
+      sector: filters.sector,
       module: filters.module,
       teamId: filters.teamId,
     });
-    this.applyTemporaryExcludedModulesFilter(qb);
-    this.applyContractScope(qb, filters.user, filters.contractId);
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: filters.module,
+    });
 
     const rows = await qb.getRawMany<{
       month: string;
@@ -684,6 +887,7 @@ export class DashboardsService {
   async getCurrentMonthByService(filters: {
     user?: any;
     month?: string;
+    sector?: DashboardSector;
     module?: ModuleType;
     teamId?: string;
     contractId?: string;
@@ -715,10 +919,10 @@ export class DashboardsService {
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
 
     this.applyQualityFilters(summaryQb, {
+      sector: filters.sector,
       module: filters.module,
       teamId: filters.teamId,
     });
-    this.applyTemporaryExcludedModulesFilter(summaryQb);
     this.applyContractScope(summaryQb, filters.user, filters.contractId);
 
     const rankingQb = this.inspectionsRepository
@@ -742,10 +946,10 @@ export class DashboardsService {
       .addOrderBy(serviceLabelExpr, 'ASC');
 
     this.applyQualityFilters(rankingQb, {
+      sector: filters.sector,
       module: filters.module,
       teamId: filters.teamId,
     });
-    this.applyTemporaryExcludedModulesFilter(rankingQb);
     this.applyContractScope(rankingQb, filters.user, filters.contractId);
 
     const [summaryRow, rankingRows] = await Promise.all([
@@ -784,6 +988,7 @@ export class DashboardsService {
     user?: any;
     from: string;
     to: string;
+    sector?: DashboardSector;
     teamIdsCsv: string;
     contractId?: string;
   }): Promise<TeamPerformanceByTeamsResponseDto> {
@@ -880,10 +1085,10 @@ export class DashboardsService {
       .addOrderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
       .addOrderBy('collaborator.name', 'ASC');
 
-    this.applyTemporaryExcludedModulesFilter(currentSummaryQb);
-    this.applyTemporaryExcludedModulesFilter(previousSummaryQb);
-    this.applyTemporaryExcludedModulesFilter(teamRankingQb);
-    this.applyTemporaryExcludedModulesFilter(collaboratorsQb);
+    this.applyQualityFilters(currentSummaryQb, { sector: filters.sector });
+    this.applyQualityFilters(previousSummaryQb, { sector: filters.sector });
+    this.applyQualityFilters(teamRankingQb, { sector: filters.sector });
+    this.applyQualityFilters(collaboratorsQb, { sector: filters.sector });
     this.applyContractScope(currentSummaryQb, filters.user, filters.contractId);
     this.applyContractScope(
       previousSummaryQb,
@@ -985,6 +1190,7 @@ export class DashboardsService {
     user?: any;
     from: string;
     to: string;
+    sector?: DashboardSector;
     lowScoreThreshold?: number;
     limit?: number;
     contractId?: string;
@@ -1032,7 +1238,7 @@ export class DashboardsService {
       .addOrderBy('COUNT(inspection.id)', 'DESC')
       .limit(limit);
 
-    this.applyTemporaryExcludedModulesFilter(qb);
+    this.applyQualityFilters(qb, { sector: 'SAFETY_WORK' });
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
@@ -1075,6 +1281,7 @@ export class DashboardsService {
     user?: any;
     from: string;
     to: string;
+    sector?: DashboardSector;
     module?: ModuleType;
     teamId?: string;
     limitPerChecklist?: number;
@@ -1122,11 +1329,16 @@ export class DashboardsService {
       .addOrderBy('checklistItem.title', 'ASC');
 
     this.applyQualityFilters(qb, {
+      sector: filters.sector,
       module: filters.module,
       teamId: filters.teamId,
     });
-    this.applyTemporaryExcludedModulesFilter(qb);
-    this.applyContractScope(qb, filters.user, filters.contractId);
+    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
 
     const rows = await qb.getRawMany<{
       checklistId: string;
@@ -1220,6 +1432,7 @@ export class DashboardsService {
     user?: any;
     from: string;
     to: string;
+    sector?: DashboardSector;
     module?: ModuleType;
     teamId: string;
     limit?: number;
@@ -1259,11 +1472,10 @@ export class DashboardsService {
       .addOrderBy('checklistItem.title', 'ASC')
       .limit(limit);
 
-    if (filters.module) {
-      qb.andWhere('inspection.module = :module', { module: filters.module });
-    }
-
-    this.applyTemporaryExcludedModulesFilter(qb);
+    this.applyQualityFilters(qb, {
+      sector: filters.sector,
+      module: filters.module,
+    });
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{

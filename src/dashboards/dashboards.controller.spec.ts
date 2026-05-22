@@ -131,6 +131,22 @@ describe('DashboardsController (integration)', () => {
       .expect(200);
   });
 
+  it('deve permitir ADMIN no endpoint de qualidade separado', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/quality/quality-by-service')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'ADMIN')
+      .expect(200);
+  });
+
+  it('deve permitir ADMIN no endpoint de segurança do trabalho separado', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/safety-work/summary')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'ADMIN')
+      .expect(200);
+  });
+
   it('deve permitir GESTOR no endpoint de analytics', async () => {
     await request(app.getHttpServer())
       .get('/dashboards/current-month-by-service')
