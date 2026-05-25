@@ -469,16 +469,8 @@ export class DashboardsService {
         'fieldPercent',
       )
       .addSelect(
-        `AVG(CASE WHEN inspection.module = :safetyWorkModule THEN inspection.scorePercent ELSE NULL END)`,
-        'safetyWorkPercent',
-      )
-      .addSelect(
         `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
         'pendingCount',
-      )
-      .addSelect(
-        `SUM(CASE WHEN inspection.hasParalysisPenalty = true THEN 1 ELSE 0 END)`,
-        'paralyzedCount',
       )
       .where('inspection.status != :draft', {
         draft: InspectionStatus.RASCUNHO,
@@ -488,7 +480,6 @@ export class DashboardsService {
       .setParameter('postWorkModule', ModuleType.POS_OBRA)
       .setParameter('remoteModule', ModuleType.REMOTO)
       .setParameter('fieldModule', ModuleType.CAMPO)
-      .setParameter('safetyWorkModule', ModuleType.SEGURANCA_TRABALHO)
       .setParameter('noTeam', 'Sem equipe')
       .groupBy('inspection.teamId')
       .addGroupBy('team.name')
@@ -519,14 +510,10 @@ export class DashboardsService {
       postWorkPercent: string | null;
       remotePercent: string | null;
       fieldPercent: string | null;
-      safetyWorkPercent: string | null;
       pendingCount: string;
-      paralyzedCount: string;
     }>();
 
     return rows.map((row) => {
-      const inspectionsCount = parseInt(row.inspectionsCount, 10);
-      const paralyzedCount = parseInt(row.paralyzedCount, 10);
       const averagePercentRaw = row.averagePercent;
       const averagePercent =
         averagePercentRaw != null
@@ -535,28 +522,81 @@ export class DashboardsService {
       const postWorkPercent = roundTo2(parseFloat(row.postWorkPercent ?? '0'));
       const remotePercent = roundTo2(parseFloat(row.remotePercent ?? '0'));
       const fieldPercent = roundTo2(parseFloat(row.fieldPercent ?? '0'));
-      const safetyWorkPercent = roundTo2(
-        parseFloat(row.safetyWorkPercent ?? '0'),
-      );
-      const paralysisRatePercent =
-        inspectionsCount > 0
-          ? Math.round((paralyzedCount / inspectionsCount) * 10000) / 100
-          : 0;
 
       return {
         teamId: row.teamId,
         teamName: row.teamName,
         averagePercent,
-        inspectionsCount,
+        inspectionsCount: parseInt(row.inspectionsCount, 10),
         postWorkPercent,
         remotePercent,
         fieldPercent,
-        safetyWorkPercent,
         pendingCount: parseInt(row.pendingCount, 10),
-        paralyzedCount,
-        paralysisRatePercent,
       };
     });
+  }
+
+  async getSafetyWorkTeamsRanking(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }) {
+    this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .leftJoin('inspection.team', 'team')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select('inspection.teamId', 'teamId')
+      .addSelect('COALESCE(team.name, :noTeam)', 'teamName')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect(
+        `AVG(CASE WHEN inspection.module = :safetyWorkModule THEN inspection.scorePercent ELSE NULL END)`,
+        'safetyWorkPercent',
+      )
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .andWhere('inspection.teamId IS NOT NULL')
+      .setParameter('safetyWorkModule', ModuleType.SEGURANCA_TRABALHO)
+      .setParameter('noTeam', 'Sem equipe')
+      .groupBy('inspection.teamId')
+      .addGroupBy('team.name')
+      .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST');
+
+    this.applyQualityFilters(qb, {
+      sector: 'SAFETY_WORK',
+    });
+
+    const periodModule = this.resolvePeriodModule(undefined, 'SAFETY_WORK');
+    this.applyDashboardPeriodFilter(qb, {
+      from: filters.from,
+      to: toLimit,
+      module: periodModule,
+    });
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
+
+    const rows = await qb.getRawMany<{
+      teamId: string;
+      teamName: string;
+      inspectionsCount: string;
+      averagePercent: string | null;
+      safetyWorkPercent: string | null;
+    }>();
+
+    return rows.map((row) => ({
+      teamId: row.teamId,
+      teamName: row.teamName,
+      averagePercent: roundTo2(parseFloat(row.averagePercent ?? '0')),
+      safetyWorkPercent: roundTo2(parseFloat(row.safetyWorkPercent ?? '0')),
+      inspectionsCount: parseInt(row.inspectionsCount, 10),
+    }));
   }
 
   async getTeamPerformance(

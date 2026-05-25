@@ -499,9 +499,7 @@ describe('DashboardsService', () => {
           postWorkPercent: '90.5',
           remotePercent: '88.2',
           fieldPercent: '91.9',
-        safetyWorkPercent: '87.6',
           pendingCount: '1',
-          paralyzedCount: '1',
         },
       ],
     });
@@ -522,10 +520,7 @@ describe('DashboardsService', () => {
         postWorkPercent: 90.5,
         remotePercent: 88.2,
         fieldPercent: 91.9,
-        safetyWorkPercent: 87.6,
         pendingCount: 1,
-        paralyzedCount: 1,
-        paralysisRatePercent: 20,
       },
     ]);
 
@@ -540,10 +535,6 @@ describe('DashboardsService', () => {
     expect(qb.setParameter).toHaveBeenCalledWith(
       'fieldModule',
       ModuleType.CAMPO,
-    );
-    expect(qb.setParameter).toHaveBeenCalledWith(
-      'safetyWorkModule',
-      ModuleType.SEGURANCA_TRABALHO,
     );
   });
 
@@ -813,6 +804,49 @@ describe('DashboardsService', () => {
       ),
       'DESC',
       'NULLS LAST',
+    );
+  });
+
+  it('deve retornar payload reduzido para ranking de safety work', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          teamId: 'team-1',
+          teamName: 'Equipe Norte',
+          inspectionsCount: '5',
+          averagePercent: '89.44',
+          postWorkPercent: '90.5',
+          remotePercent: '88.2',
+          fieldPercent: '91.9',
+          safetyWorkPercent: '87.6',
+          pendingCount: '1',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getSafetyWorkTeamsRanking({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      contractId: 'contract-1',
+      user: { role: 'ADMIN' },
+    });
+
+    expect(result).toEqual([
+      {
+        teamId: 'team-1',
+        teamName: 'Equipe Norte',
+        averagePercent: 89.44,
+        safetyWorkPercent: 87.6,
+        inspectionsCount: 5,
+      },
+    ]);
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO],
+      },
     );
   });
 });

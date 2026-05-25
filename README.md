@@ -156,6 +156,7 @@ Authorization: Bearer <token>
 
 - `GET /dashboards/summary` (autenticado)
 - `GET /dashboards/ranking/teams` (autenticado)
+- `GET /dashboards/ranking/teams/safety-work` (autenticado)
 
 ## Regras de negócio principais
 

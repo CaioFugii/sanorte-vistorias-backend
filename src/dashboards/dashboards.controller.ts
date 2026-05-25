@@ -172,12 +172,12 @@ export class DashboardsController {
     );
   }
 
-  @Get('safety-work/ranking/teams')
-  getSafetyWorkTeamsRanking(
+  @Get('ranking/teams/safety-work')
+  getTeamsRankingSafetyWork(
     @CurrentUser() user: any,
     @Query() query: DashboardQueryDto,
   ) {
-    return this.dashboardsService.getTeamsRanking(
+    return this.dashboardsService.getSafetyWorkTeamsRanking(
       this.summaryFilters(user, query, 'SAFETY_WORK'),
     );
   }

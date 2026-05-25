@@ -28,6 +28,7 @@ describe('DashboardsController (integration)', () => {
       pendingCount: 1,
     }),
     getTeamsRanking: jest.fn().mockResolvedValue([]),
+    getSafetyWorkTeamsRanking: jest.fn().mockResolvedValue([]),
     getTeamRankingInspections: jest.fn().mockResolvedValue({
       from: '2025-11-01',
       to: '2025-11-30',
@@ -164,6 +165,17 @@ describe('DashboardsController (integration)', () => {
         metric: 'field',
         page: 1,
         limit: 20,
+      })
+      .set('x-role', 'ADMIN')
+      .expect(200);
+  });
+
+  it('deve permitir ADMIN no novo endpoint de ranking safety work', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/ranking/teams/safety-work')
+      .query({
+        from: '2025-11-01',
+        to: '2025-11-30',
       })
       .set('x-role', 'ADMIN')
       .expect(200);
