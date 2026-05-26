@@ -707,6 +707,7 @@ export class DashboardsService {
       .addSelect('inspection.serviceOrderId', 'serviceOrderId')
       .addSelect('serviceOrder.osNumber', 'serviceOrderNumber')
       .addSelect('serviceOrder.address', 'serviceOrderAddress')
+      .addSelect('inspection.locationDescription', 'locationDescription')
       .addSelect('inspection.module', 'module')
       .addSelect('inspection.status', 'status')
       .addSelect('inspection.scorePercent', 'scorePercent')
@@ -767,6 +768,7 @@ export class DashboardsService {
           serviceOrderId: string | null;
           serviceOrderNumber: string | null;
           serviceOrderAddress: string | null;
+          locationDescription: string | null;
           module: ModuleType;
           status: InspectionStatus;
           scorePercent: string;
@@ -794,7 +796,7 @@ export class DashboardsService {
         inspectionId: row.inspectionId,
         serviceOrderId: row.serviceOrderId,
         serviceOrderNumber: row.serviceOrderNumber,
-        serviceOrderAddress: row.serviceOrderAddress,
+        serviceOrderAddress: row.serviceOrderAddress ?? row.locationDescription,
         module: row.module,
         status: row.status,
         scorePercent: roundTo2(parseFloat(row.scorePercent ?? '0')),

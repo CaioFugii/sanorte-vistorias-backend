@@ -746,6 +746,47 @@ describe('DashboardsService', () => {
     expect(qb.limit).toHaveBeenCalledWith(20);
   });
 
+  it('deve usar locationDescription quando serviceOrderAddress for nulo', async () => {
+    teamRepository.findOne.mockResolvedValue({
+      id: 'team-1',
+      name: 'Equipe Norte',
+    });
+
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          inspectionId: 'insp-1',
+          serviceOrderId: null,
+          serviceOrderNumber: null,
+          serviceOrderAddress: null,
+          locationDescription: 'Ponto de apoio - Quadra 12',
+          module: ModuleType.SEGURANCA_TRABALHO,
+          status: InspectionStatus.FINALIZADA,
+          scorePercent: '88.5',
+          finishedAt: new Date('2026-05-10T10:00:00.000Z'),
+          createdAt: new Date('2026-05-10T09:00:00.000Z'),
+        },
+      ],
+      count: 1,
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTeamRankingInspections('team-1', {
+      from: '2026-05-01',
+      to: '2026-05-26',
+      metric: TeamRankingMetric.SAFETY_WORK,
+      page: 1,
+      limit: 20,
+      sector: 'SAFETY_WORK' as any,
+    });
+
+    expect(result.inspections).toEqual([
+      expect.objectContaining({
+        serviceOrderAddress: 'Ponto de apoio - Quadra 12',
+      }),
+    ]);
+  });
+
   it('deve usar data e contrato da inspection no ranking inspections quando métrica for safetyWork', async () => {
     teamRepository.findOne.mockResolvedValue({
       id: 'team-1',
