@@ -499,6 +499,7 @@ describe('DashboardsService', () => {
           postWorkPercent: '90.5',
           remotePercent: '88.2',
           fieldPercent: '91.9',
+          investmentWorksPercent: '84.6',
           pendingCount: '1',
         },
       ],
@@ -520,6 +521,7 @@ describe('DashboardsService', () => {
         postWorkPercent: 90.5,
         remotePercent: 88.2,
         fieldPercent: 91.9,
+        investmentWorksPercent: 84.6,
         pendingCount: 1,
       },
     ]);
@@ -535,6 +537,10 @@ describe('DashboardsService', () => {
     expect(qb.setParameter).toHaveBeenCalledWith(
       'fieldModule',
       ModuleType.CAMPO,
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'investmentWorksModule',
+      ModuleType.OBRAS_INVESTIMENTO,
     );
   });
 
@@ -640,6 +646,54 @@ describe('DashboardsService', () => {
           Array.isArray(params?.dashboardAllowedContractIds),
       ),
     ).toBe(true);
+  });
+
+  it('deve retornar contadores por módulo de qualidade quando includeQualityModuleCounts for true', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '14',
+        pendingCount: '2',
+        averagePercent: '88.5',
+        fieldInspectionsCount: '5',
+        fieldAveragePercent: '91.2',
+        postWorkInspectionsCount: '4',
+        postWorkAveragePercent: '87.3',
+        remoteInspectionsCount: '3',
+        remoteAveragePercent: '85.5',
+        investmentWorksInspectionsCount: '2',
+        investmentWorksAveragePercent: '82.1',
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getSummary({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+      includeQualityModuleCounts: true,
+    });
+
+    expect(result).toEqual({
+      averagePercent: 88.5,
+      inspectionsCount: 14,
+      pendingCount: 2,
+      field: {
+        inspectionsCount: 5,
+        averagePercent: 91.2,
+      },
+      postWork: {
+        inspectionsCount: 4,
+        averagePercent: 87.3,
+      },
+      remote: {
+        inspectionsCount: 3,
+        averagePercent: 85.5,
+      },
+      investmentWorks: {
+        inspectionsCount: 2,
+        averagePercent: 82.1,
+      },
+    });
   });
 
   it('deve usar regra híbrida de contrato em não conformidades por checklist quando module não for informado', async () => {
@@ -785,6 +839,32 @@ describe('DashboardsService', () => {
         serviceOrderAddress: 'Ponto de apoio - Quadra 12',
       }),
     ]);
+  });
+
+  it('deve permitir filtrar ranking inspections por métrica investmentWorks', async () => {
+    teamRepository.findOne.mockResolvedValue({
+      id: 'team-1',
+      name: 'Equipe Norte',
+    });
+
+    const qb = createMockQueryBuilder({
+      rawMany: [],
+      count: 0,
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getTeamRankingInspections('team-1', {
+      from: '2026-04-26',
+      to: '2026-05-26',
+      metric: TeamRankingMetric.INVESTMENT_WORKS,
+      page: 1,
+      limit: 20,
+      sector: 'QUALITY' as any,
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
+      module: ModuleType.OBRAS_INVESTIMENTO,
+    });
   });
 
   it('deve usar data e contrato da inspection no ranking inspections quando métrica for safetyWork', async () => {

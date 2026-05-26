@@ -15,6 +15,7 @@ export enum TeamRankingMetric {
   POST_WORK = 'postWork',
   REMOTE = 'remote',
   FIELD = 'field',
+  INVESTMENT_WORKS = 'investmentWorks',
   SAFETY_WORK = 'safetyWork',
 }
 

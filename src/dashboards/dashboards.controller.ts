@@ -22,7 +22,12 @@ import {
 export class DashboardsController {
   constructor(private readonly dashboardsService: DashboardsService) {}
 
-  private summaryFilters(user: any, query: DashboardQueryDto, sector?: any) {
+  private summaryFilters(
+    user: any,
+    query: DashboardQueryDto,
+    sector?: any,
+    includeQualityModuleCounts?: boolean,
+  ) {
     return {
       user,
       from: query.from,
@@ -31,6 +36,7 @@ export class DashboardsController {
       teamId: query.teamId,
       contractId: query.contractId,
       sector,
+      includeQualityModuleCounts,
     };
   }
 
@@ -141,7 +147,7 @@ export class DashboardsController {
   @Get('quality/summary')
   getQualitySummary(@CurrentUser() user: any, @Query() query: DashboardQueryDto) {
     return this.dashboardsService.getSummary(
-      this.summaryFilters(user, query, 'QUALITY'),
+      this.summaryFilters(user, query, 'QUALITY', true),
     );
   }
 

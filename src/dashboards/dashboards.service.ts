@@ -50,6 +50,10 @@ const MAX_NON_CONFORMITIES_LIMIT_PER_CHECKLIST = 20;
 const DEFAULT_NON_CONFORMITIES_LIMIT_BY_TEAM = 10;
 const MAX_NON_CONFORMITIES_LIMIT_BY_TEAM = 20;
 type DashboardSector = 'QUALITY' | 'SAFETY_WORK';
+const QUALITY_FINALIZED_AT_PERIOD_MODULES = [
+  ModuleType.POS_OBRA,
+  ModuleType.OBRAS_INVESTIMENTO,
+];
 const QUALITY_DASHBOARD_MODULES = [
   ModuleType.CAMPO,
   ModuleType.POS_OBRA,
@@ -239,12 +243,12 @@ export class DashboardsService {
 
   private applyContractScope(qb: any, user: any, contractId?: string): void {
     if (contractId) {
-      qb.andWhere('serviceOrder.contractId = :dashboardContractId', {
+      qb.andWhere('inspection.contractId = :dashboardContractId', {
         dashboardContractId: contractId,
       });
     }
     const allowedContractIds = getAllowedContractIds(user);
-    applyContractScopeFilter(qb, allowedContractIds, 'serviceOrder.contractId');
+    applyContractScopeFilter(qb, allowedContractIds, 'inspection.contractId');
   }
 
   private applyDashboardPeriodFilter(
@@ -299,6 +303,10 @@ export class DashboardsService {
     );
   }
 
+  private qualityPeriodTimestampExpr(): string {
+    return `CASE WHEN inspection.module IN (:...dashboardFinalizedAtPeriodModules) THEN inspection.finalizedAt ELSE serviceOrder.fim_execucao END`;
+  }
+
   private applyDashboardContractScope(
     qb: any,
     filters: {
@@ -307,70 +315,14 @@ export class DashboardsService {
       module?: ModuleType;
     },
   ): void {
-    const contractColumn =
-      filters.module === ModuleType.SEGURANCA_TRABALHO
-        ? 'inspection.contractId'
-        : 'serviceOrder.contractId';
-
-    if (!filters.module) {
-      if (filters.contractId) {
-        qb.andWhere(
-          `(
-            (
-              inspection.module = :dashboardSafetyModuleContract
-              AND inspection.contractId = :dashboardContractId
-            )
-            OR
-            (
-              inspection.module != :dashboardSafetyModuleContract
-              AND serviceOrder.contractId = :dashboardContractId
-            )
-          )`,
-          {
-            dashboardSafetyModuleContract: ModuleType.SEGURANCA_TRABALHO,
-            dashboardContractId: filters.contractId,
-          },
-        );
-      }
-
-      const allowedContractIds = getAllowedContractIds(filters.user);
-      if (allowedContractIds === null) {
-        return;
-      }
-
-      if (allowedContractIds.length === 0) {
-        qb.andWhere('1 = 0');
-        return;
-      }
-
-      qb.andWhere(
-        `(
-          (
-            inspection.module = :dashboardSafetyModuleAllowedContracts
-            AND inspection.contractId IN (:...dashboardAllowedContractIds)
-          )
-          OR
-          (
-            inspection.module != :dashboardSafetyModuleAllowedContracts
-            AND serviceOrder.contractId IN (:...dashboardAllowedContractIds)
-          )
-        )`,
-        {
-          dashboardSafetyModuleAllowedContracts: ModuleType.SEGURANCA_TRABALHO,
-          dashboardAllowedContractIds: allowedContractIds,
-        },
-      );
-      return;
-    }
-
     if (filters.contractId) {
-      qb.andWhere(`${contractColumn} = :dashboardContractId`, {
+      qb.andWhere('inspection.contractId = :dashboardContractId', {
         dashboardContractId: filters.contractId,
       });
     }
 
     const allowedContractIds = getAllowedContractIds(filters.user);
-    applyContractScopeFilter(qb, allowedContractIds, contractColumn);
+    applyContractScopeFilter(qb, allowedContractIds, 'inspection.contractId');
   }
 
   async getSummary(filters: {
@@ -381,9 +333,9 @@ export class DashboardsService {
     module?: ModuleType;
     teamId?: string;
     contractId?: string;
+    includeQualityModuleCounts?: boolean;
   }) {
     this.validateDateRange(filters.from, filters.to);
-    const toLimit = toEndOfDay(filters.to);
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
@@ -392,12 +344,48 @@ export class DashboardsService {
         `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
         'pendingCount',
       )
+      .addSelect(
+        `SUM(CASE WHEN inspection.module = :fieldModule THEN 1 ELSE 0 END)`,
+        'fieldInspectionsCount',
+      )
+      .addSelect(
+        `AVG(CASE WHEN inspection.module = :fieldModule THEN inspection.scorePercent ELSE NULL END)`,
+        'fieldAveragePercent',
+      )
+      .addSelect(
+        `SUM(CASE WHEN inspection.module = :postWorkModule THEN 1 ELSE 0 END)`,
+        'postWorkInspectionsCount',
+      )
+      .addSelect(
+        `AVG(CASE WHEN inspection.module = :postWorkModule THEN inspection.scorePercent ELSE NULL END)`,
+        'postWorkAveragePercent',
+      )
+      .addSelect(
+        `SUM(CASE WHEN inspection.module = :remoteModule THEN 1 ELSE 0 END)`,
+        'remoteInspectionsCount',
+      )
+      .addSelect(
+        `AVG(CASE WHEN inspection.module = :remoteModule THEN inspection.scorePercent ELSE NULL END)`,
+        'remoteAveragePercent',
+      )
+      .addSelect(
+        `SUM(CASE WHEN inspection.module = :investmentWorksModule THEN 1 ELSE 0 END)`,
+        'investmentWorksInspectionsCount',
+      )
+      .addSelect(
+        `AVG(CASE WHEN inspection.module = :investmentWorksModule THEN inspection.scorePercent ELSE NULL END)`,
+        'investmentWorksAveragePercent',
+      )
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .where('inspection.status != :draft', {
         draft: InspectionStatus.RASCUNHO,
       })
       .andWhere('inspection.teamId IS NOT NULL')
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .setParameter('fieldModule', ModuleType.CAMPO)
+      .setParameter('postWorkModule', ModuleType.POS_OBRA)
+      .setParameter('remoteModule', ModuleType.REMOTO)
+      .setParameter('investmentWorksModule', ModuleType.OBRAS_INVESTIMENTO);
 
     this.applyQualityFilters(qb, {
       sector: filters.sector,
@@ -406,11 +394,29 @@ export class DashboardsService {
     });
 
     const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
-    this.applyDashboardPeriodFilter(qb, {
-      from: filters.from,
-      to: toLimit,
-      module: periodModule,
-    });
+    if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
+      const toLimit = toEndOfDay(filters.to);
+      this.applyDashboardPeriodFilter(qb, {
+        from: filters.from,
+        to: toLimit,
+        module: periodModule,
+      });
+    } else {
+      const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
+      // For quality dashboards, compare by Sao Paulo local date to align with monthly views.
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) >= :fromDate`,
+        { fromDate: filters.from },
+      );
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
+        { toDate: filters.to },
+      );
+      qb.setParameter(
+        'dashboardFinalizedAtPeriodModules',
+        QUALITY_FINALIZED_AT_PERIOD_MODULES,
+      );
+    }
     this.applyDashboardContractScope(qb, {
       user: filters.user,
       contractId: filters.contractId,
@@ -421,6 +427,14 @@ export class DashboardsService {
       inspectionsCount: string;
       pendingCount: string;
       averagePercent: string | null;
+      fieldInspectionsCount: string;
+      fieldAveragePercent: string | null;
+      postWorkInspectionsCount: string;
+      postWorkAveragePercent: string | null;
+      remoteInspectionsCount: string;
+      remoteAveragePercent: string | null;
+      investmentWorksInspectionsCount: string;
+      investmentWorksAveragePercent: string | null;
     }>();
 
     const inspectionsCount = parseInt(row?.inspectionsCount ?? '0', 10);
@@ -431,11 +445,57 @@ export class DashboardsService {
         ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
         : 0;
 
-    return {
+    const summary = {
       averagePercent,
       inspectionsCount,
       pendingCount,
+    } as {
+      averagePercent: number;
+      inspectionsCount: number;
+      pendingCount: number;
+      field?: {
+        inspectionsCount: number;
+        averagePercent: number;
+      };
+      postWork?: {
+        inspectionsCount: number;
+        averagePercent: number;
+      };
+      remote?: {
+        inspectionsCount: number;
+        averagePercent: number;
+      };
+      investmentWorks?: {
+        inspectionsCount: number;
+        averagePercent: number;
+      };
     };
+
+    if (filters.includeQualityModuleCounts) {
+      summary.field = {
+        inspectionsCount: parseInt(row?.fieldInspectionsCount ?? '0', 10),
+        averagePercent: roundTo2(parseFloat(row?.fieldAveragePercent ?? '0')),
+      };
+      summary.postWork = {
+        inspectionsCount: parseInt(row?.postWorkInspectionsCount ?? '0', 10),
+        averagePercent: roundTo2(parseFloat(row?.postWorkAveragePercent ?? '0')),
+      };
+      summary.remote = {
+        inspectionsCount: parseInt(row?.remoteInspectionsCount ?? '0', 10),
+        averagePercent: roundTo2(parseFloat(row?.remoteAveragePercent ?? '0')),
+      };
+      summary.investmentWorks = {
+        inspectionsCount: parseInt(
+          row?.investmentWorksInspectionsCount ?? '0',
+          10,
+        ),
+        averagePercent: roundTo2(
+          parseFloat(row?.investmentWorksAveragePercent ?? '0'),
+        ),
+      };
+    }
+
+    return summary;
   }
 
   async getTeamsRanking(filters: {
@@ -447,7 +507,6 @@ export class DashboardsService {
     contractId?: string;
   }) {
     this.validateDateRange(filters.from, filters.to);
-    const toLimit = toEndOfDay(filters.to);
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .leftJoin('inspection.team', 'team')
@@ -469,6 +528,10 @@ export class DashboardsService {
         'fieldPercent',
       )
       .addSelect(
+        `AVG(CASE WHEN inspection.module = :investmentWorksModule THEN inspection.scorePercent ELSE NULL END)`,
+        'investmentWorksPercent',
+      )
+      .addSelect(
         `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
         'pendingCount',
       )
@@ -480,6 +543,7 @@ export class DashboardsService {
       .setParameter('postWorkModule', ModuleType.POS_OBRA)
       .setParameter('remoteModule', ModuleType.REMOTO)
       .setParameter('fieldModule', ModuleType.CAMPO)
+      .setParameter('investmentWorksModule', ModuleType.OBRAS_INVESTIMENTO)
       .setParameter('noTeam', 'Sem equipe')
       .groupBy('inspection.teamId')
       .addGroupBy('team.name')
@@ -491,11 +555,28 @@ export class DashboardsService {
     });
 
     const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
-    this.applyDashboardPeriodFilter(qb, {
-      from: filters.from,
-      to: toLimit,
-      module: periodModule,
-    });
+    if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
+      const toLimit = toEndOfDay(filters.to);
+      this.applyDashboardPeriodFilter(qb, {
+        from: filters.from,
+        to: toLimit,
+        module: periodModule,
+      });
+    } else {
+      const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) >= :fromDate`,
+        { fromDate: filters.from },
+      );
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
+        { toDate: filters.to },
+      );
+      qb.setParameter(
+        'dashboardFinalizedAtPeriodModules',
+        QUALITY_FINALIZED_AT_PERIOD_MODULES,
+      );
+    }
     this.applyDashboardContractScope(qb, {
       user: filters.user,
       contractId: filters.contractId,
@@ -510,6 +591,7 @@ export class DashboardsService {
       postWorkPercent: string | null;
       remotePercent: string | null;
       fieldPercent: string | null;
+      investmentWorksPercent: string | null;
       pendingCount: string;
     }>();
 
@@ -522,6 +604,9 @@ export class DashboardsService {
       const postWorkPercent = roundTo2(parseFloat(row.postWorkPercent ?? '0'));
       const remotePercent = roundTo2(parseFloat(row.remotePercent ?? '0'));
       const fieldPercent = roundTo2(parseFloat(row.fieldPercent ?? '0'));
+      const investmentWorksPercent = roundTo2(
+        parseFloat(row.investmentWorksPercent ?? '0'),
+      );
 
       return {
         teamId: row.teamId,
@@ -531,6 +616,7 @@ export class DashboardsService {
         postWorkPercent,
         remotePercent,
         fieldPercent,
+        investmentWorksPercent,
         pendingCount: parseInt(row.pendingCount, 10),
       };
     });
@@ -696,9 +782,9 @@ export class DashboardsService {
     const page = Math.max(filters.page ?? 1, 1);
     const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
     const skip = (page - 1) * limit;
-    const toLimit = toEndOfDay(filters.to);
     const metric = filters.metric ?? TeamRankingMetric.AVERAGE;
-    const finishedAtExpr = `CASE WHEN inspection.module = :dashboardSafetyModuleFinishedAt THEN COALESCE(inspection.finalizedAt, inspection.createdAt) ELSE serviceOrder.fim_execucao END`;
+    const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
+    const finishedAtExpr = `CASE WHEN inspection.module = :dashboardSafetyModuleFinishedAt THEN COALESCE(inspection.finalizedAt, inspection.createdAt) ELSE ${qualityPeriodExpr} END`;
 
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -727,6 +813,7 @@ export class DashboardsService {
       [TeamRankingMetric.POST_WORK]: ModuleType.POS_OBRA,
       [TeamRankingMetric.REMOTE]: ModuleType.REMOTO,
       [TeamRankingMetric.FIELD]: ModuleType.CAMPO,
+      [TeamRankingMetric.INVESTMENT_WORKS]: ModuleType.OBRAS_INVESTIMENTO,
       [TeamRankingMetric.SAFETY_WORK]: ModuleType.SEGURANCA_TRABALHO,
     };
 
@@ -744,12 +831,27 @@ export class DashboardsService {
       module: metricModule,
     });
     const periodModule = this.resolvePeriodModule(metricModule, filters.sector);
-
-    this.applyDashboardPeriodFilter(qb, {
-      from: filters.from,
-      to: toLimit,
-      module: periodModule,
-    });
+    if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
+      const toLimit = toEndOfDay(filters.to);
+      this.applyDashboardPeriodFilter(qb, {
+        from: filters.from,
+        to: toLimit,
+        module: periodModule,
+      });
+    } else {
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) >= :fromDate`,
+        { fromDate: filters.from },
+      );
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
+        { toDate: filters.to },
+      );
+      qb.setParameter(
+        'dashboardFinalizedAtPeriodModules',
+        QUALITY_FINALIZED_AT_PERIOD_MODULES,
+      );
+    }
     this.applyDashboardContractScope(qb, {
       user: filters.user,
       contractId: filters.contractId,
@@ -935,9 +1037,14 @@ export class DashboardsService {
     contractId?: string;
   }): Promise<CurrentMonthByServiceResponseDto> {
     const month = resolveMonthOrCurrent(filters.month);
+    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
 
     const serviceLabelExpr = `COALESCE(NULLIF(checklistSector.name, ''), NULLIF(serviceOrderSector.name, ''), NULLIF(inspection.serviceDescription, ''), 'SEM_SERVICO')`;
-    const monthExpr = `to_char(timezone('${DASHBOARD_TIMEZONE}', COALESCE(inspection.finalizedAt, inspection.createdAt)), 'YYYY-MM')`;
+    const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
+    const monthExpr =
+      periodModule === ModuleType.SEGURANCA_TRABALHO
+        ? `to_char(timezone('${DASHBOARD_TIMEZONE}', COALESCE(inspection.finalizedAt, inspection.createdAt)), 'YYYY-MM')`
+        : `to_char(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr}), 'YYYY-MM')`;
 
     const summaryQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -945,12 +1052,10 @@ export class DashboardsService {
       .leftJoin('checklist.sector', 'checklistSector')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .leftJoin('serviceOrder.sector', 'serviceOrderSector')
-      .where('inspection.status IN (:...qualityStatuses)', {
-        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
       })
-      .andWhere(`UPPER(TRIM(${serviceLabelExpr})) IN (:...allowedSectors)`, {
-        allowedSectors: QUALITY_BY_SERVICE_ALLOWED_SECTORS,
-      })
+      .andWhere('inspection.teamId IS NOT NULL')
       .andWhere(`${monthExpr} = :month`, { month })
       .select('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
@@ -965,6 +1070,10 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    summaryQb.setParameter(
+      'dashboardFinalizedAtPeriodModules',
+      QUALITY_FINALIZED_AT_PERIOD_MODULES,
+    );
     this.applyContractScope(summaryQb, filters.user, filters.contractId);
 
     const rankingQb = this.inspectionsRepository
@@ -973,12 +1082,10 @@ export class DashboardsService {
       .leftJoin('checklist.sector', 'checklistSector')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .leftJoin('serviceOrder.sector', 'serviceOrderSector')
-      .where('inspection.status IN (:...qualityStatuses)', {
-        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
       })
-      .andWhere(`UPPER(TRIM(${serviceLabelExpr})) IN (:...allowedSectors)`, {
-        allowedSectors: QUALITY_BY_SERVICE_ALLOWED_SECTORS,
-      })
+      .andWhere('inspection.teamId IS NOT NULL')
       .andWhere(`${monthExpr} = :month`, { month })
       .select(serviceLabelExpr, 'serviceLabel')
       .addSelect('AVG(inspection.scorePercent)', 'qualityPercent')
@@ -992,6 +1099,10 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
+    rankingQb.setParameter(
+      'dashboardFinalizedAtPeriodModules',
+      QUALITY_FINALIZED_AT_PERIOD_MODULES,
+    );
     this.applyContractScope(rankingQb, filters.user, filters.contractId);
 
     const [summaryRow, rankingRows] = await Promise.all([

@@ -41,7 +41,7 @@ Authorization: Bearer <token>
   - consulta de formulário para renderização no frontend (sem persistência)
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (todas aceitam filtro opcional `contractId`; ver `Dashboards`)
+- Dashboards: `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
 
 ### Regras críticas que impactam UI
 
@@ -1944,7 +1944,33 @@ Response 200:
 
 ## Dashboards
 
-Em todas as rotas abaixo, o query param opcional **`contractId`** (`uuid`) restringe os dados às vistorias cuja ordem de serviço pertence a esse contrato. A regra de escopo por perfil (`ADMIN` vs `GESTOR`) permanece; ver `Guia rápido` → Escopo por contrato.
+Em todas as rotas abaixo, o query param opcional **`contractId`** (`uuid`) restringe os dados às vistorias vinculadas a esse contrato (via `inspection.contractId`). A regra de escopo por perfil (`ADMIN` vs `GESTOR`) permanece; ver `Guia rápido` → Escopo por contrato.
+
+Regras de consistência aplicadas aos dashboards de qualidade:
+
+- `GET /dashboards/summary`, `GET /dashboards/ranking/teams` e `GET /dashboards/current-month-by-service` usam a mesma base para `QUALITY`: período por data local (`America/Sao_Paulo`) com regra por módulo:
+  - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
+  - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+- Nos três endpoints acima, o cálculo de `QUALITY` considera status diferentes de `RASCUNHO`.
+- Nos três endpoints acima, apenas inspeções com equipe entram no total (`inspection.teamId IS NOT NULL`).
+
+Aliases de compatibilidade (mesmo contrato de query/response do endpoint-base correspondente):
+
+- `GET /dashboards/quality/ranking/teams` → mesmo comportamento de `GET /dashboards/ranking/teams` (setor `QUALITY`)
+- `GET /dashboards/quality/ranking/teams/:teamId/inspections` → mesmo comportamento de `GET /dashboards/ranking/teams/:teamId/inspections` (setor `QUALITY`)
+- `GET /dashboards/safety-work/ranking/teams/:teamId/inspections` → mesmo comportamento de `GET /dashboards/ranking/teams/:teamId/inspections` (setor `SAFETY_WORK`)
+- `GET /dashboards/quality/teams/:teamId` → mesmo comportamento de `GET /dashboards/teams/:teamId` (setor `QUALITY`)
+- `GET /dashboards/safety-work/teams/:teamId` → mesmo comportamento de `GET /dashboards/teams/:teamId` (setor `SAFETY_WORK`)
+- `GET /dashboards/quality/quality-by-service` → mesmo comportamento de `GET /dashboards/quality-by-service` (setor `QUALITY`)
+- `GET /dashboards/safety-work/quality-by-service` → mesmo comportamento de `GET /dashboards/quality-by-service` (setor `SAFETY_WORK`)
+- `GET /dashboards/quality/current-month-by-service` → mesmo comportamento de `GET /dashboards/current-month-by-service` (setor `QUALITY`)
+- `GET /dashboards/safety-work/current-month-by-service` → mesmo comportamento de `GET /dashboards/current-month-by-service` (setor `SAFETY_WORK`)
+- `GET /dashboards/quality/team-performance-by-teams` → mesmo comportamento de `GET /dashboards/team-performance-by-teams` (setor `QUALITY`)
+- `GET /dashboards/safety-work/team-performance-by-teams` → mesmo comportamento de `GET /dashboards/team-performance-by-teams` (setor `SAFETY_WORK`)
+- `GET /dashboards/quality/non-conformities/by-checklist` → mesmo comportamento de `GET /dashboards/non-conformities/by-checklist` (setor `QUALITY`)
+- `GET /dashboards/safety-work/non-conformities/by-checklist` → mesmo comportamento de `GET /dashboards/non-conformities/by-checklist` (setor `SAFETY_WORK`)
+- `GET /dashboards/quality/non-conformities/by-team` → mesmo comportamento de `GET /dashboards/non-conformities/by-team` (setor `QUALITY`)
+- `GET /dashboards/safety-work/non-conformities/by-team` → mesmo comportamento de `GET /dashboards/non-conformities/by-team` (setor `SAFETY_WORK`)
 
 ### GET /dashboards/summary
 
@@ -1955,8 +1981,82 @@ Em todas as rotas abaixo, o query param opcional **`contractId`** (`uuid`) restr
   - `module` (`ModuleType`) opcional
   - `teamId` (`uuid`) opcional
   - `contractId` (`uuid`) opcional
+- Regra de período:
+  - `QUALITY` (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
+    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
+    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+  - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+
+Response 200:
+
+```json
+{
+  "averagePercent": 92.45,
+  "inspectionsCount": 34,
+  "pendingCount": 5
+}
+```
+
+### GET /dashboards/quality/summary
+
+- Auth: JWT
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `module` (`ModuleType`) opcional
+  - `teamId` (`uuid`) opcional
+  - `contractId` (`uuid`) opcional
+- Regra de período:
+  - `QUALITY` (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
+    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
+    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+  - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Comportamento: mantém o resumo base e adiciona contadores de inspeções por módulo de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`).
+
+Response 200:
+
+```json
+{
+  "averagePercent": 92.45,
+  "inspectionsCount": 34,
+  "pendingCount": 5,
+  "field": {
+    "inspectionsCount": 10,
+    "averagePercent": 92.45
+  },
+  "postWork": {
+    "inspectionsCount": 8,
+    "averagePercent": 90.11
+  },
+  "remote": {
+    "inspectionsCount": 9,
+    "averagePercent": 89.77
+  },
+  "investmentWorks": {
+    "inspectionsCount": 7,
+    "averagePercent": 93.2
+  }
+}
+```
+
+### GET /dashboards/safety-work/summary
+
+- Auth: JWT
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `module` (`ModuleType`) opcional
+  - `teamId` (`uuid`) opcional
+  - `contractId` (`uuid`) opcional
+- Regra de período:
+  - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Comportamento: mesmo contrato de retorno de `GET /dashboards/summary`, com agregação no setor `SAFETY_WORK`.
 
 Response 200:
 
@@ -1977,6 +2077,11 @@ Response 200:
   - `module` (`ModuleType`) opcional
   - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Regra de período:
+  - `QUALITY` (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
+    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
+    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+  - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
@@ -1991,6 +2096,7 @@ Response 200:
     "postWorkPercent": 94.2,
     "remotePercent": 96.5,
     "fieldPercent": 93.8,
+    "investmentWorksPercent": 92.6,
     "pendingCount": 2
   },
   {
@@ -2001,6 +2107,7 @@ Response 200:
     "postWorkPercent": 89.3,
     "remotePercent": 91.7,
     "fieldPercent": 90.1,
+    "investmentWorksPercent": 88.4,
     "pendingCount": 1
   }
 ]
@@ -2009,6 +2116,7 @@ Response 200:
 - `postWorkPercent`: média (%) da equipe no módulo `POS_OBRA` no período (0 quando não houver vistoria no módulo).
 - `remotePercent`: média (%) da equipe no módulo `REMOTO` no período (0 quando não houver vistoria no módulo).
 - `fieldPercent`: média (%) da equipe no módulo `CAMPO` no período (0 quando não houver vistoria no módulo).
+- `investmentWorksPercent`: média (%) da equipe no módulo `OBRAS_INVESTIMENTO` no período (0 quando não houver vistoria no módulo).
 
 ### GET /dashboards/ranking/teams/safety-work
 
@@ -2049,10 +2157,22 @@ Response 200:
 - Query:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
-  - `metric` (opcional): `average`, `postWork`, `remote`, `field`, `safetyWork` (default: `average`)
+  - `metric` (opcional): `average`, `postWork`, `remote`, `field`, `investmentWorks`, `safetyWork` (default: `average`)
   - `page` (opcional, default `1`)
   - `limit` (opcional, default `20`, máximo `100`)
   - `contractId` (`uuid`) opcional
+- Mapeamento de `metric` para módulo:
+  - `postWork` -> `POS_OBRA`
+  - `remote` -> `REMOTO`
+  - `field` -> `CAMPO`
+  - `investmentWorks` -> `OBRAS_INVESTIMENTO`
+  - `safetyWork` -> `SEGURANCA_TRABALHO`
+  - `average` -> sem filtro por módulo (respeitando o setor da rota)
+- Regra de período:
+  - `QUALITY` (métrica `average`, `postWork`, `remote`, `field`, `investmentWorks`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
+    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
+    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+  - `SAFETY_WORK` (métrica `safetyWork`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
@@ -2204,12 +2324,14 @@ Response 200:
   - `module` (`ModuleType`) opcional
   - `teamId` (`uuid`) opcional
   - `contractId` (`uuid`) opcional
-- Status considerados no cálculo de qualidade:
-  - `FINALIZADA`
-  - `PENDENTE_AJUSTE`
-  - `RESOLVIDA`
+- Regra de período mensal:
+  - `QUALITY` (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): mês baseado em regra por módulo (mesma referência de período do endpoint `GET /dashboards/summary`):
+    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
+    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+  - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): mês baseado em `COALESCE(inspection.finalizedAt, inspection.createdAt)`.
+- Status considerados: todos, exceto `RASCUNHO` (mesma regra de `GET /dashboards/summary` e `GET /dashboards/ranking/teams`).
+- Apenas inspeções com equipe vinculada entram no cálculo (`teamId IS NOT NULL`).
 - `pendingAdjustmentsCount` contabiliza inspeções do mês com status `PENDENTE_AJUSTE`.
-- Observação: para `SEGURANCA_TRABALHO`, `pendingAdjustmentsCount` tende a 0, pois não há transição para `PENDENTE_AJUSTE`.
 - `qualityPercent` por serviço é `AVG(scorePercent)` no mês.
 - Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
