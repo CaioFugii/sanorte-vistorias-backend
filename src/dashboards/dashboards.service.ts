@@ -830,6 +830,10 @@ export class DashboardsService {
       sector: filters.sector,
       module: metricModule,
     });
+    qb.setParameter(
+      'dashboardFinalizedAtPeriodModules',
+      QUALITY_FINALIZED_AT_PERIOD_MODULES,
+    );
     const periodModule = this.resolvePeriodModule(metricModule, filters.sector);
     if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
       const toLimit = toEndOfDay(filters.to);
@@ -846,10 +850,6 @@ export class DashboardsService {
       qb.andWhere(
         `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
         { toDate: filters.to },
-      );
-      qb.setParameter(
-        'dashboardFinalizedAtPeriodModules',
-        QUALITY_FINALIZED_AT_PERIOD_MODULES,
       );
     }
     this.applyDashboardContractScope(qb, {

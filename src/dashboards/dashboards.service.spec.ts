@@ -926,6 +926,10 @@ describe('DashboardsService', () => {
       'DESC',
       'NULLS LAST',
     );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'dashboardFinalizedAtPeriodModules',
+      expect.any(Array),
+    );
   });
 
   it('deve retornar payload reduzido para ranking de safety work', async () => {
