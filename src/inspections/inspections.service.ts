@@ -1017,6 +1017,10 @@ export class InspectionsService {
       inspectionData,
       'serviceDescription',
     );
+    const hasTeamChange = Object.prototype.hasOwnProperty.call(
+      inspectionData,
+      'teamId',
+    );
     const nextModule = inspectionData.module ?? inspection.module;
     const nextServiceOrderId = hasServiceOrderChange
       ? inspectionData.serviceOrderId
@@ -1057,6 +1061,9 @@ export class InspectionsService {
       throw new BadRequestException(
         'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
       );
+    }
+    if (hasTeamChange && nextTeamId) {
+      await this.assertTeamExists(nextTeamId);
     }
 
     if (
@@ -1572,6 +1579,9 @@ export class InspectionsService {
           'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
         );
       }
+      if (Object.prototype.hasOwnProperty.call(payload, 'teamId') && nextTeamId) {
+        await this.assertTeamExists(nextTeamId);
+      }
 
       if (
         this.isServiceDescriptionRequired(nextModule) &&
@@ -1801,6 +1811,17 @@ export class InspectionsService {
       throw new BadRequestException(
         'Equipe empreiteira não permite vínculo de colaboradores',
       );
+    }
+  }
+
+  private async assertTeamExists(teamId: string): Promise<void> {
+    const team = await this.teamsRepository.findOne({
+      where: { id: teamId },
+      select: ['id'],
+    });
+
+    if (!team) {
+      throw new BadRequestException('Equipe não encontrada');
     }
   }
 

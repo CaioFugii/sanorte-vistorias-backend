@@ -158,6 +158,36 @@ describe('InspectionsService - Regras de Negócio', () => {
     ).resolves.not.toThrow();
   });
 
+  it('deve permitir editar teamId para equipe existente', async () => {
+    jest.spyOn(inspectionsRepository, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      status: InspectionStatus.FINALIZADA,
+      teamId: 'team-old-id',
+      collaborators: [],
+    } as Inspection);
+    jest.spyOn(teamsRepository, 'findOne').mockResolvedValue({
+      id: 'team-new-id',
+      isContractor: false,
+    });
+    jest.spyOn(inspectionsRepository, 'update').mockResolvedValue(undefined);
+
+    await service.update(
+      'test-id',
+      { teamId: 'team-new-id' } as any,
+      'user-id',
+      UserRole.GESTOR,
+    );
+
+    expect(teamsRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'team-new-id' },
+      select: ['id'],
+    });
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({ teamId: 'team-new-id' }),
+    );
+  });
+
   it('deve marcar vistoria como PENDENTE_AJUSTE quando houver NAO_CONFORME ao finalizar', async () => {
     jest
       .spyOn(service, 'findOneDetail')

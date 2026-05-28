@@ -75,6 +75,7 @@ Authorization: Bearer <token>
 - `PUT /inspections/:id`:
   - FISCAL só edita em `RASCUNHO`.
   - GESTOR/ADMIN editam em qualquer status.
+  - Quando `teamId` for enviado, a equipe informada deve existir; caso contrário, retorna `400` com `Equipe não encontrada`.
 - `PUT /inspections/:id/items`:
   - FISCAL só em `RASCUNHO`.
   - GESTOR/ADMIN em qualquer status.
@@ -1496,11 +1497,13 @@ Exemplo (truncado):
 - Regra:
   - FISCAL só atualiza se `status = RASCUNHO`
   - GESTOR/ADMIN podem atualizar sempre
+  - Quando `teamId` for enviado, a equipe informada deve existir; caso contrário, retorna `400` com `Equipe não encontrada`
 
 Request JSON (parcial):
 
 ```json
 {
+  "teamId": "uuid-da-equipe",
   "serviceDescription": "Descrição atualizada",
   "locationDescription": "Nova localização"
 }
