@@ -13,7 +13,7 @@ export class SyncController {
   constructor(private readonly inspectionsService: InspectionsService) {}
 
   @Post('inspections')
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   syncInspections(
     @Body() body: SyncInspectionsRequestDto,
     @CurrentUser() user: any,

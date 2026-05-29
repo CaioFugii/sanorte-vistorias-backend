@@ -29,7 +29,7 @@ export class ServiceOrdersController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.FISCAL)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.FISCAL)
   findAll(@CurrentUser() user: any, @Query() query: FilterServiceOrdersDto) {
     return this.serviceOrdersService.findAll(
       user,
@@ -48,7 +48,7 @@ export class ServiceOrdersController {
 
   @Post('import')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   @UseInterceptors(FileInterceptor('file'))
   async importFromExcel(
     @CurrentUser() user: any,

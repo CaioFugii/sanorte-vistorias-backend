@@ -1101,7 +1101,7 @@ export class InspectionsService {
       inspectionData.serviceDescription = nextServiceDescription;
     }
 
-    // GESTOR e ADMIN podem editar sempre
+    // GESTOR, SUPERVISOR e ADMIN podem editar sempre
     await this.inspectionsRepository.update(inspection.id, inspectionData);
     return this.findOne(inspection.id);
   }
@@ -1157,7 +1157,9 @@ export class InspectionsService {
     const inspectionUpdates: Partial<Inspection> = { scorePercent };
 
     if (
-      (userRole === UserRole.ADMIN || userRole === UserRole.GESTOR) &&
+      (userRole === UserRole.ADMIN ||
+        userRole === UserRole.GESTOR ||
+        userRole === UserRole.SUPERVISOR) &&
       (inspection.status === InspectionStatus.FINALIZADA ||
         inspection.status === InspectionStatus.PENDENTE_AJUSTE)
     ) {

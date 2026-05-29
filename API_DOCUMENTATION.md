@@ -53,13 +53,13 @@ Authorization: Bearer <token>
   - quando `module = OBRAS_INVESTIMENTO` e `serviceOrderId` não for enviado, `investmentWorkId` passa a ser obrigatório.
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
-- `GET /inspections` (GESTOR/ADMIN) não retorna `RASCUNHO`.
+- `GET /inspections` (GESTOR/SUPERVISOR/ADMIN) não retorna `RASCUNHO`.
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
 - Escopo por contrato:
   - `ADMIN` vê todos os dados.
-  - `GESTOR` e `FISCAL` veem apenas dados dentro dos contratos vinculados ao usuário.
+  - `GESTOR`, `SUPERVISOR` e `FISCAL` veem apenas dados dentro dos contratos vinculados ao usuário.
   - O filtro é aplicado nas listagens principais (`service-orders`, `inspections`, `dashboards`, `teams`).
-  - Nos **dashboards** (`GET /dashboards/*`), é possível restringir explicitamente a um contrato com o query param opcional `contractId` (UUID). Para `GESTOR`, o resultado continua limitado à interseção com os contratos do usuário; para `ADMIN`, filtra apenas por esse contrato quando informado.
+  - Nos **dashboards** (`GET /dashboards/*`), é possível restringir explicitamente a um contrato com o query param opcional `contractId` (UUID). Para `GESTOR`/`SUPERVISOR`, o resultado continua limitado à interseção com os contratos do usuário; para `ADMIN`, filtra apenas por esse contrato quando informado.
 - Usuários:
   - `POST /users` exige `contractIds`.
   - `PUT /users/:id` exige `contractIds`.
@@ -74,22 +74,22 @@ Authorization: Bearer <token>
   - uma execução de importação aplica exatamente 1 contrato para todas as OS processadas.
 - `PUT /inspections/:id`:
   - FISCAL só edita em `RASCUNHO`.
-  - GESTOR/ADMIN editam em qualquer status.
+  - GESTOR/SUPERVISOR/ADMIN editam em qualquer status.
   - Quando `teamId` for enviado, a equipe informada deve existir; caso contrário, retorna `400` com `Equipe não encontrada`.
 - `PUT /inspections/:id/items`:
   - FISCAL só em `RASCUNHO`.
-  - GESTOR/ADMIN em qualquer status.
+  - GESTOR/SUPERVISOR/ADMIN em qualquer status.
   - Sempre recalcula `scorePercent`.
-  - Para GESTOR/ADMIN, reavalia status automaticamente (`FINALIZADA` <-> `PENDENTE_AJUSTE`) quando aplicável.
+  - Para GESTOR/SUPERVISOR/ADMIN, reavalia status automaticamente (`FINALIZADA` <-> `PENDENTE_AJUSTE`) quando aplicável.
   - Exceção: para módulo `SEGURANCA_TRABALHO`, o status não vai para `PENDENTE_AJUSTE` (permanece/retorna `FINALIZADA`).
 - `POST /inspections/:id/evidences` e `DELETE /inspections/:id/evidences/:evidenceId`:
   - FISCAL só em `RASCUNHO`.
-  - GESTOR/ADMIN em qualquer status.
+  - GESTOR/SUPERVISOR/ADMIN em qualquer status.
 - `POST /inspections/:id/paralyze`:
-  - disponível para FISCAL/GESTOR/ADMIN.
+  - disponível para FISCAL/GESTOR/SUPERVISOR/ADMIN.
   - ativa penalidade persistente de 25% na nota.
 - `POST /inspections/:id/unparalyze`:
-  - disponível apenas para GESTOR/ADMIN.
+  - disponível apenas para GESTOR/SUPERVISOR/ADMIN.
   - remove penalidade e recalcula nota (correção de erro).
 - `POST /inspections/:id/finalize`: assinatura é opcional; para itens não conformes com obrigatoriedade, evidência é exigida.
 - Relatórios dinâmicos (`/reports`):
@@ -108,7 +108,7 @@ Authorization: Bearer <token>
 - `PENDENTE_AJUSTE`
   - pode avançar para `RESOLVIDA` quando pendências são resolvidas.
 - `FINALIZADA`
-  - pode voltar para `PENDENTE_AJUSTE` se GESTOR/ADMIN alterarem itens e surgirem não conformidades.
+  - pode voltar para `PENDENTE_AJUSTE` se GESTOR/SUPERVISOR/ADMIN alterarem itens e surgirem não conformidades.
   - Exceção: no módulo `SEGURANCA_TRABALHO`, não há transição para `PENDENTE_AJUSTE`.
 - `RESOLVIDA`
   - status final após resolução de pendências.
@@ -121,7 +121,7 @@ Authorization: Bearer <token>
 - `GET /service-orders`: filtros por `osNumber` (busca parcial), `sectorId`, `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA).
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`.
-- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status`, `osNumber` (busca parcial por número da OS; regra de ocultar rascunho para GESTOR/ADMIN).
+- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status`, `osNumber` (busca parcial por número da OS; regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN).
 - `GET /inspections/mine`: filtro por `osNumber` (busca parcial por número da OS).
 
 ### Contratos e padrões de resposta
@@ -175,7 +175,7 @@ Content-Type: application/json
 ### UserRole
 
 ```json
-["ADMIN", "GESTOR", "FISCAL"]
+["ADMIN", "GESTOR", "SUPERVISOR", "FISCAL"]
 ```
 
 ### ModuleType
@@ -809,7 +809,7 @@ Response 201: contrato criado
 - Auth: JWT
 - Query: `page`, `limit`
 - Response: paginação de `Team` com `collaborators` e `contracts`
-- Escopo: `GESTOR`/`FISCAL` enxergam apenas equipes vinculadas aos contratos permitidos
+- Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` enxergam apenas equipes vinculadas aos contratos permitidos
 
 ### POST /teams
 
@@ -1179,7 +1179,7 @@ Response 201:
 
 ### GET /service-orders
 
-- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Query:
   - `page`, `limit` (paginação padrão)
   - `osNumber` (opcional; busca parcial por número da OS)
@@ -1189,11 +1189,11 @@ Response 201:
   - `postWork` (opcional; `true` ou `false` — filtra OS já usadas em vistoria POS_OBRA)
 - Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`
 - Uso: listar OS disponíveis para vincular a novas vistorias; filtrar por uso por módulo (field/remote/postWork)
-- Escopo: `GESTOR`/`FISCAL` veem apenas OS dos contratos permitidos (`serviceOrder.contractId`)
+- Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` veem apenas OS dos contratos permitidos (`serviceOrder.contractId`)
 
 ### POST /service-orders/import
 
-- Auth: JWT + ADMIN ou GESTOR
+- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR
 - Body: multipart/form-data com campos:
   - `file` (arquivo Excel `.xlsx` ou `.xls`, até 5MB)
   - `contractId` (UUID, obrigatório)
@@ -1201,7 +1201,7 @@ Response 201:
 - Regra: uma importação aplica apenas 1 contrato (o `contractId` informado) para todas as OS processadas
 - Regra: `osNumber` é único por setor; duplicatas são ignoradas (não trava o processamento)
 - Campos adicionais em cada registro: `field`, `remote`, `postWork` (boolean, default `false`)
-- Regra de escopo: `GESTOR` só pode importar para contratos aos quais já está vinculado
+- Regra de escopo: `GESTOR`/`SUPERVISOR` só pode importar para contratos aos quais já está vinculado
 
 Response 200:
 
@@ -1218,7 +1218,7 @@ Response 200:
 
 ### GET /investment-works
 
-- Auth: JWT + ADMIN ou GESTOR ou FISCAL
+- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR ou FISCAL
 - Query:
   - `page`, `limit`
   - `status` (`EM_ANDAMENTO` | `PARALISADA` | `FINALIZADA` | `CANCELADA`)
@@ -1226,11 +1226,11 @@ Response 200:
   - `search` (busca parcial em obra, endereço, bairro e serviço)
   - `active` (`true` | `false`)
 - Response 200: paginação de `InvestmentWork` com `team` e `contract`
-- Escopo: `ADMIN` vê todos; `GESTOR`/`FISCAL` ficam limitados aos contratos vinculados
+- Escopo: `ADMIN` vê todos; `GESTOR`/`SUPERVISOR`/`FISCAL` ficam limitados aos contratos vinculados
 
 ### GET /investment-works/:id
 
-- Auth: JWT + ADMIN ou GESTOR ou FISCAL
+- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR ou FISCAL
 - Response 200:
   - dados da obra (`InvestmentWork`)
   - `inspectionStats.total`
@@ -1241,7 +1241,7 @@ Response 200:
 
 ### POST /investment-works
 
-- Auth: JWT + ADMIN ou GESTOR
+- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR
 - Validações:
   - `workName`, `startDate`, `expectedEndDate`, `address`, `district`, `basin`, `service`, `teamId`, `materialNetwork`, `contractId` obrigatórios
   - `expectedEndDate` não pode ser menor que `startDate`
@@ -1251,13 +1251,13 @@ Response 200:
 
 ### PUT /investment-works/:id
 
-- Auth: JWT + ADMIN ou GESTOR
+- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR
 - Atualização parcial (PATCH-like por `PUT`)
 - Mantém as mesmas validações de contrato, equipe e datas quando os campos relevantes forem enviados
 
 ### DELETE /investment-works/:id
 
-- Auth: JWT + ADMIN ou GESTOR
+- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR
 - Regra: bloqueia exclusão quando houver inspeções vinculadas e retorna:
 
 ```json
@@ -1272,7 +1272,7 @@ Response 200:
 
 ### POST /inspections
 
-- Auth: JWT + FISCAL ou GESTOR
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR
 - Regras:
   - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
   - para `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional.
@@ -1313,7 +1313,7 @@ Observação importante para UI (FISCAL):
 
 ### GET /inspections
 
-- Auth: JWT + GESTOR ou ADMIN
+- Auth: JWT + GESTOR ou SUPERVISOR ou ADMIN
 - Query:
   - `periodFrom` (`YYYY-MM-DD`)
   - `periodTo` (`YYYY-MM-DD`)
@@ -1327,7 +1327,7 @@ Observação importante para UI (FISCAL):
 - Response: paginação de DTO **enxuto de listagem** (sem `items`, `checklist`, `createdBy`, `collaborators` e sem qualquer `passwordHash`)
 - Regra: esta listagem não retorna vistorias com status `RASCUNHO`
 - Regra: se `status=RASCUNHO` for informado, o retorno é vazio (`data: []`)
-- Escopo: `GESTOR` vê apenas vistorias vinculadas aos seus contratos (via `inspection.contractId`), inclusive quando não há OS
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas vistorias vinculadas aos seus contratos (via `inspection.contractId`), inclusive quando não há OS
 
 Contrato por item (`InspectionListDTO`):
 
@@ -1496,7 +1496,7 @@ Exemplo (truncado):
 - Auth: JWT
 - Regra:
   - FISCAL só atualiza se `status = RASCUNHO`
-  - GESTOR/ADMIN podem atualizar sempre
+  - GESTOR/SUPERVISOR/ADMIN podem atualizar sempre
   - Quando `teamId` for enviado, a equipe informada deve existir; caso contrário, retorna `400` com `Equipe não encontrada`
 
 Request JSON (parcial):
@@ -1513,13 +1513,13 @@ Response 200: `Inspection` atualizado
 
 ### PUT /inspections/:id/items
 
-- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Regra:
   - FISCAL só atualiza itens se `status = RASCUNHO`
-  - GESTOR/ADMIN podem atualizar itens em qualquer status
+  - GESTOR/SUPERVISOR/ADMIN podem atualizar itens em qualquer status
   - A nota (`scorePercent`) é recalculada automaticamente a cada atualização de itens
   - Se `hasParalysisPenalty = true`, a nota final recebe penalidade persistente de 25%
-  - Para GESTOR/ADMIN, se a vistoria estiver em `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA ↔ PENDENTE_AJUSTE`) com base nos itens
+  - Para GESTOR/SUPERVISOR/ADMIN, se a vistoria estiver em `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA ↔ PENDENTE_AJUSTE`) com base nos itens
   - Exceção: para `module = SEGURANCA_TRABALHO`, a reavaliação mantém `status = FINALIZADA` (sem `PENDENTE_AJUSTE`)
 
 Request JSON:
@@ -1557,7 +1557,7 @@ Response 200:
 
 ### POST /inspections/:id/evidences
 
-- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Body JSON: não se aplica (multipart/form-data com campo `file`; opcional `inspectionItemId`)
 - Arquivo:
   - tamanho máximo: 5MB
@@ -1565,7 +1565,7 @@ Response 200:
   - validação pelo MIME declarado na parte multipart (ver **Informações gerais** → uploads de imagem)
 - Regra:
   - FISCAL só adiciona evidência se `status = RASCUNHO`
-  - GESTOR/ADMIN podem adicionar evidência em qualquer status
+  - GESTOR/SUPERVISOR/ADMIN podem adicionar evidência em qualquer status
 
 Response 201:
 
@@ -1591,7 +1591,7 @@ Response 201:
 
 ### DELETE /inspections/:id/evidences/:evidenceId
 
-- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Request JSON: não se aplica
 - Path:
   - `id`: UUID da vistoria (ou `externalId`, mesmo critério de `GET /inspections/:id`)
@@ -1602,7 +1602,7 @@ Response 201:
   - Se não houver `cloudinaryPublicId` (registro legado), apenas remove o registro.
 - Regras de perfil (iguais ao POST de evidência):
   - FISCAL só pode remover se `status = RASCUNHO`.
-  - GESTOR/ADMIN podem remover em qualquer status de vistoria.
+  - GESTOR/SUPERVISOR/ADMIN podem remover em qualquer status de vistoria.
 - Erros:
   - `404` se a evidência não existir ou não pertencer à vistoria informada.
 
@@ -1639,7 +1639,7 @@ Response 201:
 
 ### POST /inspections/:id/finalize
 
-- Auth: JWT + FISCAL ou GESTOR
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR
 - Request JSON: sem body
 
 Response 200: `Inspection` finalizada
@@ -1656,7 +1656,7 @@ Regras:
 
 ### POST /inspections/:id/paralyze
 
-- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Regra:
   - `reason` é obrigatório.
   - Define `hasParalysisPenalty = true` (persistente).
@@ -1675,7 +1675,7 @@ Response 200: `Inspection` atualizado
 
 ### POST /inspections/:id/unparalyze
 
-- Auth: JWT + GESTOR ou ADMIN
+- Auth: JWT + GESTOR ou SUPERVISOR ou ADMIN
 - Regra:
   - Remove penalidade de paralisação (`hasParalysisPenalty = false`).
   - Limpa `paralyzedReason`, `paralyzedAt`, `paralyzedByUserId`.
@@ -1688,7 +1688,7 @@ Response 200: `Inspection` atualizado
 
 ### POST /inspections/:id/items/:itemId/resolve
 
-- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Regra: vistoria deve estar em `PENDENTE_AJUSTE`
 
 Request JSON:
@@ -1725,7 +1725,7 @@ Response 200:
 
 ### POST /inspections/:id/resolve
 
-- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Regra: só permite quando todos os itens `NAO_CONFORME` já tiverem `resolvedAt`
 
 Request JSON:
@@ -1820,7 +1820,7 @@ Response 200:
 
 ### POST /sync/inspections
 
-- Auth: JWT + FISCAL ou GESTOR ou ADMIN
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Processamento em lote, idempotente por `externalId`
 
 Request JSON:
@@ -1947,7 +1947,7 @@ Response 200:
 
 ## Dashboards
 
-Em todas as rotas abaixo, o query param opcional **`contractId`** (`uuid`) restringe os dados às vistorias vinculadas a esse contrato (via `inspection.contractId`). A regra de escopo por perfil (`ADMIN` vs `GESTOR`) permanece; ver `Guia rápido` → Escopo por contrato.
+Em todas as rotas abaixo, o query param opcional **`contractId`** (`uuid`) restringe os dados às vistorias vinculadas a esse contrato (via `inspection.contractId`). A regra de escopo por perfil (`ADMIN` vs `GESTOR`/`SUPERVISOR`) permanece; ver `Guia rápido` → Escopo por contrato.
 
 Regras de consistência aplicadas aos dashboards de qualidade:
 
@@ -1990,7 +1990,7 @@ Aliases de compatibilidade (mesmo contrato de query/response do endpoint-base co
     - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
 
@@ -2017,7 +2017,7 @@ Response 200:
     - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Comportamento: mantém o resumo base e adiciona contadores de inspeções por módulo de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`).
 
 Response 200:
@@ -2058,7 +2058,7 @@ Response 200:
 - Regra de período:
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Comportamento: mesmo contrato de retorno de `GET /dashboards/summary`, com agregação no setor `SAFETY_WORK`.
 
 Response 200:
@@ -2085,7 +2085,7 @@ Response 200:
     - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
     - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
 
@@ -2129,7 +2129,7 @@ Response 200:
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
 
@@ -2177,7 +2177,7 @@ Response 200:
     - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
   - `SAFETY_WORK` (métrica `safetyWork`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Retorna as vistorias que compõem a nota clicada no ranking por equipe, com paginação.
 
@@ -2243,7 +2243,7 @@ Response 404 quando a equipe não existe:
   - `module` (`ModuleType`) opcional
   - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Retorna métricas de desempenho de uma equipe específica no período e módulo (mesmos filtros do summary/ranking). Útil para tela de detalhe da equipe ou relatório.
 
@@ -2274,7 +2274,7 @@ Response 404 quando a equipe não existe:
 ### GET /dashboards/quality-by-service
 
 - Auth: JWT
-- Perfis permitidos: `ADMIN`, `GESTOR`
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
 - Query:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
@@ -2282,7 +2282,7 @@ Response 404 quando a equipe não existe:
   - `teamId` (`uuid`) opcional
   - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Timezone da agregação mensal: `America/Sao_Paulo`.
 - Status considerados no cálculo de qualidade:
   - `FINALIZADA`
@@ -2321,7 +2321,7 @@ Response 200:
 ### GET /dashboards/current-month-by-service
 
 - Auth: JWT
-- Perfis permitidos: `ADMIN`, `GESTOR`
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
 - Query:
   - `month` (`YYYY-MM`) opcional (default = mês atual em `America/Sao_Paulo`)
   - `module` (`ModuleType`) opcional
@@ -2336,7 +2336,7 @@ Response 200:
 - Apenas inspeções com equipe vinculada entram no cálculo (`teamId IS NOT NULL`).
 - `pendingAdjustmentsCount` contabiliza inspeções do mês com status `PENDENTE_AJUSTE`.
 - `qualityPercent` por serviço é `AVG(scorePercent)` no mês.
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
 
@@ -2362,7 +2362,7 @@ Response 200:
 ### GET /dashboards/safety-work/low-score-collaborators
 
 - Auth: JWT
-- Perfis permitidos: `ADMIN`, `GESTOR`
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
 - Query:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
@@ -2371,7 +2371,7 @@ Response 200:
   - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Considera vistorias de `SEGURANCA_TRABALHO` com `inspectionScope` por colaborador; ver implementação para detalhes de ordenação.
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200 (estrutura simplificada):
 
@@ -2398,7 +2398,7 @@ Response 200 (estrutura simplificada):
 ### GET /dashboards/team-performance-by-teams
 
 - Auth: JWT
-- Perfis permitidos: `ADMIN`, `GESTOR`
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
 - Query:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
@@ -2406,7 +2406,7 @@ Response 200 (estrutura simplificada):
   - `contractId` (`uuid`) opcional
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Compara período atual com período imediatamente anterior de mesma duração; retorna resumo agregado e métricas por equipe e colaboradores.
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200 (estrutura simplificada):
 
@@ -2444,7 +2444,7 @@ Response 200 (estrutura simplificada):
 ### GET /dashboards/non-conformities/by-checklist
 
 - Auth: JWT
-- Perfis permitidos: `ADMIN`, `GESTOR`
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
 - Query:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
@@ -2457,7 +2457,7 @@ Response 200 (estrutura simplificada):
   - `FINALIZADA`
   - `PENDENTE_AJUSTE`
   - `RESOLVIDA`
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Retorna os checklists com perguntas que mais receberam `NAO_CONFORME`, incluindo taxa de não conformidade por pergunta.
 
 Response 200:
@@ -2498,7 +2498,7 @@ Response 200:
 ### GET /dashboards/non-conformities/by-team
 
 - Auth: JWT
-- Perfis permitidos: `ADMIN`, `GESTOR`
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
 - Query:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
@@ -2511,7 +2511,7 @@ Response 200:
   - `FINALIZADA`
   - `PENDENTE_AJUSTE`
   - `RESOLVIDA`
-- Escopo: `GESTOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Retorna as maiores não conformidades da equipe no período, agregadas por pergunta (`checklistItem`) independentemente do checklist.
 
 Response 200:
@@ -2559,6 +2559,17 @@ Response 200:
 
 ### GESTOR
 
+- Criar/editar/finalizar vistorias (exige `serviceOrderId` para módulos que pedem OS; quando não houver OS, exige `contractId`)
+- Importar OS via Excel (`POST /service-orders/import`)
+- Paralisar e remover penalidade de paralisação (unparalyze)
+- Resolver itens não conformes e pendências
+- Acessar listagem geral de vistorias
+- Dados operacionais e dashboards limitados aos contratos vinculados ao usuário
+- Relatórios dinâmicos: consultar tipos e schema do formulário (`GET /reports/types`, `GET /reports/types/:code/fields`)
+
+### SUPERVISOR
+
+- Mesmo nível hierárquico e mesmas permissões operacionais de `GESTOR`
 - Criar/editar/finalizar vistorias (exige `serviceOrderId` para módulos que pedem OS; quando não houver OS, exige `contractId`)
 - Importar OS via Excel (`POST /service-orders/import`)
 - Paralisar e remover penalidade de paralisação (unparalyze)

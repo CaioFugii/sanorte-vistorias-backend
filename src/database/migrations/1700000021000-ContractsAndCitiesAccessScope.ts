@@ -69,7 +69,7 @@ export class ContractsAndCitiesAccessScope1700000021000 implements MigrationInte
       FROM "users" u
       CROSS JOIN "contracts" c
       WHERE c."name" = 'CONTRATO_INICIAL'
-        AND u."role" IN ('GESTOR', 'FISCAL')
+        AND u."role" IN ('GESTOR', 'SUPERVISOR', 'FISCAL')
     `);
 
     await queryRunner.query(`

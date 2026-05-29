@@ -31,7 +31,7 @@ export class InvestmentWorksController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.FISCAL)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.FISCAL)
   findAll(
     @CurrentUser() user: any,
     @Query() filters: FilterInvestmentWorksDto,
@@ -46,21 +46,21 @@ export class InvestmentWorksController {
 
   @Get(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.FISCAL)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.FISCAL)
   findOne(@Param('id') id: string, @CurrentUser() user: any) {
     return this.investmentWorksService.findOne(id, user);
   }
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   create(@Body() dto: CreateInvestmentWorkDto, @CurrentUser() user: any) {
     return this.investmentWorksService.create(dto, user);
   }
 
   @Put(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateInvestmentWorkDto,
@@ -72,7 +72,7 @@ export class InvestmentWorksController {
   @Delete(':id')
   @HttpCode(204)
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   async remove(
     @Param('id') id: string,
     @CurrentUser() user: any,

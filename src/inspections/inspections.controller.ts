@@ -36,7 +36,7 @@ export class InspectionsController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR)
   create(
     @Body() createInspectionDto: CreateInspectionDto,
     @CurrentUser() user: any,
@@ -46,7 +46,7 @@ export class InspectionsController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   findAll(@CurrentUser() user: any, @Query() filterDto: FilterInspectionsDto) {
     return this.inspectionsService.findAll(
       {
@@ -101,14 +101,14 @@ export class InspectionsController {
   @Delete(':id')
   @HttpCode(204)
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   async remove(@Param('id') id: string): Promise<void> {
     await this.inspectionsService.remove(id);
   }
 
   @Put(':id/items')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   updateItems(
     @Param('id') id: string,
     @Body() items: any[],
@@ -119,7 +119,7 @@ export class InspectionsController {
 
   @Post(':id/evidences')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: createTempDiskStorage('sanorte-evidence'),
@@ -157,7 +157,7 @@ export class InspectionsController {
   @Delete(':id/evidences/:evidenceId')
   @HttpCode(204)
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   async removeEvidence(
     @Param('id') id: string,
     @Param('evidenceId', new ParseUUIDPipe({ version: '4' }))
@@ -181,14 +181,14 @@ export class InspectionsController {
 
   @Post(':id/finalize')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR)
   finalize(@Param('id') id: string) {
     return this.inspectionsService.finalize(id);
   }
 
   @Post(':id/paralyze')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   paralyze(
     @Param('id') id: string,
     @Body() paralyzeInspectionDto: ParalyzeInspectionDto,
@@ -203,14 +203,14 @@ export class InspectionsController {
 
   @Post(':id/unparalyze')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   unparalyze(@Param('id') id: string) {
     return this.inspectionsService.unparalyze(id);
   }
 
   @Post(':id/items/:itemId/resolve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   resolveItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
@@ -227,7 +227,7 @@ export class InspectionsController {
 
   @Post(':id/resolve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
   resolve(
     @Param('id') id: string,
     @Body()

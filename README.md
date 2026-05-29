@@ -52,6 +52,7 @@ npm run seed
 |---|---|---|
 | admin@sanorte.com | senha123 | ADMIN |
 | gestor@sanorte.com | senha123 | GESTOR |
+| supervisor@sanorte.com | senha123 | SUPERVISOR |
 | fiscal@sanorte.com | senha123 | FISCAL |
 
 Setores padrão (seed): `ESGOTO`, `AGUA`, `REPOSICAO`.
@@ -128,24 +129,24 @@ Authorization: Bearer <token>
 
 ### Inspections
 
-- `POST /inspections` (FISCAL/GESTOR)
-- `GET /inspections` (GESTOR/ADMIN; não lista `RASCUNHO`)
+- `POST /inspections` (FISCAL/GESTOR/SUPERVISOR)
+- `GET /inspections` (GESTOR/SUPERVISOR/ADMIN; não lista `RASCUNHO`)
 - `GET /inspections/mine` (FISCAL)
 - `GET /inspections/:id` (autenticado; resposta enxuta para detalhe/PDF)
 - `PUT /inspections/:id` (autenticado; regra por status/role)
 - `PUT /inspections/:id/items` (autenticado)
 - `POST /inspections/:id/evidences` (multipart)
-- `DELETE /inspections/:id/evidences/:evidenceId` (FISCAL/GESTOR/ADMIN; 204)
+- `DELETE /inspections/:id/evidences/:evidenceId` (FISCAL/GESTOR/SUPERVISOR/ADMIN; 204)
 - `POST /inspections/:id/signature` (JSON)
-- `POST /inspections/:id/paralyze` (FISCAL/GESTOR/ADMIN)
-- `POST /inspections/:id/unparalyze` (GESTOR/ADMIN)
-- `POST /inspections/:id/finalize` (FISCAL/GESTOR)
-- `POST /inspections/:id/items/:itemId/resolve` (FISCAL/GESTOR/ADMIN)
-- `POST /inspections/:id/resolve` (FISCAL/GESTOR/ADMIN)
+- `POST /inspections/:id/paralyze` (FISCAL/GESTOR/SUPERVISOR/ADMIN)
+- `POST /inspections/:id/unparalyze` (GESTOR/SUPERVISOR/ADMIN)
+- `POST /inspections/:id/finalize` (FISCAL/GESTOR/SUPERVISOR)
+- `POST /inspections/:id/items/:itemId/resolve` (FISCAL/GESTOR/SUPERVISOR/ADMIN)
+- `POST /inspections/:id/resolve` (FISCAL/GESTOR/SUPERVISOR/ADMIN)
 
 ### Sync
 
-- `POST /sync/inspections` (FISCAL/GESTOR/ADMIN)
+- `POST /sync/inspections` (FISCAL/GESTOR/SUPERVISOR/ADMIN)
 
 ### Uploads
 
@@ -168,10 +169,10 @@ Authorization: Bearer <token>
 - Em `POST /inspections`, `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e opcional para `SEGURANCA_TRABALHO`.
 - FISCAL só edita vistoria em `RASCUNHO`.
 - Atualização de itens recalcula automaticamente a nota da vistoria (`scorePercent`).
-- Vistoria pode ser paralisada por FISCAL/GESTOR/ADMIN com motivo obrigatório.
+- Vistoria pode ser paralisada por FISCAL/GESTOR/SUPERVISOR/ADMIN com motivo obrigatório.
 - Ao paralisar, a vistoria recebe penalidade persistente de 25% na nota (`scorePercent`).
-- GESTOR/ADMIN podem remover a penalidade via `POST /inspections/:id/unparalyze` (correção de erro).
-- Para GESTOR/ADMIN, ao atualizar itens em vistoria `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA` ↔ `PENDENTE_AJUSTE`).
+- GESTOR/SUPERVISOR/ADMIN podem remover a penalidade via `POST /inspections/:id/unparalyze` (correção de erro).
+- Para GESTOR/SUPERVISOR/ADMIN, ao atualizar itens em vistoria `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA` ↔ `PENDENTE_AJUSTE`).
 - Exceção: em `SEGURANCA_TRABALHO`, a vistoria não vai para `PENDENTE_AJUSTE` (mantém `FINALIZADA`).
 - `POST /inspections/:id/finalize` exige:
   - assinatura do líder/encarregado;

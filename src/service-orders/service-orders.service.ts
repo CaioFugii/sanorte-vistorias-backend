@@ -209,7 +209,7 @@ export class ServiceOrdersService {
 
     const allowedContractIds = getAllowedContractIds(user);
     if (
-      user?.role === UserRole.GESTOR &&
+      (user?.role === UserRole.GESTOR || user?.role === UserRole.SUPERVISOR) &&
       allowedContractIds !== null &&
       !allowedContractIds.includes(contractId)
     ) {

@@ -60,6 +60,13 @@ async function seed() {
     role: UserRole.FISCAL,
   });
 
+  const supervisor = userRepository.create({
+    name: 'Supervisor',
+    email: 'supervisor@sanorte.com',
+    passwordHash,
+    role: UserRole.SUPERVISOR,
+  });
+
   // Verificar se já existem
   const existingAdmin = await userRepository.findOne({
     where: { email: admin.email },
@@ -83,6 +90,14 @@ async function seed() {
   if (!existingFiscal) {
     await userRepository.save(fiscal);
     console.log('✓ Fiscal criado: fiscal@sanorte.com / senha123');
+  }
+
+  const existingSupervisor = await userRepository.findOne({
+    where: { email: supervisor.email },
+  });
+  if (!existingSupervisor) {
+    await userRepository.save(supervisor);
+    console.log('✓ Supervisor criado: supervisor@sanorte.com / senha123');
   }
 
   console.log('\nSeed concluído!');
