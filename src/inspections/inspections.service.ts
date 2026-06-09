@@ -985,8 +985,57 @@ export class InspectionsService {
     return inspection;
   }
 
+  /**
+   * Core mínimo para operações de gestão (update/remove/paralyze/unparalyze),
+   * evitando carregar o grafo completo de relações da vistoria.
+   */
+  private async findInspectionCoreForManagement(
+    id: string,
+  ): Promise<
+    Pick<
+      Inspection,
+      | 'id'
+      | 'status'
+      | 'module'
+      | 'hasParalysisPenalty'
+      | 'serviceOrderId'
+      | 'teamId'
+      | 'serviceDescription'
+      | 'inspectionScope'
+    >
+  > {
+    const inspection = await this.inspectionsRepository.findOne({
+      where: [{ id }, { externalId: id }],
+      select: [
+        'id',
+        'status',
+        'module',
+        'hasParalysisPenalty',
+        'serviceOrderId',
+        'teamId',
+        'serviceDescription',
+        'inspectionScope',
+      ],
+    });
+    if (!inspection) {
+      throw new NotFoundException('Vistoria não encontrada');
+    }
+    return inspection;
+  }
+
+  private async findInspectionCollaboratorIds(
+    inspectionId: string,
+  ): Promise<string[]> {
+    const inspection = await this.inspectionsRepository.findOne({
+      where: { id: inspectionId },
+      relations: ['collaborators'],
+    });
+
+    return (inspection?.collaborators ?? []).map((collaborator) => collaborator.id);
+  }
+
   async remove(id: string): Promise<void> {
-    const inspection = await this.findOne(id);
+    const inspection = await this.findInspectionCoreForManagement(id);
 
     if (inspection.status !== InspectionStatus.RASCUNHO) {
       this.logger.warn('Inspection deletion blocked due status', {
@@ -1028,7 +1077,7 @@ export class InspectionsService {
     userId: string,
     userRole: string,
   ): Promise<Inspection> {
-    const inspection = await this.findOne(id);
+    const inspection = await this.findInspectionCoreForManagement(id);
     const hasServiceOrderChange = Object.prototype.hasOwnProperty.call(
       inspectionData,
       'serviceOrderId',
@@ -1059,7 +1108,7 @@ export class InspectionsService {
       ? inspectionData.collaborators
           .map((collaborator) => collaborator?.id)
           .filter(Boolean)
-      : (inspection.collaborators || []).map((collaborator) => collaborator.id);
+      : await this.findInspectionCollaboratorIds(inspection.id);
 
     // FISCAL só pode editar se status = RASCUNHO
     if (
@@ -1218,10 +1267,10 @@ export class InspectionsService {
     reason: string,
     userId: string,
   ): Promise<Inspection> {
-    const inspection = await this.findOne(id);
+    const inspection = await this.findInspectionCoreForManagement(id);
 
     if (inspection.hasParalysisPenalty) {
-      return inspection;
+      return this.findOne(inspection.id);
     }
 
     const scorePercent = await this.calculateFinalScorePercent(
@@ -1241,10 +1290,10 @@ export class InspectionsService {
   }
 
   async unparalyze(id: string): Promise<Inspection> {
-    const inspection = await this.findOne(id);
+    const inspection = await this.findInspectionCoreForManagement(id);
 
     if (!inspection.hasParalysisPenalty) {
-      return inspection;
+      return this.findOne(inspection.id);
     }
 
     const scorePercent = await this.calculateFinalScorePercent(

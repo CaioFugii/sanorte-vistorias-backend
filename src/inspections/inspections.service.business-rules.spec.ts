@@ -75,7 +75,9 @@ describe('InspectionsService - Regras de Negócio', () => {
     };
 
     serviceOrderRepository = {
-      findOne: jest.fn().mockResolvedValue({ id: 'service-order-id' }),
+      findOne: jest
+        .fn()
+        .mockResolvedValue({ id: 'service-order-id', contractId: 'contract-id' }),
       update: jest.fn(),
     };
     investmentWorkRepository = {
@@ -120,7 +122,7 @@ describe('InspectionsService - Regras de Negócio', () => {
   });
 
   it('deve excluir vistoria em RASCUNHO', async () => {
-    jest.spyOn(service, 'findOne').mockResolvedValue({
+    inspectionsRepository.findOne.mockResolvedValue({
       ...mockInspection,
       status: InspectionStatus.RASCUNHO,
     } as Inspection);
@@ -131,7 +133,7 @@ describe('InspectionsService - Regras de Negócio', () => {
   });
 
   it('não deve excluir vistoria fora de RASCUNHO', async () => {
-    jest.spyOn(service, 'findOne').mockResolvedValue({
+    inspectionsRepository.findOne.mockResolvedValue({
       ...mockInspection,
       status: InspectionStatus.FINALIZADA,
     } as Inspection);
@@ -464,8 +466,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: true,
     } as Inspection;
 
-    jest
-      .spyOn(service, 'findOne')
+    inspectionsRepository.findOne
       .mockResolvedValueOnce(activeInspection)
       .mockResolvedValueOnce(paralyzedInspection);
     inspectionItemsRepository.find.mockResolvedValue([
@@ -492,7 +493,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: true,
     } as Inspection;
 
-    jest.spyOn(service, 'findOne').mockResolvedValue(alreadyParalyzed);
+    inspectionsRepository.findOne.mockResolvedValue(alreadyParalyzed);
 
     await service.paralyze('test-id', 'Motivo', 'gestor-id');
 
@@ -509,8 +510,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: false,
     } as Inspection;
 
-    jest
-      .spyOn(service, 'findOne')
+    inspectionsRepository.findOne
       .mockResolvedValueOnce(paralyzedInspection)
       .mockResolvedValueOnce(unparalyzedInspection);
     inspectionItemsRepository.find.mockResolvedValue([
@@ -538,7 +538,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       hasParalysisPenalty: false,
     } as Inspection;
 
-    jest.spyOn(service, 'findOne').mockResolvedValue(activeInspection);
+    inspectionsRepository.findOne.mockResolvedValue(activeInspection);
 
     await service.unparalyze('test-id');
 
@@ -563,6 +563,7 @@ describe('InspectionsService - Regras de Negócio', () => {
           module: ModuleType.SEGURANCA_TRABALHO,
           inspectionScope: InspectionScope.TEAM,
           checklistId: 'checklist-id',
+          contractId: 'contract-id',
           serviceDescription: 'Vistoria ST sem OS',
         },
         'user-id',
@@ -642,6 +643,7 @@ describe('InspectionsService - Regras de Negócio', () => {
         {
           module: ModuleType.SEGURANCA_TRABALHO,
           checklistId: 'checklist-id',
+          contractId: 'contract-id',
         },
         'user-id',
       ),
@@ -663,6 +665,7 @@ describe('InspectionsService - Regras de Negócio', () => {
           inspectionScope: InspectionScope.COLLABORATOR,
           checklistId: 'checklist-id',
           teamId: 'team-id',
+          contractId: 'contract-id',
           serviceDescription: 'Vistoria ST colaborador',
           collaboratorIds: ['c-1', 'c-2'],
         },
@@ -689,6 +692,7 @@ describe('InspectionsService - Regras de Negócio', () => {
           inspectionScope: InspectionScope.COLLABORATOR,
           checklistId: 'checklist-id',
           teamId: 'team-id',
+          contractId: 'contract-id',
           serviceDescription: 'Vistoria ST colaborador',
           collaboratorIds: ['c-outsider'],
         },
