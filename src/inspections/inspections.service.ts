@@ -1034,6 +1034,33 @@ export class InspectionsService {
     return (inspection?.collaborators ?? []).map((collaborator) => collaborator.id);
   }
 
+  private async deleteInspectionCloudinaryAssets(
+    inspectionId: string,
+  ): Promise<void> {
+    const [evidenceRows, signatureRows] = await Promise.all([
+      this.evidencesRepository.find({
+        where: { inspectionId },
+        select: ['cloudinaryPublicId'],
+      }),
+      this.signaturesRepository.find({
+        where: { inspectionId },
+        select: ['cloudinaryPublicId'],
+      }),
+    ]);
+
+    const publicIds = [
+      ...evidenceRows.map((row) => row.cloudinaryPublicId),
+      ...signatureRows.map((row) => row.cloudinaryPublicId),
+    ]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value));
+
+    const uniquePublicIds = [...new Set(publicIds)];
+    for (const publicId of uniquePublicIds) {
+      await this.cloudinaryService.deleteAsset(publicId);
+    }
+  }
+
   async remove(id: string): Promise<void> {
     const inspection = await this.findInspectionCoreForManagement(id);
 
@@ -1064,6 +1091,7 @@ export class InspectionsService {
       );
     }
 
+    await this.deleteInspectionCloudinaryAssets(inspection.id);
     await this.inspectionsRepository.delete(inspection.id);
     this.logger.log('Inspection removed', {
       inspectionId: inspection.id,

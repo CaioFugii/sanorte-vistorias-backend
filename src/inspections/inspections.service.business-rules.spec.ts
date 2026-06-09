@@ -57,6 +57,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       create: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     pendingAdjustmentsRepository = {
       findOne: jest.fn(),
@@ -69,6 +70,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     };
     evidencesRepository = {
       count: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     teamsRepository = {
       findOne: jest.fn(),

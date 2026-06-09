@@ -35,6 +35,7 @@ describe('InspectionsService', () => {
       create: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
       findAndCount: jest.fn(),
       createQueryBuilder: jest.fn(),
     };
@@ -425,6 +426,40 @@ describe('InspectionsService', () => {
     await expect(
       service.removeEvidence('i1', 'e1', UserRole.FISCAL),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('remove deve apagar assets no Cloudinary antes de deletar vistoria', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'i1',
+      status: InspectionStatus.RASCUNHO,
+      module: ModuleType.CAMPO,
+      serviceOrderId: null,
+      teamId: null,
+      serviceDescription: null,
+      inspectionScope: InspectionScope.TEAM,
+      hasParalysisPenalty: false,
+    });
+    evidencesRepository.find.mockResolvedValue([
+      { cloudinaryPublicId: 'quality/evidences/a' },
+      { cloudinaryPublicId: 'quality/evidences/a' },
+      { cloudinaryPublicId: '  ' },
+    ]);
+    signaturesRepository.find.mockResolvedValue([
+      { cloudinaryPublicId: 'quality/signatures/s1' },
+      { cloudinaryPublicId: null },
+    ]);
+    cloudinaryService.deleteAsset.mockResolvedValue({ result: 'ok' });
+
+    await service.remove('i1');
+
+    expect(cloudinaryService.deleteAsset).toHaveBeenCalledTimes(2);
+    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith(
+      'quality/evidences/a',
+    );
+    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith(
+      'quality/signatures/s1',
+    );
+    expect(inspectionsRepository.delete).toHaveBeenCalledWith('i1');
   });
 
   it('findAll deve retornar DTO enxuto para listagem', async () => {
