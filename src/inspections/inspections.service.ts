@@ -1352,7 +1352,7 @@ export class InspectionsService {
     signerName: string,
     imageBase64: string,
   ): Promise<Signature> {
-    const inspection = await this.findOne(id);
+    const inspection = await this.findInspectionCoreByIdOrExternalId(id);
 
     if (inspection.status !== InspectionStatus.RASCUNHO) {
       throw new BadRequestException(
