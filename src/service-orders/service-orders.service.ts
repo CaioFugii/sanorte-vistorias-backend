@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -24,6 +25,8 @@ export interface ImportResult {
 
 @Injectable()
 export class ServiceOrdersService {
+  private readonly logger = new Logger(ServiceOrdersService.name);
+
   constructor(
     @InjectRepository(ServiceOrder)
     private readonly serviceOrderRepository: Repository<ServiceOrder>,
@@ -213,6 +216,11 @@ export class ServiceOrdersService {
       allowedContractIds !== null &&
       !allowedContractIds.includes(contractId)
     ) {
+      this.logger.warn('Service order import blocked by contract scope', {
+        contractId,
+        userId: user?.id,
+        userRole: user?.role,
+      });
       throw new ForbiddenException(
         'Você não tem acesso ao contrato selecionado para importação.',
       );
@@ -390,6 +398,15 @@ export class ServiceOrdersService {
         );
       }
     }
+
+    this.logger.log('Service order import completed', {
+      contractId,
+      userId: user?.id,
+      inserted: result.inserted,
+      skipped: result.skipped,
+      deleted: result.deleted,
+      errorsCount: result.errors.length,
+    });
 
     return result;
   }

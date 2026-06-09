@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -27,6 +28,8 @@ import {
 
 @Injectable()
 export class InvestmentWorksService {
+  private readonly logger = new Logger(InvestmentWorksService.name);
+
   constructor(
     @InjectRepository(InvestmentWork)
     private readonly investmentWorkRepository: Repository<InvestmentWork>,
@@ -199,6 +202,12 @@ export class InvestmentWorksService {
     });
 
     const saved = await this.investmentWorkRepository.save(investmentWork);
+    this.logger.log('Investment work created', {
+      investmentWorkId: saved.id,
+      contractId: saved.contractId,
+      teamId: saved.teamId,
+      createdByUserId: user.id,
+    });
     return this.findOneScoped(saved.id, user);
   }
 
@@ -242,6 +251,13 @@ export class InvestmentWorksService {
       investmentWork.id,
       updatePayload,
     );
+    this.logger.log('Investment work updated', {
+      investmentWorkId: investmentWork.id,
+      contractId: nextContractId,
+      teamId: nextTeamId,
+      updatedByUserId: user.id,
+      updatedFields: Object.keys(dto),
+    });
     return this.findOneScoped(investmentWork.id, user);
   }
 
@@ -252,12 +268,21 @@ export class InvestmentWorksService {
       where: { investmentWorkId: investmentWork.id },
     });
     if (inspectionsCount > 0) {
+      this.logger.warn('Investment work removal blocked due linked inspections', {
+        investmentWorkId: investmentWork.id,
+        inspectionsCount,
+        userId: user.id,
+      });
       throw new BadRequestException(
         'Não é possível remover obra com inspeções vinculadas',
       );
     }
 
     await this.investmentWorkRepository.delete(investmentWork.id);
+    this.logger.log('Investment work removed', {
+      investmentWorkId: investmentWork.id,
+      removedByUserId: user.id,
+    });
   }
 
   private async findOneScoped(id: string, user: any): Promise<InvestmentWork> {

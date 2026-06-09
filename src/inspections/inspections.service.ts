@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -56,6 +57,8 @@ type PendingItemsSummary = {
 
 @Injectable()
 export class InspectionsService {
+  private readonly logger = new Logger(InspectionsService.name);
+
   constructor(
     @InjectRepository(Inspection)
     private inspectionsRepository: Repository<Inspection>,
@@ -264,6 +267,15 @@ export class InspectionsService {
     });
 
     const savedInspection = await this.inspectionsRepository.save(inspection);
+    this.logger.log('Inspection created', {
+      inspectionId: savedInspection.id,
+      module: savedInspection.module,
+      status: savedInspection.status,
+      contractId: savedInspection.contractId,
+      serviceOrderId: savedInspection.serviceOrderId,
+      investmentWorkId: savedInspection.investmentWorkId,
+      createdByUserId: userId,
+    });
 
     // Marcar a ordem de serviço como usada no módulo correspondente
     const serviceOrderUpdate: Partial<ServiceOrder> = {};
@@ -977,6 +989,10 @@ export class InspectionsService {
     const inspection = await this.findOne(id);
 
     if (inspection.status !== InspectionStatus.RASCUNHO) {
+      this.logger.warn('Inspection deletion blocked due status', {
+        inspectionId: inspection.id,
+        status: inspection.status,
+      });
       throw new BadRequestException(
         'Só é possível excluir vistoria com status RASCUNHO',
       );
@@ -1000,6 +1016,10 @@ export class InspectionsService {
     }
 
     await this.inspectionsRepository.delete(inspection.id);
+    this.logger.log('Inspection removed', {
+      inspectionId: inspection.id,
+      module: inspection.module,
+    });
   }
 
   async update(
@@ -1046,6 +1066,12 @@ export class InspectionsService {
       userRole === 'FISCAL' &&
       inspection.status !== InspectionStatus.RASCUNHO
     ) {
+      this.logger.warn('Inspection update blocked for fiscal by status', {
+        inspectionId: inspection.id,
+        status: inspection.status,
+        userId,
+        userRole,
+      });
       throw new ForbiddenException(
         'Fiscal não pode editar vistoria após finalização',
       );
@@ -1103,6 +1129,12 @@ export class InspectionsService {
 
     // GESTOR, SUPERVISOR e ADMIN podem editar sempre
     await this.inspectionsRepository.update(inspection.id, inspectionData);
+    this.logger.log('Inspection updated', {
+      inspectionId: inspection.id,
+      updatedByUserId: userId,
+      updatedByRole: userRole,
+      updatedFields: Object.keys(inspectionData),
+    });
     return this.findOne(inspection.id);
   }
 
@@ -1404,6 +1436,10 @@ export class InspectionsService {
     const inspection = await this.findInspectionCoreForUpdateItems(id);
 
     if (inspection.status !== InspectionStatus.RASCUNHO) {
+      this.logger.warn('Inspection finalization blocked due status', {
+        inspectionId: inspection.id,
+        status: inspection.status,
+      });
       throw new BadRequestException('Vistoria já foi finalizada');
     }
 
@@ -1445,6 +1481,11 @@ export class InspectionsService {
       status,
       scorePercent,
       finalizedAt: new Date(),
+    });
+    this.logger.log('Inspection finalized', {
+      inspectionId,
+      status,
+      scorePercent,
     });
 
     return this.findOneDetail(inspectionId);
@@ -1491,6 +1532,18 @@ export class InspectionsService {
         });
       }
     }
+
+    const createdCount = results.filter((r) => r.status === 'CREATED').length;
+    const updatedCount = results.filter((r) => r.status === 'UPDATED').length;
+    const errorCount = results.filter((r) => r.status === 'ERROR').length;
+    this.logger.log('Inspection sync batch completed', {
+      total: inspections.length,
+      createdCount,
+      updatedCount,
+      errorCount,
+      userId: user?.id,
+      userRole: user?.role,
+    });
 
     return { results };
   }
@@ -2204,6 +2257,10 @@ export class InspectionsService {
 
     await this.inspectionsRepository.update(inspectionId, {
       status: InspectionStatus.RESOLVIDA,
+    });
+    this.logger.log('Inspection resolved', {
+      inspectionId,
+      resolvedByUserId: userId,
     });
 
     return this.findOne(inspectionId);

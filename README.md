@@ -37,7 +37,14 @@ NODE_ENV=development
 JWT_SECRET=your-secret-key-change-in-production
 JWT_EXPIRES_IN=24h
 CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
+SENTRY_DSN=https://<key>@o0.ingest.sentry.io/<project-id>
+SENTRY_ENVIRONMENT=development
+SENTRY_RELEASE=sanorte-vistorias-backend@1.0.1
+SENTRY_TRACES_SAMPLE_RATE=0.1
+MONITORING_SMOKE_TEST_TOKEN=change-this-token
 ```
+
+Obs.: `SENTRY_RELEASE` pode ser omitido em deploys Heroku, pois o backend agora usa automaticamente `HEROKU_SLUG_COMMIT` (ou `SOURCE_VERSION`) quando disponível.
 
 3. Executar migrations e seed:
 
@@ -77,6 +84,10 @@ Authorization: Bearer <token>
 ```
 
 ## Endpoints por módulo
+
+### Monitoring
+
+- `GET /monitoring/sentry-smoke-test` (protegido por header `x-monitoring-token`)
 
 ### Auth
 

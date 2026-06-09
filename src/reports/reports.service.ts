@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ReportType, ReportTypeField } from '../entities';
 
 @Injectable()
 export class ReportsService {
+  private readonly logger = new Logger(ReportsService.name);
+
   constructor(
     @InjectRepository(ReportType)
     private readonly reportTypesRepository: Repository<ReportType>,
@@ -32,10 +34,16 @@ export class ReportsService {
 
   async findTypeFields(code: string): Promise<ReportTypeField[]> {
     const reportType = await this.findReportTypeOrFail(code);
-    return this.reportTypeFieldsRepository.find({
+    const fields = await this.reportTypeFieldsRepository.find({
       where: { reportTypeId: reportType.id },
       order: { order: 'ASC' },
     });
+    this.logger.log('Report type fields fetched', {
+      reportTypeCode: code.trim(),
+      reportTypeId: reportType.id,
+      fieldsCount: fields.length,
+    });
+    return fields;
   }
 
   private async findReportTypeOrFail(code: string): Promise<ReportType> {
