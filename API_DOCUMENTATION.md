@@ -1094,6 +1094,15 @@ Request JSON (parcial):
 
 Response 200: `ChecklistSection` atualizado
 
+### DELETE /checklists/:id/sections/:sectionId
+
+- Auth: JWT + ADMIN
+- Response 200: vazio
+- Regras:
+  - retorna `400` se for a única seção do checklist
+  - retorna `400` se algum item da seção estiver vinculado a vistorias
+  - remove os itens da seção antes de excluí-la
+
 ### POST /checklists/:id/items
 
 - Auth: JWT + ADMIN

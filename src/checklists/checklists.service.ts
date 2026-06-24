@@ -5,12 +5,13 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   Checklist,
   ChecklistItem,
   ChecklistSection,
   Inspection,
+  InspectionItem,
   Sector,
 } from '../entities';
 import { InspectionScope, ModuleType } from '../common/enums';
@@ -28,6 +29,8 @@ export class ChecklistsService {
     private checklistSectionsRepository: Repository<ChecklistSection>,
     @InjectRepository(Inspection)
     private inspectionsRepository: Repository<Inspection>,
+    @InjectRepository(InspectionItem)
+    private inspectionItemsRepository: Repository<InspectionItem>,
     @InjectRepository(Sector)
     private sectorsRepository: Repository<Sector>,
     private cloudinaryService: CloudinaryService,
@@ -211,6 +214,44 @@ export class ChecklistsService {
 
   async removeItem(checklistId: string, itemId: string): Promise<void> {
     await this.checklistItemsRepository.delete({ id: itemId, checklistId });
+  }
+
+  async removeSection(checklistId: string, sectionId: string): Promise<void> {
+    const section = await this.checklistSectionsRepository.findOne({
+      where: { id: sectionId, checklistId },
+    });
+    if (!section) {
+      throw new NotFoundException('Seção do checklist não encontrada');
+    }
+
+    const sectionCount = await this.checklistSectionsRepository.count({
+      where: { checklistId },
+    });
+    if (sectionCount <= 1) {
+      throw new BadRequestException(
+        'Não é possível excluir a única seção do checklist',
+      );
+    }
+
+    const items = await this.checklistItemsRepository.find({
+      where: { sectionId, checklistId },
+      select: ['id'],
+    });
+    if (items.length > 0) {
+      const itemIds = items.map((item) => item.id);
+      const linkedInspectionItems = await this.inspectionItemsRepository.count({
+        where: { checklistItemId: In(itemIds) },
+      });
+      if (linkedInspectionItems > 0) {
+        throw new BadRequestException(
+          'Não é possível excluir seção com itens vinculados a vistorias',
+        );
+      }
+
+      await this.checklistItemsRepository.delete({ sectionId, checklistId });
+    }
+
+    await this.checklistSectionsRepository.delete({ id: sectionId, checklistId });
   }
 
   async removeChecklist(id: string): Promise<void> {

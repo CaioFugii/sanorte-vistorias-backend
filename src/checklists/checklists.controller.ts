@@ -95,6 +95,16 @@ export class ChecklistsController {
     );
   }
 
+  @Delete(':id/sections/:sectionId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  removeSection(
+    @Param('id') id: string,
+    @Param('sectionId') sectionId: string,
+  ) {
+    return this.checklistsService.removeSection(id, sectionId);
+  }
+
   @Put(':id/items/:itemId')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)

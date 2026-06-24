@@ -7,6 +7,7 @@ import {
   ChecklistItem,
   ChecklistSection,
   Inspection,
+  InspectionItem,
   Sector,
 } from '../entities';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
@@ -19,6 +20,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
       ChecklistItem,
       ChecklistSection,
       Inspection,
+      InspectionItem,
       Sector,
     ]),
   ],
