@@ -30,7 +30,7 @@ Authorization: Bearer <token>
 - Setores: `GET/POST/PUT/DELETE /sectors`
 - Colaboradores: `GET/POST/PUT/DELETE /collaborators`
 - Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections`, `items` e upload de imagem de referência
-- Ordens de Serviço (OS): `GET /service-orders`, `POST /service-orders/import`
+- Ordens de Serviço (OS): `GET /service-orders`, `POST /service-orders/import`, `DELETE /service-orders/:id` (ADMIN)
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
@@ -1222,6 +1222,16 @@ Response 200:
   "errors": []
 }
 ```
+
+### DELETE /service-orders/:id
+
+- Auth: JWT + ADMIN
+- Path: `id` (UUID da ordem de serviço)
+- Regra: não permite excluir OS vinculada a vistorias (`inspection.serviceOrderId`)
+- Response 204: vazio
+- Erros:
+  - `404`: ordem de serviço não encontrada
+  - `400`: ordem de serviço vinculada a vistorias
 
 ## Investment Works (Obras de Investimento)
 

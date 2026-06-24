@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Contract, ServiceOrder, Sector } from '../entities';
+import { Contract, Inspection, ServiceOrder, Sector } from '../entities';
 import { ServiceOrdersService } from './service-orders.service';
 import { ServiceOrdersController } from './service-orders.controller';
 import { ServiceOrderImportParserService } from './import/service-order-import-parser.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ServiceOrder, Sector, Contract])],
+  imports: [TypeOrmModule.forFeature([ServiceOrder, Sector, Contract, Inspection])],
   controllers: [ServiceOrdersController],
   providers: [ServiceOrdersService, ServiceOrderImportParserService],
   exports: [ServiceOrdersService],

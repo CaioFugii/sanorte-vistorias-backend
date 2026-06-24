@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Post,
   UseGuards,
   UseInterceptors,
@@ -11,6 +13,7 @@ import {
   FileTypeValidator,
   BadRequestException,
   ParseUUIDPipe,
+  Param,
   Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -80,5 +83,15 @@ export class ServiceOrdersController {
     file: Express.Multer.File,
   ) {
     return this.serviceOrdersService.importFromExcel(user, file, contractId);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async remove(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<void> {
+    await this.serviceOrdersService.remove(id);
   }
 }

@@ -3,11 +3,12 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as XLSX from 'xlsx';
-import { Contract, ServiceOrder, Sector } from '../entities';
+import { Contract, Inspection, ServiceOrder, Sector } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { ServiceOrderImportParserService } from './import/service-order-import-parser.service';
 import {
@@ -34,6 +35,8 @@ export class ServiceOrdersService {
     private readonly sectorsRepository: Repository<Sector>,
     @InjectRepository(Contract)
     private readonly contractsRepository: Repository<Contract>,
+    @InjectRepository(Inspection)
+    private readonly inspectionRepository: Repository<Inspection>,
     private readonly serviceOrderImportParser: ServiceOrderImportParserService,
   ) {}
 
@@ -409,5 +412,30 @@ export class ServiceOrdersService {
     });
 
     return result;
+  }
+
+  async remove(id: string): Promise<void> {
+    const serviceOrder = await this.serviceOrderRepository.findOne({
+      where: { id },
+    });
+    if (!serviceOrder) {
+      throw new NotFoundException('Ordem de serviço não encontrada');
+    }
+
+    const inspectionsCount = await this.inspectionRepository.count({
+      where: { serviceOrderId: id },
+    });
+    if (inspectionsCount > 0) {
+      this.logger.warn('Service order removal blocked due linked inspections', {
+        serviceOrderId: id,
+        inspectionsCount,
+      });
+      throw new BadRequestException(
+        'Não é possível excluir ordem de serviço vinculada a vistorias',
+      );
+    }
+
+    await this.serviceOrderRepository.delete(id);
+    this.logger.log('Service order removed', { serviceOrderId: id });
   }
 }
