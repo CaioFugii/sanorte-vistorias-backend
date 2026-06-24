@@ -3,6 +3,7 @@ import { TeamRankingMetric } from './team-ranking-inspections-query.dto';
 
 export class TeamRankingInspectionItemDto {
   inspectionId: string;
+  externalId: string | null;
   serviceOrderId: string | null;
   serviceOrderNumber: string | null;
   serviceOrderAddress: string | null;

@@ -790,6 +790,7 @@ export class DashboardsService {
       .createQueryBuilder('inspection')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('inspection.id', 'inspectionId')
+      .addSelect('inspection.externalId', 'externalId')
       .addSelect('inspection.serviceOrderId', 'serviceOrderId')
       .addSelect('serviceOrder.osNumber', 'serviceOrderNumber')
       .addSelect('serviceOrder.address', 'serviceOrderAddress')
@@ -867,6 +868,7 @@ export class DashboardsService {
         .limit(limit)
         .getRawMany<{
           inspectionId: string;
+          externalId: string | null;
           serviceOrderId: string | null;
           serviceOrderNumber: string | null;
           serviceOrderAddress: string | null;
@@ -896,6 +898,7 @@ export class DashboardsService {
       hasPrev: page > 1,
       inspections: rows.map((row) => ({
         inspectionId: row.inspectionId,
+        externalId: row.externalId,
         serviceOrderId: row.serviceOrderId,
         serviceOrderNumber: row.serviceOrderNumber,
         serviceOrderAddress: row.serviceOrderAddress ?? row.locationDescription,

@@ -2208,6 +2208,7 @@ Response 200:
   "inspections": [
     {
       "inspectionId": "7e3bc6ad-2b2f-44bf-bec0-dad64989b38c",
+      "externalId": "31a9e29b-1ca9-4d69-a6cf-e6367471743f",
       "serviceOrderId": "e35cf2b4-53a6-45cc-b57d-cd00d58d9a1a",
       "serviceOrderNumber": "OS-123456",
       "serviceOrderAddress": "Rua das Palmeiras, 100 - Centro",
@@ -2219,6 +2220,7 @@ Response 200:
     },
     {
       "inspectionId": "53ad4f4a-377d-4f36-82e2-f178fdf93fd9",
+      "externalId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "serviceOrderId": "a6e6b603-f136-4937-9115-7a2ae8880ba3",
       "serviceOrderNumber": "OS-123470",
       "serviceOrderAddress": "Av. Brasil, 420 - Industrial",

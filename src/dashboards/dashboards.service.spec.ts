@@ -744,6 +744,7 @@ describe('DashboardsService', () => {
       rawMany: [
         {
           inspectionId: 'insp-1',
+          externalId: 'ext-insp-1',
           serviceOrderId: 'so-1',
           serviceOrderNumber: 'OS-001',
           serviceOrderAddress: 'Rua A, 123 - Centro',
@@ -781,6 +782,7 @@ describe('DashboardsService', () => {
       inspections: [
         {
           inspectionId: 'insp-1',
+          externalId: 'ext-insp-1',
           serviceOrderId: 'so-1',
           serviceOrderNumber: 'OS-001',
           serviceOrderAddress: 'Rua A, 123 - Centro',
