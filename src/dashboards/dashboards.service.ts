@@ -1461,10 +1461,12 @@ export class DashboardsService {
       .createQueryBuilder('inspection')
       .innerJoin('inspection.items', 'inspectionItem')
       .innerJoin('inspection.checklist', 'checklist')
+      .leftJoin('checklist.sector', 'sector')
       .innerJoin('inspectionItem.checklistItem', 'checklistItem')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('checklist.id', 'checklistId')
       .addSelect('checklist.name', 'checklistName')
+      .addSelect('sector.name', 'sectorName')
       .addSelect('checklistItem.id', 'checklistItemId')
       .addSelect('checklistItem.title', 'checklistItemTitle')
       .addSelect(nonConformCountExpr, 'nonConformitiesCount')
@@ -1477,6 +1479,7 @@ export class DashboardsService {
       .setParameter('nonConformAnswer', ChecklistAnswer.NAO_CONFORME)
       .groupBy('checklist.id')
       .addGroupBy('checklist.name')
+      .addGroupBy('sector.name')
       .addGroupBy('checklistItem.id')
       .addGroupBy('checklistItem.title')
       .having(`${nonConformCountExpr} > 0`)
@@ -1499,6 +1502,7 @@ export class DashboardsService {
     const rows = await qb.getRawMany<{
       checklistId: string;
       checklistName: string;
+      sectorName: string | null;
       checklistItemId: string;
       checklistItemTitle: string;
       nonConformitiesCount: string;
@@ -1510,6 +1514,7 @@ export class DashboardsService {
       {
         checklistId: string;
         checklistName: string;
+        sectorName?: string;
         totalNonConformities: number;
         questions: Array<{
           checklistItemId: string;
@@ -1537,6 +1542,7 @@ export class DashboardsService {
         checklistsMap.set(checklistId, {
           checklistId,
           checklistName: row.checklistName,
+          sectorName: row.sectorName ?? undefined,
           totalNonConformities: 0,
           questions: [],
         });

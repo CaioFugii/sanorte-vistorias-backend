@@ -2494,6 +2494,7 @@ Response 200:
     {
       "checklistId": "8b0f1d7a-2d06-4f80-92f9-6889edc8e5ba",
       "checklistName": "Checklist Rede",
+      "sectorName": "AGUA",
       "totalNonConformities": 16,
       "questions": [
         {

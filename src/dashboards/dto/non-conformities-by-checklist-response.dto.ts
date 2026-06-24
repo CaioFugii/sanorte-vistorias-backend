@@ -11,6 +11,7 @@ export class NonConformityQuestionDto {
 export class NonConformityChecklistDto {
   checklistId: string;
   checklistName: string;
+  sectorName?: string;
   totalNonConformities: number;
   questions: NonConformityQuestionDto[];
 }

@@ -331,6 +331,7 @@ describe('DashboardsService', () => {
         {
           checklistId: 'checklist-1',
           checklistName: 'Checklist Rede',
+          sectorName: 'AGUA',
           checklistItemId: 'item-1',
           checklistItemTitle: 'Uso correto de EPI',
           nonConformitiesCount: '10',
@@ -339,6 +340,7 @@ describe('DashboardsService', () => {
         {
           checklistId: 'checklist-1',
           checklistName: 'Checklist Rede',
+          sectorName: 'AGUA',
           checklistItemId: 'item-2',
           checklistItemTitle: 'Sinalização da área',
           nonConformitiesCount: '6',
@@ -347,6 +349,7 @@ describe('DashboardsService', () => {
         {
           checklistId: 'checklist-2',
           checklistName: 'Checklist Ligação',
+          sectorName: 'ESGOTO',
           checklistItemId: 'item-3',
           checklistItemTitle: 'Isolamento elétrico',
           nonConformitiesCount: '8',
@@ -375,6 +378,7 @@ describe('DashboardsService', () => {
         {
           checklistId: 'checklist-1',
           checklistName: 'Checklist Rede',
+          sectorName: 'AGUA',
           totalNonConformities: 16,
           questions: [
             {
@@ -389,6 +393,7 @@ describe('DashboardsService', () => {
         {
           checklistId: 'checklist-2',
           checklistName: 'Checklist Ligação',
+          sectorName: 'ESGOTO',
           totalNonConformities: 8,
           questions: [
             {
