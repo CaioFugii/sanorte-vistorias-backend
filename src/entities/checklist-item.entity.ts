@@ -50,6 +50,15 @@ export class ChecklistItem {
   @Column({ name: 'reference_image_public_id', nullable: true })
   referenceImagePublicId: string | null;
 
+  @Column({ name: 'reference_image_storage_provider', nullable: true })
+  referenceImageStorageProvider: string | null;
+
+  @Column({ name: 'reference_image_storage_key', nullable: true })
+  referenceImageStorageKey: string | null;
+
+  @Column({ name: 'reference_image_storage_bucket', nullable: true })
+  referenceImageStorageBucket: string | null;
+
   @Column({ default: true })
   active: boolean;
 

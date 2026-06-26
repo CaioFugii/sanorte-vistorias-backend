@@ -103,6 +103,7 @@ describe('InspectionsService - Regras de Negócio', () => {
         uploadImageFromPath: jest.fn(),
         uploadImageStream: jest.fn(),
       } as any,
+      { deleteStoredAsset: jest.fn() } as any,
       dataSource as any,
       new InspectionDomainService(),
     );

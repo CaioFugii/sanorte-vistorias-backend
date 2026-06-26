@@ -242,7 +242,52 @@ heroku config:set STORAGE_PROVIDER=s3 AWS_REGION=sa-east-1 AWS_S3_BUCKET=... AWS
 
 Mantenha `CLOUDINARY_URL` configurado durante a transição para rollback via flag.
 
-Fase atual: uploads genéricos, evidências, assinaturas, resolução de pendências e imagens de referência de checklist usam o provider selecionado. Registros legados no Cloudinary continuam legíveis via `url` persistida.
+Fase atual: uploads genéricos, evidências, assinaturas, resolução de pendências e imagens de referência de checklist usam o provider selecionado. Novos registros persistem `storageProvider`, `storageKey` e `storageBucket`; legado Cloudinary continua legível via `url` e `cloudinaryPublicId`. Deleção remota usa o provider gravado no registro.
+
+Após deploy, rodar migration:
+
+```bash
+npm run migration:run
+```
+
+### Backfill Cloudinary -> S3
+
+Verificar quantos assets legados ainda estão no Cloudinary:
+
+```bash
+npm run storage:legacy-stats
+```
+
+Simular migração (sem gravar):
+
+```bash
+npm run storage:migrate-cloudinary-to-s3 -- --dry-run --limit 20
+```
+
+Executar migração em lotes:
+
+```bash
+npm run storage:migrate-cloudinary-to-s3 -- --batch-size 25
+```
+
+Heroku:
+
+```bash
+heroku run npm run storage:legacy-stats -a sanorte-vistorias-backend
+heroku run npm run storage:migrate-cloudinary-to-s3 -- --dry-run --limit 20 -a sanorte-vistorias-backend
+heroku run npm run storage:migrate-cloudinary-to-s3 -- --batch-size 25 -a sanorte-vistorias-backend
+```
+
+O job copia `evidences`, `signatures` e `checklist_items` com `storage_provider=cloudinary`, preservando a key (`quality/...`) e atualizando `url` para o bucket S3.
+
+### Descomissionamento Cloudinary
+
+1. Ativar `STORAGE_PROVIDER=s3` em produção.
+2. Rodar `storage:legacy-stats` até `cloudinaryPendingMigration = 0`.
+3. Manter `CLOUDINARY_URL` por 2–4 semanas para rollback.
+4. Remover `CLOUDINARY_URL` e, depois, o SDK Cloudinary do código quando estável.
+
+Rollback imediato de novos uploads: `STORAGE_PROVIDER=cloudinary`.
 
 ## Documentação detalhada
 

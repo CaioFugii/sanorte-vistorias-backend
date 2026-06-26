@@ -21,6 +21,11 @@ import {
   ASSET_STORAGE,
   AssetStorage,
 } from '../storage/asset-storage.interface';
+import {
+  ASSET_STORAGE_REGISTRY,
+  AssetStorageRegistry,
+} from '../storage/asset-storage.registry';
+import { buildStoredAssetFields } from '../storage/asset-storage.util';
 
 @Injectable()
 export class ChecklistsService {
@@ -38,6 +43,8 @@ export class ChecklistsService {
     @InjectRepository(Sector)
     private sectorsRepository: Repository<Sector>,
     @Inject(ASSET_STORAGE) private assetStorage: AssetStorage,
+    @Inject(ASSET_STORAGE_REGISTRY)
+    private assetStorageRegistry: AssetStorageRegistry,
   ) {}
 
   async findAll(
@@ -170,14 +177,23 @@ export class ChecklistsService {
       const uploaded = await this.assetStorage.uploadImageFromPath(file.path, {
         folder: 'quality/checklists/reference-images',
       });
+      const storedAsset = buildStoredAssetFields(uploaded);
 
-      if (item.referenceImagePublicId) {
-        await this.assetStorage.deleteAsset(item.referenceImagePublicId);
+      if (item.referenceImagePublicId || item.referenceImageStorageKey) {
+        await this.assetStorageRegistry.deleteStoredAsset({
+          storageProvider: item.referenceImageStorageProvider,
+          storageKey: item.referenceImageStorageKey,
+          referenceImagePublicId: item.referenceImagePublicId,
+          referenceImageStorageKey: item.referenceImageStorageKey,
+        });
       }
 
       await this.checklistItemsRepository.update(item.id, {
-        referenceImageUrl: uploaded.url,
-        referenceImagePublicId: uploaded.publicId,
+        referenceImageUrl: storedAsset.url,
+        referenceImagePublicId: storedAsset.cloudinaryPublicId,
+        referenceImageStorageProvider: storedAsset.storageProvider,
+        referenceImageStorageKey: storedAsset.storageKey,
+        referenceImageStorageBucket: storedAsset.storageBucket,
       });
 
       return this.findChecklistItemOrFail(checklistId, itemId);

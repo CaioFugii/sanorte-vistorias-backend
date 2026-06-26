@@ -32,6 +32,8 @@ export interface InspectionDetailEvidenceDto {
   /** Preenchido quando a mídia está armazenada como data URL */
   dataUrl?: string | null;
   cloudinaryPublicId?: string | null;
+  storageProvider?: string | null;
+  storageKey?: string | null;
   bytes?: number | null;
   size?: number;
   format?: string | null;
@@ -47,6 +49,8 @@ export interface InspectionDetailSignatureDto {
   url?: string | null;
   dataUrl?: string | null;
   cloudinaryPublicId?: string | null;
+  storageProvider?: string | null;
+  storageKey?: string | null;
 }
 
 /**

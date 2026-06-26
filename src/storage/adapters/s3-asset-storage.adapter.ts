@@ -113,6 +113,47 @@ export class S3AssetStorageAdapter implements AssetStorage {
     this.logger.log(`Deleted S3 object key=${key}`);
   }
 
+  /** Backfill/migration: upload preserving an explicit S3 key. */
+  async putObjectWithKey(
+    key: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<{ key: string; url: string; bytes: number }> {
+    this.assertConfigured();
+
+    const normalizedKey = key.trim();
+    if (!normalizedKey) {
+      throw new InternalServerErrorException('S3 object key is required');
+    }
+
+    await this.client!.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: normalizedKey,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+
+    return {
+      key: normalizedKey,
+      url: this.buildPublicUrl(normalizedKey),
+      bytes: body.length,
+    };
+  }
+
+  buildPublicUrl(key: string): string {
+    return `${this.publicBaseUrl}/${key.trim()}`;
+  }
+
+  getBucketName(): string {
+    return this.bucket;
+  }
+
+  isConfigured(): boolean {
+    return this.client !== null;
+  }
+
   private buildResult(
     key: string,
     bytes: number,
@@ -120,7 +161,7 @@ export class S3AssetStorageAdapter implements AssetStorage {
   ): AssetUploadResult {
     return {
       publicId: key,
-      url: `${this.publicBaseUrl}/${key}`,
+      url: this.buildPublicUrl(key),
       resourceType: 'image',
       bytes,
       format,

@@ -51,6 +51,15 @@ import {
   AssetStorage,
 } from '../storage/asset-storage.interface';
 import {
+  ASSET_STORAGE_REGISTRY,
+  AssetStorageRegistry,
+} from '../storage/asset-storage.registry';
+import {
+  buildStoredAssetFields,
+  buildSyncedAssetFields,
+  resolveStoredAssetId,
+} from '../storage/asset-storage.util';
+import {
   getAllowedContractIds,
 } from '../common/auth/contract-scope.util';
 
@@ -85,6 +94,8 @@ export class InspectionsService {
     @InjectRepository(InvestmentWork)
     private investmentWorkRepository: Repository<InvestmentWork>,
     @Inject(ASSET_STORAGE) private assetStorage: AssetStorage,
+    @Inject(ASSET_STORAGE_REGISTRY)
+    private assetStorageRegistry: AssetStorageRegistry,
     private dataSource: DataSource,
     private inspectionDomainService: InspectionDomainService,
   ) {}
@@ -750,6 +761,8 @@ export class InspectionsService {
           filePath: true,
           url: true,
           cloudinaryPublicId: true,
+          storageProvider: true,
+          storageKey: true,
           bytes: true,
           size: true,
           format: true,
@@ -768,6 +781,8 @@ export class InspectionsService {
           url: true,
           imagePath: true,
           cloudinaryPublicId: true,
+          storageProvider: true,
+          storageKey: true,
         },
         order: { signedAt: 'ASC' },
       }),
@@ -924,6 +939,8 @@ export class InspectionsService {
       mimeType: ev.mimeType,
       url,
       ...(dataUrl ? { dataUrl } : {}),
+      ...(ev.storageProvider ? { storageProvider: ev.storageProvider } : {}),
+      ...(ev.storageKey ? { storageKey: ev.storageKey } : {}),
       ...(ev.cloudinaryPublicId
         ? { cloudinaryPublicId: ev.cloudinaryPublicId }
         : {}),
@@ -949,6 +966,8 @@ export class InspectionsService {
       signedAt: sig.signedAt,
       ...(url ? { url } : {}),
       ...(dataUrl ? { dataUrl } : {}),
+      ...(sig.storageProvider ? { storageProvider: sig.storageProvider } : {}),
+      ...(sig.storageKey ? { storageKey: sig.storageKey } : {}),
       ...(sig.cloudinaryPublicId
         ? { cloudinaryPublicId: sig.cloudinaryPublicId }
         : {}),
@@ -1044,24 +1063,33 @@ export class InspectionsService {
     const [evidenceRows, signatureRows] = await Promise.all([
       this.evidencesRepository.find({
         where: { inspectionId },
-        select: ['cloudinaryPublicId'],
+        select: [
+          'cloudinaryPublicId',
+          'storageProvider',
+          'storageKey',
+        ],
       }),
       this.signaturesRepository.find({
         where: { inspectionId },
-        select: ['cloudinaryPublicId'],
+        select: [
+          'cloudinaryPublicId',
+          'storageProvider',
+          'storageKey',
+        ],
       }),
     ]);
 
-    const publicIds = [
-      ...evidenceRows.map((row) => row.cloudinaryPublicId),
-      ...signatureRows.map((row) => row.cloudinaryPublicId),
-    ]
-      .map((value) => value?.trim())
-      .filter((value): value is string => Boolean(value));
-
-    const uniquePublicIds = [...new Set(publicIds)];
-    for (const publicId of uniquePublicIds) {
-      await this.assetStorage.deleteAsset(publicId);
+    const assetRecords = [...evidenceRows, ...signatureRows];
+    const seen = new Set<string>();
+    for (const record of assetRecords) {
+      const provider = record.storageProvider || 'cloudinary';
+      const assetId =
+        record.storageKey?.trim() || record.cloudinaryPublicId?.trim();
+      if (!assetId) continue;
+      const dedupeKey = `${provider}:${assetId}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      await this.assetStorageRegistry.deleteStoredAsset(record);
     }
   }
 
@@ -1370,16 +1398,20 @@ export class InspectionsService {
       const uploaded = await this.assetStorage.uploadImageFromPath(file.path, {
         folder: 'quality/evidences',
       });
+      const storedAsset = buildStoredAssetFields(uploaded);
 
       const evidence = this.evidencesRepository.create({
         inspectionId: inspection.id,
         inspectionItemId,
-        filePath: uploaded.url,
+        filePath: storedAsset.url,
         fileName: file.originalname,
         mimeType: file.mimetype,
         size: uploaded.bytes,
-        cloudinaryPublicId: uploaded.publicId,
-        url: uploaded.url,
+        cloudinaryPublicId: storedAsset.cloudinaryPublicId,
+        storageProvider: storedAsset.storageProvider,
+        storageKey: storedAsset.storageKey,
+        storageBucket: storedAsset.storageBucket,
+        url: storedAsset.url,
         bytes: uploaded.bytes,
         format: uploaded.format,
         width: uploaded.width,
@@ -1418,8 +1450,8 @@ export class InspectionsService {
       throw new NotFoundException('Evidência não encontrada nesta vistoria');
     }
 
-    if (evidence.cloudinaryPublicId?.trim()) {
-      await this.assetStorage.deleteAsset(evidence.cloudinaryPublicId);
+    if (resolveStoredAssetId(evidence)) {
+      await this.assetStorageRegistry.deleteStoredAsset(evidence);
     }
 
     await this.evidencesRepository.delete(evidence.id);
@@ -1442,14 +1474,18 @@ export class InspectionsService {
     const uploaded = await this.assetStorage.uploadImage(imageBuffer, {
       folder: 'quality/signatures',
     });
+    const storedAsset = buildStoredAssetFields(uploaded);
 
     const signature = this.signaturesRepository.create({
       inspectionId: inspection.id,
       signerName,
       signerRoleLabel: 'Lider/Encarregado',
-      imagePath: uploaded.url,
-      cloudinaryPublicId: uploaded.publicId,
-      url: uploaded.url,
+      imagePath: storedAsset.url,
+      cloudinaryPublicId: storedAsset.cloudinaryPublicId,
+      storageProvider: storedAsset.storageProvider,
+      storageKey: storedAsset.storageKey,
+      storageBucket: storedAsset.storageBucket,
+      url: storedAsset.url,
       signedAt: new Date(),
     });
 
@@ -1842,6 +1878,11 @@ export class InspectionsService {
           (evidence.format ? `image/${evidence.format}` : 'image/*');
         const normalizedSize = evidence.size ?? evidence.bytes ?? 0;
 
+        const syncedAsset = buildSyncedAssetFields({
+          url: evidenceUrl,
+          publicId: evidencePublicId,
+        });
+
         const whereCandidates: Array<Record<string, any>> = [];
         if (evidencePublicId) {
           whereCandidates.push({
@@ -1877,7 +1918,10 @@ export class InspectionsService {
             fileName: normalizedFileName,
             mimeType: normalizedMimeType,
             size: normalizedSize,
-            cloudinaryPublicId: evidencePublicId,
+            cloudinaryPublicId: syncedAsset.cloudinaryPublicId,
+            storageProvider: syncedAsset.storageProvider,
+            storageKey: syncedAsset.storageKey,
+            storageBucket: syncedAsset.storageBucket,
             url: evidenceUrl,
             bytes: evidence.bytes ?? normalizedSize,
             format: evidence.format || null,
@@ -2062,13 +2106,21 @@ export class InspectionsService {
       throw new BadRequestException('Assinatura inválida: url é obrigatória');
     }
 
+    const syncedAsset = buildSyncedAssetFields({
+      url: signatureUrl,
+      publicId: cloudinaryPublicId,
+    });
+
     if (existing) {
       await this.signaturesRepository.update(existing.id, {
         signerName: signaturePayload.signerName || existing.signerName,
         signerRoleLabel:
           signaturePayload.signerRoleLabel || existing.signerRoleLabel,
         imagePath: signatureUrl,
-        cloudinaryPublicId,
+        cloudinaryPublicId: syncedAsset.cloudinaryPublicId,
+        storageProvider: syncedAsset.storageProvider,
+        storageKey: syncedAsset.storageKey,
+        storageBucket: syncedAsset.storageBucket,
         url: signatureUrl,
         signedAt: signaturePayload.signedAt
           ? new Date(signaturePayload.signedAt)
@@ -2084,7 +2136,10 @@ export class InspectionsService {
         signerRoleLabel:
           signaturePayload.signerRoleLabel || 'Lider/Encarregado',
         imagePath: signatureUrl,
-        cloudinaryPublicId,
+        cloudinaryPublicId: syncedAsset.cloudinaryPublicId,
+        storageProvider: syncedAsset.storageProvider,
+        storageKey: syncedAsset.storageKey,
+        storageBucket: syncedAsset.storageBucket,
         url: signatureUrl,
         signedAt: signaturePayload.signedAt
           ? new Date(signaturePayload.signedAt)

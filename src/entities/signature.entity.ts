@@ -31,6 +31,15 @@ export class Signature {
   @Column({ name: 'cloudinary_public_id', nullable: true })
   cloudinaryPublicId: string;
 
+  @Column({ name: 'storage_provider', nullable: true })
+  storageProvider: string;
+
+  @Column({ name: 'storage_key', nullable: true })
+  storageKey: string;
+
+  @Column({ name: 'storage_bucket', nullable: true })
+  storageBucket: string;
+
   @Column({ nullable: true })
   url: string;
 
