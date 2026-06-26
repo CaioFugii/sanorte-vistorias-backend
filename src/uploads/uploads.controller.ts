@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Controller,
   Delete,
+  Inject,
   Param,
   Post,
   Body,
@@ -16,12 +17,17 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import * as fs from 'fs/promises';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { createTempDiskStorage } from '../common/multer/temp-disk.storage';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import {
+  ASSET_STORAGE,
+  AssetStorage,
+} from '../storage/asset-storage.interface';
 
 @Controller('uploads')
 @UseGuards(JwtAuthGuard)
 export class UploadsController {
-  constructor(private readonly cloudinaryService: CloudinaryService) {}
+  constructor(
+    @Inject(ASSET_STORAGE) private readonly assetStorage: AssetStorage,
+  ) {}
 
   @Post()
   @UseInterceptors(
@@ -51,17 +57,14 @@ export class UploadsController {
     }
 
     try {
-      const uploaded = await this.cloudinaryService.uploadImageFromPath(
-        file.path,
-        {
-          folder: this.resolveFolder(folder),
-        },
-      );
+      const uploaded = await this.assetStorage.uploadImageFromPath(file.path, {
+        folder: this.resolveFolder(folder),
+      });
 
       return {
-        publicId: uploaded.public_id,
-        url: uploaded.secure_url,
-        resourceType: uploaded.resource_type,
+        publicId: uploaded.publicId,
+        url: uploaded.url,
+        resourceType: uploaded.resourceType,
         bytes: uploaded.bytes,
         format: uploaded.format,
         width: uploaded.width,
@@ -75,7 +78,7 @@ export class UploadsController {
   @Delete(':publicId(*)')
   async delete(@Param('publicId') publicId: string) {
     const decodedPublicId = decodeURIComponent(publicId);
-    await this.cloudinaryService.deleteAsset(decodedPublicId);
+    await this.assetStorage.deleteAsset(decodedPublicId);
     return { ok: true };
   }
 

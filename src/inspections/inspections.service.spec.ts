@@ -22,10 +22,9 @@ describe('InspectionsService', () => {
   let serviceOrderRepository: any;
   let investmentWorkRepository: any;
   let dataSource: any;
-  let cloudinaryService: {
+  let assetStorage: {
     uploadImage: jest.Mock;
     uploadImageFromPath: jest.Mock;
-    uploadImageStream: jest.Mock;
     deleteAsset: jest.Mock;
   };
 
@@ -83,10 +82,9 @@ describe('InspectionsService', () => {
       findOne: jest.fn(),
     };
 
-    cloudinaryService = {
+    assetStorage = {
       uploadImage: jest.fn(),
       uploadImageFromPath: jest.fn(),
-      uploadImageStream: jest.fn(),
       deleteAsset: jest.fn(),
     };
 
@@ -105,7 +103,7 @@ describe('InspectionsService', () => {
       teamsRepository as any,
       serviceOrderRepository as any,
       investmentWorkRepository as any,
-      cloudinaryService as any,
+      assetStorage as any,
       dataSource as any,
       new InspectionDomainService(),
     );
@@ -388,11 +386,11 @@ describe('InspectionsService', () => {
       inspectionId: 'i1',
       cloudinaryPublicId: 'quality/evidences/x',
     });
-    cloudinaryService.deleteAsset.mockResolvedValue({ result: 'ok' });
+    assetStorage.deleteAsset.mockResolvedValue(undefined);
 
     await service.removeEvidence('i1', 'e1', UserRole.FISCAL);
 
-    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith(
+    expect(assetStorage.deleteAsset).toHaveBeenCalledWith(
       'quality/evidences/x',
     );
     expect(evidencesRepository.delete).toHaveBeenCalledWith('e1');
@@ -412,7 +410,7 @@ describe('InspectionsService', () => {
 
     await service.removeEvidence('i1', 'e1', UserRole.GESTOR);
 
-    expect(cloudinaryService.deleteAsset).not.toHaveBeenCalled();
+    expect(assetStorage.deleteAsset).not.toHaveBeenCalled();
     expect(evidencesRepository.delete).toHaveBeenCalledWith('e1');
   });
 
@@ -448,15 +446,15 @@ describe('InspectionsService', () => {
       { cloudinaryPublicId: 'quality/signatures/s1' },
       { cloudinaryPublicId: null },
     ]);
-    cloudinaryService.deleteAsset.mockResolvedValue({ result: 'ok' });
+    assetStorage.deleteAsset.mockResolvedValue(undefined);
 
     await service.remove('i1');
 
-    expect(cloudinaryService.deleteAsset).toHaveBeenCalledTimes(2);
-    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith(
+    expect(assetStorage.deleteAsset).toHaveBeenCalledTimes(2);
+    expect(assetStorage.deleteAsset).toHaveBeenCalledWith(
       'quality/evidences/a',
     );
-    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith(
+    expect(assetStorage.deleteAsset).toHaveBeenCalledWith(
       'quality/signatures/s1',
     );
     expect(inspectionsRepository.delete).toHaveBeenCalledWith('i1');

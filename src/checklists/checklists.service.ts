@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Inject,
 } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -16,7 +17,10 @@ import {
 } from '../entities';
 import { InspectionScope, ModuleType } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import {
+  ASSET_STORAGE,
+  AssetStorage,
+} from '../storage/asset-storage.interface';
 
 @Injectable()
 export class ChecklistsService {
@@ -33,7 +37,7 @@ export class ChecklistsService {
     private inspectionItemsRepository: Repository<InspectionItem>,
     @InjectRepository(Sector)
     private sectorsRepository: Repository<Sector>,
-    private cloudinaryService: CloudinaryService,
+    @Inject(ASSET_STORAGE) private assetStorage: AssetStorage,
   ) {}
 
   async findAll(
@@ -163,20 +167,17 @@ export class ChecklistsService {
     }
 
     try {
-      const uploaded = await this.cloudinaryService.uploadImageFromPath(
-        file.path,
-        {
-          folder: 'quality/checklists/reference-images',
-        },
-      );
+      const uploaded = await this.assetStorage.uploadImageFromPath(file.path, {
+        folder: 'quality/checklists/reference-images',
+      });
 
       if (item.referenceImagePublicId) {
-        await this.cloudinaryService.deleteAsset(item.referenceImagePublicId);
+        await this.assetStorage.deleteAsset(item.referenceImagePublicId);
       }
 
       await this.checklistItemsRepository.update(item.id, {
-        referenceImageUrl: uploaded.secure_url,
-        referenceImagePublicId: uploaded.public_id,
+        referenceImageUrl: uploaded.url,
+        referenceImagePublicId: uploaded.publicId,
       });
 
       return this.findChecklistItemOrFail(checklistId, itemId);

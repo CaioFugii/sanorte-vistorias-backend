@@ -1,25 +1,24 @@
 import { UploadsController } from './uploads.controller';
+import { AssetStorage } from '../storage/asset-storage.interface';
 
 describe('UploadsController', () => {
   let controller: UploadsController;
-  let cloudinaryService: {
-    uploadImageFromPath: jest.Mock;
-    deleteAsset: jest.Mock;
-  };
+  let assetStorage: jest.Mocked<AssetStorage>;
 
   beforeEach(() => {
-    cloudinaryService = {
+    assetStorage = {
       uploadImageFromPath: jest.fn(),
+      uploadImage: jest.fn(),
       deleteAsset: jest.fn(),
     };
-    controller = new UploadsController(cloudinaryService as any);
+    controller = new UploadsController(assetStorage);
   });
 
   it('should upload with default evidences folder and return metadata', async () => {
-    cloudinaryService.uploadImageFromPath.mockResolvedValue({
-      public_id: 'quality/evidences/asset-1',
-      secure_url: 'https://res.cloudinary.com/demo/image/upload/v1/asset-1.jpg',
-      resource_type: 'image',
+    assetStorage.uploadImageFromPath.mockResolvedValue({
+      publicId: 'quality/evidences/asset-1',
+      url: 'https://example-bucket.s3.sa-east-1.amazonaws.com/quality/evidences/asset-1.jpg',
+      resourceType: 'image',
       bytes: 12345,
       format: 'jpg',
       width: 1024,
@@ -35,15 +34,12 @@ describe('UploadsController', () => {
 
     const result = await controller.upload(file);
 
-    expect(cloudinaryService.uploadImageFromPath).toHaveBeenCalledWith(
-      file.path,
-      {
-        folder: 'quality/evidences',
-      },
-    );
+    expect(assetStorage.uploadImageFromPath).toHaveBeenCalledWith(file.path, {
+      folder: 'quality/evidences',
+    });
     expect(result).toEqual({
       publicId: 'quality/evidences/asset-1',
-      url: 'https://res.cloudinary.com/demo/image/upload/v1/asset-1.jpg',
+      url: 'https://example-bucket.s3.sa-east-1.amazonaws.com/quality/evidences/asset-1.jpg',
       resourceType: 'image',
       bytes: 12345,
       format: 'jpg',
@@ -53,10 +49,10 @@ describe('UploadsController', () => {
   });
 
   it('should map signatures alias folder', async () => {
-    cloudinaryService.uploadImageFromPath.mockResolvedValue({
-      public_id: 'quality/signatures/asset-2',
-      secure_url: 'https://res.cloudinary.com/demo/image/upload/v1/asset-2.png',
-      resource_type: 'image',
+    assetStorage.uploadImageFromPath.mockResolvedValue({
+      publicId: 'quality/signatures/asset-2',
+      url: 'https://example-bucket.s3.sa-east-1.amazonaws.com/quality/signatures/asset-2.png',
+      resourceType: 'image',
       bytes: 999,
       format: 'png',
       width: 500,
@@ -72,20 +68,17 @@ describe('UploadsController', () => {
 
     await controller.upload(file, 'signatures');
 
-    expect(cloudinaryService.uploadImageFromPath).toHaveBeenCalledWith(
-      file.path,
-      {
-        folder: 'quality/signatures',
-      },
-    );
+    expect(assetStorage.uploadImageFromPath).toHaveBeenCalledWith(file.path, {
+      folder: 'quality/signatures',
+    });
   });
 
-  it('should delete a cloudinary asset', async () => {
-    cloudinaryService.deleteAsset.mockResolvedValue({ result: 'ok' });
+  it('should delete a stored asset', async () => {
+    assetStorage.deleteAsset.mockResolvedValue(undefined);
 
     const result = await controller.delete('quality%2Fevidences%2Fasset-1');
 
-    expect(cloudinaryService.deleteAsset).toHaveBeenCalledWith(
+    expect(assetStorage.deleteAsset).toHaveBeenCalledWith(
       'quality/evidences/asset-1',
     );
     expect(result).toEqual({ ok: true });

@@ -18,7 +18,7 @@ import {
 } from '../entities';
 import { InspectionDomainService } from './inspection-domain.service';
 import { SyncController } from './sync.controller';
-import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [
@@ -36,7 +36,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
       ServiceOrder,
       InvestmentWork,
     ]),
-    CloudinaryModule,
+    StorageModule,
   ],
   controllers: [InspectionsController, SyncController],
   providers: [InspectionsService, InspectionDomainService],

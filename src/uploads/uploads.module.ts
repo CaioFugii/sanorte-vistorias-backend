@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { StorageModule } from '../storage/storage.module';
 import { UploadsController } from './uploads.controller';
 
 @Module({
-  imports: [CloudinaryModule],
+  imports: [StorageModule],
   controllers: [UploadsController],
 })
 export class UploadsModule {}

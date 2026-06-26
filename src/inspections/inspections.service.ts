@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Inject,
   Logger,
 } from '@nestjs/common';
 import * as fs from 'fs/promises';
@@ -45,7 +46,10 @@ import {
   SyncInspectionDto,
   SyncSignatureDto,
 } from './dto/sync-inspections.dto';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import {
+  ASSET_STORAGE,
+  AssetStorage,
+} from '../storage/asset-storage.interface';
 import {
   getAllowedContractIds,
 } from '../common/auth/contract-scope.util';
@@ -80,7 +84,7 @@ export class InspectionsService {
     private serviceOrderRepository: Repository<ServiceOrder>,
     @InjectRepository(InvestmentWork)
     private investmentWorkRepository: Repository<InvestmentWork>,
-    private cloudinaryService: CloudinaryService,
+    @Inject(ASSET_STORAGE) private assetStorage: AssetStorage,
     private dataSource: DataSource,
     private inspectionDomainService: InspectionDomainService,
   ) {}
@@ -1034,7 +1038,7 @@ export class InspectionsService {
     return (inspection?.collaborators ?? []).map((collaborator) => collaborator.id);
   }
 
-  private async deleteInspectionCloudinaryAssets(
+  private async deleteInspectionStoredAssets(
     inspectionId: string,
   ): Promise<void> {
     const [evidenceRows, signatureRows] = await Promise.all([
@@ -1057,7 +1061,7 @@ export class InspectionsService {
 
     const uniquePublicIds = [...new Set(publicIds)];
     for (const publicId of uniquePublicIds) {
-      await this.cloudinaryService.deleteAsset(publicId);
+      await this.assetStorage.deleteAsset(publicId);
     }
   }
 
@@ -1091,7 +1095,7 @@ export class InspectionsService {
       );
     }
 
-    await this.deleteInspectionCloudinaryAssets(inspection.id);
+    await this.deleteInspectionStoredAssets(inspection.id);
     await this.inspectionsRepository.delete(inspection.id);
     this.logger.log('Inspection removed', {
       inspectionId: inspection.id,
@@ -1363,22 +1367,19 @@ export class InspectionsService {
     }
 
     try {
-      const uploaded = await this.cloudinaryService.uploadImageFromPath(
-        file.path,
-        {
-          folder: 'quality/evidences',
-        },
-      );
+      const uploaded = await this.assetStorage.uploadImageFromPath(file.path, {
+        folder: 'quality/evidences',
+      });
 
       const evidence = this.evidencesRepository.create({
         inspectionId: inspection.id,
         inspectionItemId,
-        filePath: uploaded.secure_url,
+        filePath: uploaded.url,
         fileName: file.originalname,
         mimeType: file.mimetype,
         size: uploaded.bytes,
-        cloudinaryPublicId: uploaded.public_id,
-        url: uploaded.secure_url,
+        cloudinaryPublicId: uploaded.publicId,
+        url: uploaded.url,
         bytes: uploaded.bytes,
         format: uploaded.format,
         width: uploaded.width,
@@ -1418,7 +1419,7 @@ export class InspectionsService {
     }
 
     if (evidence.cloudinaryPublicId?.trim()) {
-      await this.cloudinaryService.deleteAsset(evidence.cloudinaryPublicId);
+      await this.assetStorage.deleteAsset(evidence.cloudinaryPublicId);
     }
 
     await this.evidencesRepository.delete(evidence.id);
@@ -1438,7 +1439,7 @@ export class InspectionsService {
     }
 
     const imageBuffer = this.base64ToBuffer(imageBase64);
-    const uploaded = await this.cloudinaryService.uploadImage(imageBuffer, {
+    const uploaded = await this.assetStorage.uploadImage(imageBuffer, {
       folder: 'quality/signatures',
     });
 
@@ -1446,9 +1447,9 @@ export class InspectionsService {
       inspectionId: inspection.id,
       signerName,
       signerRoleLabel: 'Lider/Encarregado',
-      imagePath: uploaded.secure_url,
-      cloudinaryPublicId: uploaded.public_id,
-      url: uploaded.secure_url,
+      imagePath: uploaded.url,
+      cloudinaryPublicId: uploaded.publicId,
+      url: uploaded.url,
       signedAt: new Date(),
     });
 
@@ -2120,10 +2121,10 @@ export class InspectionsService {
       return trimmed;
     }
     const imageBuffer = this.base64ToBuffer(trimmed);
-    const uploaded = await this.cloudinaryService.uploadImage(imageBuffer, {
+    const uploaded = await this.assetStorage.uploadImage(imageBuffer, {
       folder: 'quality/evidences',
     });
-    return uploaded.secure_url;
+    return uploaded.url;
   }
 
   /**

@@ -37,6 +37,11 @@ NODE_ENV=development
 JWT_SECRET=your-secret-key-change-in-production
 JWT_EXPIRES_IN=24h
 CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
+STORAGE_PROVIDER=cloudinary
+AWS_REGION=sa-east-1
+AWS_S3_BUCKET=your-bucket-name
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
 SENTRY_DSN=https://<key>@o0.ingest.sentry.io/<project-id>
 SENTRY_ENVIRONMENT=development
 SENTRY_RELEASE=sanorte-vistorias-backend@1.0.1
@@ -216,6 +221,28 @@ Listagens retornam:
   }
 }
 ```
+
+## Armazenamento de imagens (Cloudinary / S3)
+
+Por padrão, uploads usam Cloudinary (`STORAGE_PROVIDER=cloudinary`). Para AWS S3:
+
+```env
+STORAGE_PROVIDER=s3
+AWS_REGION=sa-east-1
+AWS_S3_BUCKET=seu-bucket
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+Na Heroku (`sanorte-vistorias-backend`):
+
+```bash
+heroku config:set STORAGE_PROVIDER=s3 AWS_REGION=sa-east-1 AWS_S3_BUCKET=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... -a sanorte-vistorias-backend
+```
+
+Mantenha `CLOUDINARY_URL` configurado durante a transição para rollback via flag.
+
+Fase atual: uploads genéricos, evidências, assinaturas, resolução de pendências e imagens de referência de checklist usam o provider selecionado. Registros legados no Cloudinary continuam legíveis via `url` persistida.
 
 ## Documentação detalhada
 
