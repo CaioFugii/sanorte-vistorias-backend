@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { getDatabaseConfig } from './config/database.config';
 import appConfig from './config/app.config';
 
@@ -32,6 +33,16 @@ import { MonitoringModule } from './monitoring/monitoring.module';
       useFactory: (configService: ConfigService) =>
         getDatabaseConfig(configService),
       inject: [ConfigService],
+    }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => [
+        {
+          ttl: configService.get<number>('app.authLoginThrottleTtlMs') || 60000,
+          limit: configService.get<number>('app.authLoginThrottleLimit') || 5,
+        },
+      ],
     }),
     AuthModule,
     UsersModule,

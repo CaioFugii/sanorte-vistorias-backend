@@ -24,7 +24,9 @@
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
     "seed": "ts-node src/database/seeds/run-seed.ts",
     "storage:legacy-stats": "ts-node src/database/scripts/storage-legacy-stats.ts",
-    "storage:migrate-cloudinary-to-s3": "ts-node src/database/scripts/migrate-cloudinary-assets-to-s3.ts"
+    "storage:migrate-cloudinary-to-s3": "ts-node src/database/scripts/migrate-cloudinary-assets-to-s3.ts",
+    "storage:legacy-stats:dist": "node dist/database/scripts/storage-legacy-stats.js",
+    "storage:migrate-cloudinary-to-s3:dist": "node dist/database/scripts/migrate-cloudinary-assets-to-s3.js"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -38,6 +40,7 @@
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.3.0",
+    "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^10.0.1",
     "@sentry/node": "^10.57.0",
     "@types/multer": "^1.4.11",
@@ -45,6 +48,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
     "cloudinary": "^2.9.0",
+    "helmet": "^8.2.0",
     "multer": "^1.4.5-lts.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
