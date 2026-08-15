@@ -28,9 +28,15 @@ export interface AssetStorage {
 
 export const ASSET_STORAGE = Symbol('ASSET_STORAGE');
 
-export function resolveStorageProvider(): 'cloudinary' | 's3' {
+export function resolveStorageProvider(): 'cloudinary' | 's3' | 'local' {
   const provider = (process.env.STORAGE_PROVIDER || 'cloudinary')
     .trim()
     .toLowerCase();
-  return provider === 's3' ? 's3' : 'cloudinary';
+  if (provider === 's3') {
+    return 's3';
+  }
+  if (provider === 'local') {
+    return 'local';
+  }
+  return 'cloudinary';
 }

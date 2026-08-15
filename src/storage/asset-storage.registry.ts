@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { StorageProvider } from '../common/enums/storage-provider.enum';
 import { AssetStorage } from './asset-storage.interface';
 import { CloudinaryAssetStorageAdapter } from './adapters/cloudinary-asset-storage.adapter';
+import { LocalAssetStorageAdapter } from './adapters/local-asset-storage.adapter';
 import { S3AssetStorageAdapter } from './adapters/s3-asset-storage.adapter';
 import {
   resolveStoredAssetId,
@@ -16,12 +17,17 @@ export class AssetStorageRegistry {
   constructor(
     private readonly cloudinaryStorage: CloudinaryAssetStorageAdapter,
     private readonly s3Storage: S3AssetStorageAdapter,
+    private readonly localStorage: LocalAssetStorageAdapter,
   ) {}
 
   getForProvider(provider: StorageProvider): AssetStorage {
-    return provider === StorageProvider.S3
-      ? this.s3Storage
-      : this.cloudinaryStorage;
+    if (provider === StorageProvider.S3) {
+      return this.s3Storage;
+    }
+    if (provider === StorageProvider.LOCAL) {
+      return this.localStorage;
+    }
+    return this.cloudinaryStorage;
   }
 
   async deleteStoredAsset(record: StoredAssetRecord): Promise<void> {

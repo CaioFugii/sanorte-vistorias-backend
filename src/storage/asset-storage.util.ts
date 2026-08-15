@@ -16,16 +16,19 @@ export function buildStoredAssetFields(uploaded: AssetUploadResult): {
   storageBucket: string | null;
   url: string;
 } {
-  const provider = resolveStorageProvider();
+  const providerName = resolveStorageProvider();
+  const storageProvider =
+    providerName === 's3'
+      ? StorageProvider.S3
+      : providerName === 'local'
+        ? StorageProvider.LOCAL
+        : StorageProvider.CLOUDINARY;
   return {
     cloudinaryPublicId: uploaded.publicId,
-    storageProvider:
-      provider === StorageProvider.S3
-        ? StorageProvider.S3
-        : StorageProvider.CLOUDINARY,
+    storageProvider,
     storageKey: uploaded.publicId,
     storageBucket:
-      provider === StorageProvider.S3
+      storageProvider === StorageProvider.S3
         ? process.env.AWS_S3_BUCKET?.trim() || null
         : null,
     url: uploaded.url,
@@ -51,6 +54,9 @@ export function resolveStoredAssetProvider(
   if (provider === StorageProvider.CLOUDINARY) {
     return StorageProvider.CLOUDINARY;
   }
+  if (provider === StorageProvider.LOCAL) {
+    return StorageProvider.LOCAL;
+  }
   return StorageProvider.CLOUDINARY;
 }
 
@@ -66,6 +72,9 @@ export function inferStorageProviderFromUrl(
   }
   if (normalized.includes('cloudinary.com')) {
     return StorageProvider.CLOUDINARY;
+  }
+  if (normalized.includes('/files/')) {
+    return StorageProvider.LOCAL;
   }
   return StorageProvider.CLOUDINARY;
 }

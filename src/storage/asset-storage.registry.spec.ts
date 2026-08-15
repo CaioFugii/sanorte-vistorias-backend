@@ -5,9 +5,11 @@ describe('AssetStorageRegistry', () => {
   it('deleteStoredAsset should route to matching provider adapter', async () => {
     const cloudinaryStorage = { deleteAsset: jest.fn() };
     const s3Storage = { deleteAsset: jest.fn() };
+    const localStorage = { deleteAsset: jest.fn() };
     const registry = new AssetStorageRegistry(
       cloudinaryStorage as any,
       s3Storage as any,
+      localStorage as any,
     );
 
     await registry.deleteStoredAsset({

@@ -60,6 +60,12 @@ describe('asset-storage.util', () => {
 
     expect(synced.storageProvider).toBe(StorageProvider.S3);
     expect(synced.storageKey).toBe('quality/evidences/x.jpg');
+
+    expect(
+      inferStorageProviderFromUrl(
+        'http://localhost:3000/files/quality/evidences/x.jpg',
+      ),
+    ).toBe(StorageProvider.LOCAL);
   });
 
   it('resolveStoredAssetId should prefer storageKey', () => {
