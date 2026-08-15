@@ -29,6 +29,7 @@ export class TeamsController {
       filters.page || 1,
       filters.limit || 10,
       filters.name,
+      filters.contractId,
     );
   }
 

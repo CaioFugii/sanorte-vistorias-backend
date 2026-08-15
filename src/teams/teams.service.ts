@@ -24,6 +24,7 @@ export class TeamsService {
     page: number = 1,
     limit: number = 10,
     name?: string,
+    contractId?: string,
   ): Promise<PaginatedResponseDto<Team>> {
     const skip = (page - 1) * limit;
     const trimmedName = name?.trim();
@@ -40,6 +41,7 @@ export class TeamsService {
       query.andWhere('team.name ILIKE :name', { name: `%${trimmedName}%` });
     }
 
+    this.applySelectedContractFilter(query, allowedContractIds, contractId);
     applyContractScopeFilter(query, allowedContractIds, 'contracts.id');
 
     const [data, total] = await query
@@ -173,6 +175,35 @@ export class TeamsService {
 
   async remove(id: string): Promise<void> {
     await this.teamsRepository.delete(id);
+  }
+
+  private applySelectedContractFilter(
+    query: ReturnType<Repository<Team>['createQueryBuilder']>,
+    allowedContractIds: string[] | null,
+    contractId?: string,
+  ): void {
+    const selectedContractId = contractId?.trim();
+    if (!selectedContractId) {
+      return;
+    }
+
+    if (
+      allowedContractIds !== null &&
+      !allowedContractIds.includes(selectedContractId)
+    ) {
+      query.andWhere('1 = 0');
+      return;
+    }
+
+    query.andWhere(
+      `EXISTS (
+        SELECT 1
+        FROM team_contracts tc
+        WHERE tc.team_id = team.id
+          AND tc.contract_id = :filterContractId
+      )`,
+      { filterContractId: selectedContractId },
+    );
   }
 
   private async resolveCollaborators(

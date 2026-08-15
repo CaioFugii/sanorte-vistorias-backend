@@ -807,9 +807,9 @@ Response 201: contrato criado
 ### GET /teams
 
 - Auth: JWT
-- Query: `page`, `limit`
+- Query: `page`, `limit`, `name` (busca parcial), `contractId` (UUID opcional; apenas equipes ativas vinculadas a esse contrato)
 - Response: paginação de `Team` com `collaborators` e `contracts`
-- Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` enxergam apenas equipes vinculadas aos contratos permitidos
+- Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` enxergam apenas equipes vinculadas aos contratos permitidos. Se `contractId` estiver fora do escopo, a lista vem vazia.
 
 ### POST /teams
 
