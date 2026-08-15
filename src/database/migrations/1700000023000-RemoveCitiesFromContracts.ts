@@ -6,12 +6,15 @@ export class RemoveCitiesFromContracts1700000023000 implements MigrationInterfac
       `DROP INDEX IF EXISTS "IDX_contract_cities_city_id"`,
     );
     await queryRunner.query(`
-      ALTER TABLE "contract_cities"
-      DROP CONSTRAINT IF EXISTS "FK_contract_cities_city"
-    `);
-    await queryRunner.query(`
-      ALTER TABLE "contract_cities"
-      DROP CONSTRAINT IF EXISTS "FK_contract_cities_contract"
+      DO $$
+      BEGIN
+        IF to_regclass('public.contract_cities') IS NOT NULL THEN
+          ALTER TABLE "contract_cities"
+            DROP CONSTRAINT IF EXISTS "FK_contract_cities_city";
+          ALTER TABLE "contract_cities"
+            DROP CONSTRAINT IF EXISTS "FK_contract_cities_contract";
+        END IF;
+      END$$;
     `);
     await queryRunner.query(`DROP TABLE IF EXISTS "contract_cities"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "cities"`);

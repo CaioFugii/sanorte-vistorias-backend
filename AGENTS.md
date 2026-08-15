@@ -27,7 +27,7 @@ Documentação deste repo:
 ## Stack
 
 - NestJS 10, TypeORM, PostgreSQL
-- JWT (Passport), Cloudinary (uploads), Sentry (monitoramento)
+- JWT (Passport), storage local (dev) / S3 / Cloudinary, Sentry
 - Jest (testes unitários)
 
 ---
@@ -141,15 +141,20 @@ Cálculo de nota: `InspectionDomainService.calculateScorePercent` + `applyParaly
 
 ## Setup e comandos
 
+Ambiente local do monorepo (obrigatório). Não use `DATABASE_URL` de produção.
+
 ```bash
-npm install
-# Criar .env: DB_*, JWT_*, CLOUDINARY_URL, SENTRY_*, PORT=3000
+# Na raiz do monorepo
+docker compose up -d
+cd sanorte-vistorias-backend
+# .env: DATABASE_URL local, DATABASE_SSL=false, STORAGE_PROVIDER=local
 npm run migration:run
-npm run seed
+npm run seed:local
 npm run start:dev
 ```
 
-API em `http://localhost:3000`. Auth: `Authorization: Bearer <token>`.
+API em `http://localhost:3000`. Auth: `Authorization: Bearer <token>`.  
+Login: `admin@sanorte.com` / `senha123`. Detalhes: skill `sanorte-local-dev` e `AGENTS.md` da raiz.
 
 | Script | Uso |
 |--------|-----|
@@ -157,7 +162,10 @@ API em `http://localhost:3000`. Auth: `Authorization: Bearer <token>`.
 | `npm test` | Testes unitários — **rodar antes de concluir** |
 | `npm run migration:run` | Aplicar migrations |
 | `npm run migration:generate -- src/database/migrations/Nome` | Gerar migration |
-| `npm run seed` | Dados iniciais |
+| `npm run seed:local` | Dump PRD (se faltar) + load no Postgres local |
+| `npm run seed:dump-prd` | Snapshot JSON a partir de `DATABASE_URL_PRD` |
+| `npm run seed:load-prd` | Importa snapshot (só host local) |
+| `npm run seed` | Só usuários/setores padrão |
 | `npm run build` | Build de produção |
 
 ---

@@ -1,5 +1,6 @@
 # compiled output
 /dist
+*.tsbuildinfo
 /node_modules
 /docs
 
@@ -42,6 +43,9 @@ lerna-debug.log*
 
 # Storage
 /storage
+
+# Local PRD snapshot (contains production data)
+/src/database/seeds/data/*.json
 
 # Heroku
 .heroku

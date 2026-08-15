@@ -1,6 +1,6 @@
 # Sistema de Vistorias em Campo - Backend
 
-API REST em NestJS para gestão de vistorias de campo, com autenticação JWT, upload de imagens no Cloudinary e fluxo de pendências.
+API REST em NestJS para gestão de vistorias de campo, com autenticação JWT, armazenamento local/S3/Cloudinary e fluxo de pendências.
 
 ## Stack
 
@@ -8,15 +8,44 @@ API REST em NestJS para gestão de vistorias de campo, com autenticação JWT, u
 - TypeORM
 - PostgreSQL
 - JWT
-- Cloudinary
+- Storage: local (dev), S3 ou Cloudinary
 
 ## Pré-requisitos
 
 - Node.js 18+
-- PostgreSQL 12+
+- Docker (Postgres local) ou PostgreSQL 12+
 - npm
 
-## Configuração
+## Ambiente local (recomendado)
+
+Na raiz do monorepo:
+
+```bash
+docker compose up -d
+cd sanorte-vistorias-backend
+cp .env.example .env   # ajuste DATABASE_URL_PRD se for gerar seed a partir de produção
+npm install
+npm run migration:run
+npm run seed:local
+npm run start:dev
+```
+
+Ou use o script único: `./scripts/setup-local.sh`.
+
+`seed:local` gera um snapshot de produção (se ainda não existir) e carrega no Postgres local:
+
+- cadastros completos (usuários, equipes, checklists, contratos, etc.)
+- cerca de 500 vistorias/OS mais recentes, com itens, evidências e assinaturas relacionados
+- senha local de todos os usuários: `senha123`
+
+O snapshot fica em `src/database/seeds/data/prd-snapshot.json` (gitignored). Regenerar:
+
+```bash
+npm run seed:dump-prd
+npm run seed:load-prd
+```
+
+## Configuração manual
 
 1. Instalar dependências:
 
@@ -24,34 +53,25 @@ API REST em NestJS para gestão de vistorias de campo, com autenticação JWT, u
 npm install
 ```
 
-2. Criar `.env`:
+2. Criar `.env` (veja `.env.example`). Para local:
 
 ```env
-DB_HOST=localhost
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
-DB_DATABASE=vistorias_db
+DATABASE_URL=postgres://sanorte:sanorte@localhost:5432/vistorias_db
+DATABASE_SSL=false
+DATABASE_URL_PRD=postgres://user:pass@host:5432/dbname
 PORT=3000
 NODE_ENV=development
+PUBLIC_API_URL=http://localhost:3000
 JWT_SECRET=your-secret-key-change-in-production
 JWT_EXPIRES_IN=24h
-CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
-STORAGE_PROVIDER=cloudinary
-AWS_REGION=sa-east-1
-AWS_S3_BUCKET=your-bucket-name
-AWS_ACCESS_KEY_ID=your-access-key-id
-AWS_SECRET_ACCESS_KEY=your-secret-access-key
-SENTRY_DSN=https://<key>@o0.ingest.sentry.io/<project-id>
-SENTRY_ENVIRONMENT=development
-SENTRY_RELEASE=sanorte-vistorias-backend@1.0.1
-SENTRY_TRACES_SAMPLE_RATE=0.1
-MONITORING_SMOKE_TEST_TOKEN=change-this-token
+CORS_ORIGINS=http://localhost:5173
+STORAGE_PROVIDER=local
+STORAGE_PATH=./storage
 ```
 
-Obs.: `SENTRY_RELEASE` pode ser omitido em deploys Heroku, pois o backend agora usa automaticamente `HEROKU_SLUG_COMMIT` (ou `SOURCE_VERSION`) quando disponível.
+`DATABASE_URL` deve apontar para o Postgres **local**. `DATABASE_URL_PRD` só é usado pelo dump.
 
-3. Executar migrations e seed:
+3. Executar migrations e seed mínimo (sem dados de PRD):
 
 ```bash
 npm run migration:run
@@ -222,9 +242,11 @@ Listagens retornam:
 }
 ```
 
-## Armazenamento de imagens (Cloudinary / S3)
+## Armazenamento de imagens (local / Cloudinary / S3)
 
-Por padrão, uploads usam Cloudinary (`STORAGE_PROVIDER=cloudinary`). Para AWS S3:
+Em desenvolvimento local use `STORAGE_PROVIDER=local`. Arquivos vão para `STORAGE_PATH` (padrão `./storage`) e são servidos em `GET /files/*`.
+
+Em produção, uploads usam Cloudinary (`STORAGE_PROVIDER=cloudinary`) ou AWS S3:
 
 ```env
 STORAGE_PROVIDER=s3
