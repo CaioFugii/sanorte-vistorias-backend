@@ -1970,9 +1970,8 @@ Em todas as rotas abaixo, o query param opcional **`contractId`** (`uuid`) restr
 
 Regras de consistência aplicadas aos dashboards de qualidade:
 
-- `GET /dashboards/summary`, `GET /dashboards/ranking/teams` e `GET /dashboards/current-month-by-service` usam a mesma base para `QUALITY`: período por data local (`America/Sao_Paulo`) com regra por módulo:
-  - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
-  - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+- `GET /dashboards/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/current-month-by-service` e `GET /dashboards/quality-by-service` usam a mesma base para `QUALITY`: período por data local (`America/Sao_Paulo`) com regra por módulo:
+  - todos os módulos de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): usa `inspection.finalizedAt` (data de finalização, a mesma da listagem `/quality/inspections`).
 - Nos três endpoints acima, o cálculo de `QUALITY` considera status diferentes de `RASCUNHO`.
 - Nos três endpoints acima, apenas inspeções com equipe entram no total (`inspection.teamId IS NOT NULL`).
 
@@ -2005,8 +2004,7 @@ Aliases de compatibilidade (mesmo contrato de query/response do endpoint-base co
   - `contractId` (`uuid`) opcional
 - Regra de período:
   - `QUALITY` (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
-    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
-    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+    - todos os módulos de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): usa `inspection.finalizedAt` (data de finalização, a mesma da listagem `/quality/inspections`).
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
@@ -2032,8 +2030,7 @@ Response 200:
   - `contractId` (`uuid`) opcional
 - Regra de período:
   - `QUALITY` (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
-    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
-    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+    - todos os módulos de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): usa `inspection.finalizedAt` (data de finalização, a mesma da listagem `/quality/inspections`).
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
@@ -2101,8 +2098,7 @@ Response 200:
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Regra de período:
   - `QUALITY` (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
-    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
-    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+    - todos os módulos de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): usa `inspection.finalizedAt` (data de finalização, a mesma da listagem `/quality/inspections`).
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
@@ -2192,8 +2188,7 @@ Response 200:
   - `average` -> sem filtro por módulo (respeitando o setor da rota)
 - Regra de período:
   - `QUALITY` (métrica `average`, `postWork`, `remote`, `field`, `investmentWorks`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
-    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
-    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+    - todos os módulos de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): usa `inspection.finalizedAt` (data de finalização, a mesma da listagem `/quality/inspections`).
   - `SAFETY_WORK` (métrica `safetyWork`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
@@ -2350,8 +2345,7 @@ Response 200:
   - `contractId` (`uuid`) opcional
 - Regra de período mensal:
   - `QUALITY` (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): mês baseado em regra por módulo (mesma referência de período do endpoint `GET /dashboards/summary`):
-    - `CAMPO` e `REMOTO`: usa `serviceOrder.fim_execucao`.
-    - `POS_OBRA` e `OBRAS_INVESTIMENTO`: usa `inspection.finalizedAt`.
+    - todos os módulos de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): usa `inspection.finalizedAt` (data de finalização, a mesma da listagem `/quality/inspections`).
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): mês baseado em `COALESCE(inspection.finalizedAt, inspection.createdAt)`.
 - Status considerados: todos, exceto `RASCUNHO` (mesma regra de `GET /dashboards/summary` e `GET /dashboards/ranking/teams`).
 - Apenas inspeções com equipe vinculada entram no cálculo (`teamId IS NOT NULL`).

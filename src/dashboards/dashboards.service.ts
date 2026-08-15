@@ -50,10 +50,6 @@ const MAX_NON_CONFORMITIES_LIMIT_PER_CHECKLIST = 20;
 const DEFAULT_NON_CONFORMITIES_LIMIT_BY_TEAM = 10;
 const MAX_NON_CONFORMITIES_LIMIT_BY_TEAM = 20;
 type DashboardSector = 'QUALITY' | 'SAFETY_WORK';
-const QUALITY_FINALIZED_AT_PERIOD_MODULES = [
-  ModuleType.POS_OBRA,
-  ModuleType.OBRAS_INVESTIMENTO,
-];
 const QUALITY_DASHBOARD_MODULES = [
   ModuleType.CAMPO,
   ModuleType.POS_OBRA,
@@ -304,7 +300,7 @@ export class DashboardsService {
   }
 
   private qualityPeriodTimestampExpr(): string {
-    return `CASE WHEN inspection.module IN (:...dashboardFinalizedAtPeriodModules) THEN inspection.finalizedAt ELSE serviceOrder.fim_execucao END`;
+    return `COALESCE(inspection.finalizedAt, inspection.createdAt)`;
   }
 
   private applyDashboardContractScope(
@@ -411,10 +407,6 @@ export class DashboardsService {
       qb.andWhere(
         `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
         { toDate: filters.to },
-      );
-      qb.setParameter(
-        'dashboardFinalizedAtPeriodModules',
-        QUALITY_FINALIZED_AT_PERIOD_MODULES,
       );
     }
     this.applyDashboardContractScope(qb, {
@@ -572,10 +564,6 @@ export class DashboardsService {
         `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
         { toDate: filters.to },
       );
-      qb.setParameter(
-        'dashboardFinalizedAtPeriodModules',
-        QUALITY_FINALIZED_AT_PERIOD_MODULES,
-      );
     }
     this.applyDashboardContractScope(qb, {
       user: filters.user,
@@ -720,9 +708,26 @@ export class DashboardsService {
         draft: InspectionStatus.RASCUNHO,
       })
       .andWhere('inspection.teamId = :teamId', { teamId })
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
-      .andWhere('serviceOrder.fim_execucao >= :from', { from: filters.from })
-      .andWhere('serviceOrder.fim_execucao <= :to', { to: toLimit });
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
+
+    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
+      this.applyDashboardPeriodFilter(qb, {
+        from: filters.from,
+        to: toLimit,
+        module: periodModule,
+      });
+    } else {
+      const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) >= :fromDate`,
+        { fromDate: filters.from },
+      );
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
+        { toDate: filters.to },
+      );
+    }
 
     this.applyQualityFilters(qb, {
       sector: filters.sector,
@@ -784,7 +789,7 @@ export class DashboardsService {
     const skip = (page - 1) * limit;
     const metric = filters.metric ?? TeamRankingMetric.AVERAGE;
     const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
-    const finishedAtExpr = `CASE WHEN inspection.module = :dashboardSafetyModuleFinishedAt THEN COALESCE(inspection.finalizedAt, inspection.createdAt) ELSE ${qualityPeriodExpr} END`;
+    const finishedAtExpr = qualityPeriodExpr;
 
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -804,11 +809,7 @@ export class DashboardsService {
         draft: InspectionStatus.RASCUNHO,
       })
       .andWhere('inspection.teamId = :teamId', { teamId })
-      .andWhere('inspection.scorePercent IS NOT NULL')
-      .setParameter(
-        'dashboardSafetyModuleFinishedAt',
-        ModuleType.SEGURANCA_TRABALHO,
-      );
+      .andWhere('inspection.scorePercent IS NOT NULL');
 
     const metricToModule = {
       [TeamRankingMetric.POST_WORK]: ModuleType.POS_OBRA,
@@ -831,10 +832,6 @@ export class DashboardsService {
       sector: filters.sector,
       module: metricModule,
     });
-    qb.setParameter(
-      'dashboardFinalizedAtPeriodModules',
-      QUALITY_FINALIZED_AT_PERIOD_MODULES,
-    );
     const periodModule = this.resolvePeriodModule(metricModule, filters.sector);
     if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
       const toLimit = toEndOfDay(filters.to);
@@ -922,9 +919,10 @@ export class DashboardsService {
   }): Promise<QualityByServiceResponseDto> {
     this.validateDateRange(filters.from, filters.to);
 
-    const monthExpr = `to_char(timezone('${DASHBOARD_TIMEZONE}', serviceOrder.fim_execucao), 'YYYY-MM')`;
+    const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
+    const monthExpr = `to_char(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr}), 'YYYY-MM')`;
     const serviceLabelExpr = `COALESCE(NULLIF(checklistSector.name, ''), NULLIF(serviceOrderSector.name, ''), NULLIF(inspection.serviceDescription, ''), 'SEM_SERVICO')`;
-    const dayExpr = `DATE(timezone('${DASHBOARD_TIMEZONE}', serviceOrder.fim_execucao))`;
+    const dayExpr = `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr}))`;
 
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -1073,10 +1071,6 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
-    summaryQb.setParameter(
-      'dashboardFinalizedAtPeriodModules',
-      QUALITY_FINALIZED_AT_PERIOD_MODULES,
-    );
     this.applyContractScope(summaryQb, filters.user, filters.contractId);
 
     const rankingQb = this.inspectionsRepository
@@ -1102,10 +1096,6 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
-    rankingQb.setParameter(
-      'dashboardFinalizedAtPeriodModules',
-      QUALITY_FINALIZED_AT_PERIOD_MODULES,
-    );
     this.applyContractScope(rankingQb, filters.user, filters.contractId);
 
     const [summaryRow, rankingRows] = await Promise.all([

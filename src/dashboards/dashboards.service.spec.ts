@@ -653,6 +653,29 @@ describe('DashboardsService', () => {
     ).toBe(true);
   });
 
+  it('deve usar finalizedAt no período de qualidade para CAMPO e REMOTO', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '0',
+        pendingCount: '0',
+        averagePercent: null,
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getSummary({
+      from: '2026-08-13',
+      to: '2026-08-13',
+      sector: 'QUALITY' as any,
+    });
+
+    expect(
+      qb.andWhere.mock.calls.some(([sql]: [string]) =>
+        sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt)'),
+      ),
+    ).toBe(true);
+  });
+
   it('deve retornar contadores por módulo de qualidade quando includeQualityModuleCounts for true', async () => {
     const qb = createMockQueryBuilder({
       rawOne: {
@@ -927,15 +950,9 @@ describe('DashboardsService', () => {
       ),
     ).toBe(true);
     expect(qb.orderBy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'CASE WHEN inspection.module = :dashboardSafetyModuleFinishedAt',
-      ),
+      expect.stringContaining('COALESCE(inspection.finalizedAt, inspection.createdAt)'),
       'DESC',
       'NULLS LAST',
-    );
-    expect(qb.setParameter).toHaveBeenCalledWith(
-      'dashboardFinalizedAtPeriodModules',
-      expect.any(Array),
     );
   });
 
