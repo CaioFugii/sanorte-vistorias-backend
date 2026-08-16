@@ -8,6 +8,7 @@ import {
   PrdSnapshot,
   SNAPSHOT_RELATIVE_PATH,
   SnapshotColumn,
+  sanitizeSeedTimestamp,
 } from './prd-seed.config';
 import { assertLoadTargetIsLocal } from './seed-db-guard';
 import { DataSource } from 'typeorm';
@@ -29,13 +30,17 @@ function toSqlValue(
   if (value === null || value === undefined) {
     return null;
   }
-  if (column.udtName === 'date' && typeof value === 'string') {
-    return value.slice(0, 10);
+  const sanitized = sanitizeSeedTimestamp(value);
+  if (sanitized === null) {
+    return null;
+  }
+  if (column.udtName === 'date' && typeof sanitized === 'string') {
+    return sanitized.slice(0, 10);
   }
   if (column.udtName === 'jsonb' || column.udtName === 'json') {
-    return typeof value === 'string' ? value : JSON.stringify(value);
+    return typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
   }
-  return value;
+  return sanitized;
 }
 
 async function insertTable(
