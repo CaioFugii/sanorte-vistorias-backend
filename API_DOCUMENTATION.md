@@ -680,7 +680,7 @@ Response 200:
 ### GET /users
 
 - Auth: JWT + ADMIN
-- Query: `page`, `limit`
+- Query: `page`, `limit`, `contractId` (UUID opcional; usuários que têm esse contrato disponível)
 - Response: paginação de `User` (sem `passwordHash`)
 
 ### POST /users

@@ -4,7 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Contract, User } from '../entities';
 import { UserRole } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService {
@@ -78,15 +78,37 @@ export class UsersService {
   async findAll(
     page: number = 1,
     limit: number = 10,
+    contractId?: string,
   ): Promise<PaginatedResponseDto<User>> {
     const skip = (page - 1) * limit;
+    const selectedContractId = contractId?.trim();
 
-    const [data, total] = await this.usersRepository.findAndCount({
-      skip,
-      take: limit,
-      order: { createdAt: 'DESC' },
-      relations: ['contracts'],
-    });
+    const idsQuery = this.usersRepository
+      .createQueryBuilder('u')
+      .select(['u.id', 'u.createdAt'])
+      .orderBy('u.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    if (selectedContractId) {
+      idsQuery.innerJoin(
+        'u.contracts',
+        'filterContract',
+        'filterContract.id = :filterContractId',
+        { filterContractId: selectedContractId },
+      );
+    }
+
+    const [idRows, total] = await idsQuery.getManyAndCount();
+    const ids = idRows.map((row) => row.id);
+    const data =
+      ids.length === 0
+        ? []
+        : await this.usersRepository.find({
+            where: { id: In(ids) },
+            relations: ['contracts'],
+            order: { createdAt: 'DESC' },
+          });
 
     const totalPages = Math.ceil(total / limit);
 

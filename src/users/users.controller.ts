@@ -14,8 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
-import { PaginationQueryDto } from '../common/dto/pagination.dto';
-import { CreateUserDto, UpdateUserDto } from './dto';
+import { CreateUserDto, FilterUsersDto, UpdateUserDto } from './dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,10 +23,11 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  findAll(@Query() pagination: PaginationQueryDto) {
+  findAll(@Query() filters: FilterUsersDto) {
     return this.usersService.findAll(
-      pagination.page || 1,
-      pagination.limit || 10,
+      filters.page || 1,
+      filters.limit || 10,
+      filters.contractId,
     );
   }
 

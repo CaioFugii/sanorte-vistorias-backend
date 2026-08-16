@@ -12,6 +12,11 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - `DOMAIN.md` — enums, entidades e regras de negócio
 - `CHANGELOG.md` — histórico de alterações
 - Filtros em `GET /inspections`: `contractId`, `service`, `executionFrom`/`executionTo` e `inspectionFrom`/`inspectionTo`
+- Filtro `contractId` em `GET /users`
+
+### Fixed
+
+- Crash de boot na Heroku por binding nativo do `bcrypt` (trocado por `bcryptjs`)
 
 ### Removed
 
