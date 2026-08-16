@@ -23,27 +23,15 @@ Na raiz do monorepo:
 ```bash
 docker compose up -d
 cd sanorte-vistorias-backend
-cp .env.example .env   # ajuste DATABASE_URL_PRD se for gerar seed a partir de produção
+cp .env.example .env
 npm install
 npm run migration:run
-npm run seed:local
 npm run start:dev
 ```
 
 Ou use o script único: `./scripts/setup-local.sh`.
 
-`seed:local` gera um snapshot de produção (se ainda não existir) e carrega no Postgres local:
-
-- cadastros completos (usuários, equipes, checklists, contratos, etc.)
-- cerca de 500 vistorias/OS mais recentes, com itens, evidências e assinaturas relacionados
-- senha local de todos os usuários: `senha123`
-
-O snapshot fica em `src/database/seeds/data/prd-snapshot.json` (gitignored). Regenerar:
-
-```bash
-npm run seed:dump-prd
-npm run seed:load-prd
-```
+O Postgres local já deve estar populado. Login: `admin@sanorte.com` / `senha123`.
 
 ## Configuração manual
 
@@ -58,7 +46,6 @@ npm install
 ```env
 DATABASE_URL=postgres://sanorte:sanorte@localhost:5432/vistorias_db
 DATABASE_SSL=false
-DATABASE_URL_PRD=postgres://user:pass@host:5432/dbname
 PORT=3000
 NODE_ENV=development
 PUBLIC_API_URL=http://localhost:3000
@@ -69,16 +56,15 @@ STORAGE_PROVIDER=local
 STORAGE_PATH=./storage
 ```
 
-`DATABASE_URL` deve apontar para o Postgres **local**. `DATABASE_URL_PRD` só é usado pelo dump.
+`DATABASE_URL` deve apontar para o Postgres **local**.
 
-3. Executar migrations e seed mínimo (sem dados de PRD):
+3. Executar migrations:
 
 ```bash
 npm run migration:run
-npm run seed
 ```
 
-## Usuários padrão (seed)
+## Usuários locais
 
 | Email | Senha | Role |
 |---|---|---|
@@ -87,7 +73,7 @@ npm run seed
 | supervisor@sanorte.com | senha123 | SUPERVISOR |
 | fiscal@sanorte.com | senha123 | FISCAL |
 
-Setores padrão (seed): `ESGOTO`, `AGUA`, `REPOSICAO`.
+Setores padrão: `ESGOTO`, `AGUA`, `REPOSICAO`.
 
 ## Executar
 

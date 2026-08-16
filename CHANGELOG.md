@@ -13,6 +13,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - `CHANGELOG.md` — histórico de alterações
 - Filtros em `GET /inspections`: `contractId`, `service`, `executionFrom`/`executionTo` e `inspectionFrom`/`inspectionTo`
 
+### Removed
+
+- Pasta `src/database/seeds` e scripts `seed` / `seed:local` / `seed:dump-prd` / `seed:load-prd`
+
 ## [1.0.1] — 2026-06-09
 
 ### Added

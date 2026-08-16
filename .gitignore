@@ -44,9 +44,6 @@ lerna-debug.log*
 # Storage
 /storage
 
-# Local PRD snapshot (contains production data)
-/src/database/seeds/data/*.json
-
 # Heroku
 .heroku
 

@@ -54,8 +54,7 @@ src/
 ├── entities/          Entidades TypeORM
 ├── common/enums/      Enums compartilhados
 ├── database/
-│   ├── migrations/    Alterações de schema
-│   └── seeds/         Dados iniciais
+│   └── migrations/    Alterações de schema
 └── config/            Database, TypeORM, app
 ```
 
@@ -109,9 +108,9 @@ Valores legados no banco: `QUALIDADE`, `OBRAS_GLOBAL`, `CANTEIRO`.
 
 `ADMIN` | `GESTOR` | `SUPERVISOR` | `FISCAL`
 
-Seed (senha `senha123`): `admin@sanorte.com`, `gestor@sanorte.com`, `supervisor@sanorte.com`, `fiscal@sanorte.com`.
+Login local (senha `senha123`): `admin@sanorte.com`, `gestor@sanorte.com`, `supervisor@sanorte.com`, `fiscal@sanorte.com`.
 
-Setores seed: `ESGOTO`, `AGUA`, `REPOSICAO`.
+Setores padrão: `ESGOTO`, `AGUA`, `REPOSICAO`.
 
 ### Status de vistoria
 
@@ -149,7 +148,6 @@ docker compose up -d
 cd sanorte-vistorias-backend
 # .env: DATABASE_URL local, DATABASE_SSL=false, STORAGE_PROVIDER=local
 npm run migration:run
-npm run seed:local
 npm run start:dev
 ```
 
@@ -162,10 +160,6 @@ Login: `admin@sanorte.com` / `senha123`. Detalhes: skill `sanorte-local-dev` e `
 | `npm test` | Testes unitários — **rodar antes de concluir** |
 | `npm run migration:run` | Aplicar migrations |
 | `npm run migration:generate -- src/database/migrations/Nome` | Gerar migration |
-| `npm run seed:local` | Dump PRD (se faltar) + load no Postgres local |
-| `npm run seed:dump-prd` | Snapshot JSON a partir de `DATABASE_URL_PRD` |
-| `npm run seed:load-prd` | Importa snapshot (só host local) |
-| `npm run seed` | Só usuários/setores padrão |
 | `npm run build` | Build de produção |
 
 ---

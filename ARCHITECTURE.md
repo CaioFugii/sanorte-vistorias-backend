@@ -157,14 +157,12 @@ POST /inspections/:id/resolve    → RESOLVIDA
 
 - Configuração: `src/config/database.config.ts`, `typeorm.config.ts`
 - **Nunca** alterar entidade sem migration em `src/database/migrations/`
-- Seed: `src/database/seeds/run-seed.ts` (usuários, setores, dados de exemplo)
 
 Comandos:
 
 ```bash
 npm run migration:generate -- src/database/migrations/NomeDaMigration
 npm run migration:run
-npm run seed
 ```
 
 ## DTOs e validação
