@@ -5,15 +5,10 @@ import { Client } from 'pg';
 import {
   FULL_COPY_TABLES,
   PrdSnapshot,
-  QUALITY_SEED_SERVICES,
-  SEED_INSPECTION_MONTHS,
-  SEED_INSPECTIONS_PER_MONTH_PER_SERVICE,
   SEED_ROW_LIMIT,
-  SEED_SAFETY_INSPECTION_LIMIT,
   SNAPSHOT_RELATIVE_PATH,
   SnapshotColumn,
   SnapshotTable,
-  sanitizeSeedTimestamp,
 } from './prd-seed.config';
 import { assertDumpSourceIsRemote } from './seed-db-guard';
 
@@ -24,7 +19,11 @@ type PgClient = Client;
 function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
   const normalized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
-    normalized[key] = sanitizeSeedTimestamp(value);
+    if (value instanceof Date) {
+      normalized[key] = value.toISOString();
+    } else {
+      normalized[key] = value;
+    }
   }
   return normalized;
 }
@@ -82,69 +81,6 @@ async function fetchByIds(
   return result.rows.map(normalizeRow);
 }
 
-function mergeRowsById(
-  ...groups: Record<string, unknown>[][]
-): Record<string, unknown>[] {
-  const byId = new Map<string, Record<string, unknown>>();
-  for (const rows of groups) {
-    for (const row of rows) {
-      byId.set(row.id as string, row);
-    }
-  }
-  return [...byId.values()];
-}
-
-async function fetchQualityInspectionsByMonthAndService(
-  client: PgClient,
-): Promise<Record<string, unknown>[]> {
-  const result = await client.query(
-    `
-      WITH labeled AS (
-        SELECT
-          i.*,
-          to_char(
-            timezone('America/Sao_Paulo', COALESCE(i.finalized_at, i.created_at)),
-            'YYYY-MM'
-          ) AS seed_month,
-          UPPER(TRIM(COALESCE(
-            NULLIF(checklist_sector.name, ''),
-            NULLIF(service_order_sector.name, ''),
-            NULLIF(i.service_description, ''),
-            'SEM_SERVICO'
-          ))) AS service_label
-        FROM inspections i
-        LEFT JOIN checklists checklist ON checklist.id = i.checklist_id
-        LEFT JOIN sectors checklist_sector ON checklist_sector.id = checklist.sector_id
-        LEFT JOIN service_orders service_order ON service_order.id = i.service_order_id
-        LEFT JOIN sectors service_order_sector ON service_order_sector.id = service_order.sector_id
-        WHERE i.status IN ('FINALIZADA', 'PENDENTE_AJUSTE', 'RESOLVIDA')
-          AND i.module <> 'SEGURANCA_TRABALHO'
-          AND COALESCE(i.finalized_at, i.created_at) >= (
-            date_trunc('month', timezone('America/Sao_Paulo', now()))
-            - (($1::int - 1) * interval '1 month')
-          )
-      ),
-      ranked AS (
-        SELECT id, seed_month, service_label,
-          ROW_NUMBER() OVER (
-            PARTITION BY seed_month, service_label
-            ORDER BY COALESCE(finalized_at, created_at) DESC NULLS LAST
-          ) AS rn
-        FROM labeled
-        WHERE service_label = ANY($2::text[])
-      )
-      SELECT id FROM ranked WHERE rn <= $3
-    `,
-    [
-      SEED_INSPECTION_MONTHS,
-      [...QUALITY_SEED_SERVICES],
-      SEED_INSPECTIONS_PER_MONTH_PER_SERVICE,
-    ],
-  );
-  const ids = uniqueIds(result.rows.map((row) => row.id as string));
-  return fetchByIds(client, 'inspections', 'id', ids);
-}
-
 function uniqueIds(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
@@ -196,34 +132,18 @@ export async function dumpFromPrd(): Promise<void> {
       console.log(`✓ ${table}: ${rows.length} (completo)`);
     }
 
-    const qualityInspections = await fetchQualityInspectionsByMonthAndService(
+    const inspections = await fetchRecent(
       client,
+      'inspections',
+      SEED_ROW_LIMIT,
+      'created_at',
     );
-    const safetyResult = await client.query(
-      `
-        SELECT * FROM inspections
-        WHERE module = 'SEGURANCA_TRABALHO'
-        ORDER BY COALESCE(finalized_at, created_at) DESC NULLS LAST
-        LIMIT $1
-      `,
-      [SEED_SAFETY_INSPECTION_LIMIT],
-    );
-    const inspections = mergeRowsById(
-      qualityInspections,
-      safetyResult.rows.map(normalizeRow),
-    );
-    const expectedQualityCap =
-      SEED_INSPECTION_MONTHS *
-      QUALITY_SEED_SERVICES.length *
-      SEED_INSPECTIONS_PER_MONTH_PER_SERVICE;
     snapshot.tables.inspections = tablePayload(
       await columnsOf('inspections'),
       inspections,
-      qualityInspections.length >= expectedQualityCap,
+      inspections.length >= SEED_ROW_LIMIT,
     );
-    console.log(
-      `✓ inspections: ${inspections.length} (${qualityInspections.length} qualidade nos últimos ${SEED_INSPECTION_MONTHS} meses por setor + segurança)`,
-    );
+    console.log(`✓ inspections: ${inspections.length} (mais recentes)`);
 
     const inspectionIds = uniqueIds(
       inspections.map((row) => row.id as string),
@@ -255,7 +175,7 @@ export async function dumpFromPrd(): Promise<void> {
       recentServiceOrders.length >= SEED_ROW_LIMIT,
     );
     console.log(
-      `✓ service_orders: ${serviceOrders.length} (${SEED_ROW_LIMIT} recentes + referenciadas pelas vistorias)`,
+      `✓ service_orders: ${serviceOrders.length} (500 recentes + referenciadas pelas vistorias)`,
     );
 
     const childTables: Array<{
