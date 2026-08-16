@@ -56,6 +56,11 @@ const QUALITY_DASHBOARD_MODULES = [
   ModuleType.REMOTO,
   ModuleType.OBRAS_INVESTIMENTO,
 ];
+const QUALITY_RANKING_MODULES = [
+  ModuleType.CAMPO,
+  ModuleType.POS_OBRA,
+  ModuleType.REMOTO,
+];
 const SAFETY_WORK_DASHBOARD_MODULES = [ModuleType.SEGURANCA_TRABALHO];
 
 /** Converte uma data YYYY-MM-DD para o fim do dia (23:59:59.999) em UTC. */
@@ -235,6 +240,18 @@ export class DashboardsService {
     if (filters.teamId) {
       qb.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
     }
+  }
+
+  private applyQualityRankingModules(
+    qb: any,
+    filters: { sector?: DashboardSector; module?: ModuleType },
+  ): void {
+    if (filters.sector !== 'QUALITY' || filters.module) {
+      return;
+    }
+    qb.andWhere('inspection.module IN (:...qualityRankingModules)', {
+      qualityRankingModules: QUALITY_RANKING_MODULES,
+    });
   }
 
   private applyContractScope(qb: any, user: any, contractId?: string): void {
@@ -545,6 +562,10 @@ export class DashboardsService {
       sector: filters.sector,
       module: filters.module,
     });
+    this.applyQualityRankingModules(qb, {
+      sector: filters.sector,
+      module: filters.module,
+    });
 
     const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
     if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
@@ -829,6 +850,10 @@ export class DashboardsService {
       metric !== TeamRankingMetric.AVERAGE ? metricToModule[metric] : undefined;
 
     this.applyQualityFilters(qb, {
+      sector: filters.sector,
+      module: metricModule,
+    });
+    this.applyQualityRankingModules(qb, {
       sector: filters.sector,
       module: metricModule,
     });

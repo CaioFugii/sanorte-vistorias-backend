@@ -118,7 +118,7 @@ Authorization: Bearer <token>
 ### Filtros disponíveis para listagens (essencial para telas)
 
 - Paginação padrão em listas: `page`, `limit`.
-- `GET /service-orders`: filtros por `osNumber` (busca parcial), `sectorId`, `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA).
+- `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres).
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`.
 - `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `contractId`, `status`, `osNumber` (busca parcial por número da OS), `service` (busca parcial em `serviceOrder.resultado`), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
@@ -1191,11 +1191,15 @@ Response 201:
 - Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Query:
   - `page`, `limit` (paginação padrão)
-  - `osNumber` (opcional; busca parcial por número da OS)
+  - `osNumber` (opcional; busca parcial por número da OS; mínimo 3 caracteres)
   - `sectorId` (opcional; UUID do setor)
+  - `contractId` (opcional; UUID do contrato)
+  - `from`, `to` (opcional; intervalo de `fimExecucao`, ISO8601)
   - `field` (opcional; `true` ou `false` — filtra OS já usadas em vistoria CAMPO)
   - `remote` (opcional; `true` ou `false` — filtra OS já usadas em vistoria REMOTO)
   - `postWork` (opcional; `true` ou `false` — filtra OS já usadas em vistoria POS_OBRA)
+  - `equipe` (opcional; busca parcial na equipe PDA; mínimo 3 caracteres)
+  - `resultado` (opcional; busca parcial no resultado da OS; mínimo 3 caracteres)
 - Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`
 - Uso: listar OS disponíveis para vincular a novas vistorias; filtrar por uso por módulo (field/remote/postWork)
 - Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` veem apenas OS dos contratos permitidos (`serviceOrder.contractId`)
@@ -2135,6 +2139,7 @@ Response 200:
 ]
 ```
 
+- `averagePercent`, `inspectionsCount` e `pendingCount` consideram apenas `CAMPO`, `REMOTO` e `POS_OBRA` (excluem `OBRAS_INVESTIMENTO`).
 - `postWorkPercent`: média (%) da equipe no módulo `POS_OBRA` no período (0 quando não houver vistoria no módulo).
 - `remotePercent`: média (%) da equipe no módulo `REMOTO` no período (0 quando não houver vistoria no módulo).
 - `fieldPercent`: média (%) da equipe no módulo `CAMPO` no período (0 quando não houver vistoria no módulo).
@@ -2189,7 +2194,8 @@ Response 200:
   - `field` -> `CAMPO`
   - `investmentWorks` -> `OBRAS_INVESTIMENTO`
   - `safetyWork` -> `SEGURANCA_TRABALHO`
-  - `average` -> sem filtro por módulo (respeitando o setor da rota)
+  - `average` (setor `QUALITY`) -> `CAMPO`, `REMOTO` e `POS_OBRA` (exclui `OBRAS_INVESTIMENTO`)
+  - `average` (setor `SAFETY_WORK`) -> sem filtro extra por módulo além do setor
 - Regra de período:
   - `QUALITY` (métrica `average`, `postWork`, `remote`, `field`, `investmentWorks`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
     - todos os módulos de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`): usa `inspection.finalizedAt` (data de finalização, a mesma da listagem `/quality/inspections`).

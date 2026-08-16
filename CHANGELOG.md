@@ -13,6 +13,11 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - `CHANGELOG.md` — histórico de alterações
 - Filtros em `GET /inspections`: `contractId`, `service`, `executionFrom`/`executionTo` e `inspectionFrom`/`inspectionTo`
 - Filtro `contractId` em `GET /users`
+- Filtros `equipe` e `resultado` em `GET /service-orders`
+
+### Changed
+
+- Ranking de Qualidade (`GET /dashboards/ranking/teams`): média, quantidade e pendências consideram apenas `CAMPO`, `REMOTO` e `POS_OBRA` (excluem `OBRAS_INVESTIMENTO`)
 
 ### Fixed
 

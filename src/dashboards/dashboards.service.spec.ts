@@ -547,6 +547,16 @@ describe('DashboardsService', () => {
       'investmentWorksModule',
       ModuleType.OBRAS_INVESTIMENTO,
     );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...qualityRankingModules)',
+      {
+        qualityRankingModules: [
+          ModuleType.CAMPO,
+          ModuleType.POS_OBRA,
+          ModuleType.REMOTO,
+        ],
+      },
+    );
   });
 
   it('deve usar data e contrato da inspection no summary quando module for SEGURANCA_TRABALHO', async () => {
