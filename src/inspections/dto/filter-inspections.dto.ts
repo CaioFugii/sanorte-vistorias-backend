@@ -4,6 +4,7 @@ import {
   IsUUID,
   IsDateString,
   IsString,
+  MaxLength,
 } from 'class-validator';
 import {
   ModuleType,
@@ -36,6 +37,31 @@ export class FilterInspectionsDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID('4', { message: 'teamId must be a valid UUID' })
   teamId?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'contractId must be a valid UUID' })
+  contractId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  executionFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  executionTo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  inspectionFrom?: string;
+
+  @IsOptional()
+  @IsDateString()
+  inspectionTo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  service?: string;
 
   @IsOptional()
   @IsEnum(InspectionStatus, {

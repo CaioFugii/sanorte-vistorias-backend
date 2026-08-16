@@ -73,7 +73,7 @@ export interface InspectionDetailResponseDto {
   scorePercent: number | null;
   team: { name: string } | null;
   checklist: { name: string } | null;
-  serviceOrder: { osNumber: string } | null;
+  serviceOrder: { osNumber: string; fimExecucao: Date | null } | null;
   investmentWork: { id: string; name: string } | null;
   createdBy: { name: string } | null;
   items: InspectionDetailItemDto[];

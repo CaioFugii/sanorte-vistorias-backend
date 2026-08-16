@@ -121,7 +121,7 @@ Authorization: Bearer <token>
 - `GET /service-orders`: filtros por `osNumber` (busca parcial), `sectorId`, `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA).
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`.
-- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `status`, `osNumber` (busca parcial por número da OS; regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN).
+- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `contractId`, `status`, `osNumber` (busca parcial por número da OS), `service` (busca parcial em `serviceOrder.resultado`), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
 - `GET /inspections/mine`: filtro por `osNumber` (busca parcial por número da OS).
 
 ### Contratos e padrões de resposta
@@ -1339,8 +1339,12 @@ Observação importante para UI (FISCAL):
   - `module`
   - `inspectionScope` (`TEAM` | `COLLABORATOR`)
   - `teamId`
+  - `contractId` (UUID do contrato)
   - `status`
   - `osNumber` (busca parcial por número da OS; ex.: `?osNumber=OS-001`)
+  - `service` (busca parcial pelo serviço da OS, coluna `resultado`; ex.: `?service=REPOSIÇÃO`)
+  - `executionFrom` / `executionTo` (`YYYY-MM-DD`, data local `America/Sao_Paulo` de `serviceOrder.fimExecucao`)
+  - `inspectionFrom` / `inspectionTo` (`YYYY-MM-DD`, data local `America/Sao_Paulo` de `inspection.finalizedAt`)
   - `investmentWorkId` (UUID da obra de investimento)
   - `page`, `limit`
 - Response: paginação de DTO **enxuto de listagem** (sem `items`, `checklist`, `createdBy`, `collaborators` e sem qualquer `passwordHash`)
@@ -1440,7 +1444,7 @@ Exemplo de item em `data`:
 | `id`, `externalId` | Identificação; `serverId` === `id` (UUID interno para PUT/POST que exigem id do servidor) |
 | `checklistId` | Abrir checklist no cache da UI |
 | `status`, `module`, `hasParalysisPenalty` | Estado e chips |
-| `serviceOrderId`, `serviceOrder` | `serviceOrder.osNumber` para título da OS quando houver OS |
+| `serviceOrderId`, `serviceOrder` | quando houver OS, `{ osNumber, fimExecucao }`; `osNumber` pode vir vazio e `fimExecucao` pode ser `null` |
 | `investmentWork` | quando existir vínculo, retorna `{ id, name }` da obra de investimento |
 | `createdBy` | usuário criador da vistoria, no formato `{ name }` |
 | `updatedAt` | Fallback de “última alteração” ao montar views |
@@ -1473,7 +1477,7 @@ Exemplo (truncado):
   "scorePercent": 88.5,
   "team": { "name": "Equipe 1" },
   "checklist": { "name": "Checklist QLT" },
-  "serviceOrder": { "osNumber": "12345" },
+  "serviceOrder": { "osNumber": "12345", "fimExecucao": "2026-04-18T15:10:00.000Z" },
   "investmentWork": { "id": "uuid", "name": "Obra X" },
   "createdBy": { "name": "Fiscal A" },
   "items": [

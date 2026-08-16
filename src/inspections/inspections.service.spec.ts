@@ -620,6 +620,74 @@ describe('InspectionsService', () => {
     expect(response.data[0].pendingItemsPreview).toEqual([]);
   });
 
+  it('findAll deve aplicar filtros de contrato, equipe, serviço e períodos', async () => {
+    const pendingQb: any = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    };
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+    inspectionItemsRepository.createQueryBuilder.mockReturnValue(pendingQb);
+
+    await service.findAll(
+      {
+        contractId: 'contract-id',
+        teamId: 'team-id',
+        service: 'REPOSIÇÃO',
+        executionFrom: '2026-05-01',
+        executionTo: '2026-05-31',
+        inspectionFrom: '2026-06-01',
+        inspectionTo: '2026-06-30',
+      },
+      1,
+      10,
+      { role: UserRole.ADMIN },
+    );
+
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
+      teamId: 'team-id',
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.contractId = :filterContractId',
+      { filterContractId: 'contract-id' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'serviceOrder.resultado ILIKE :service',
+      { service: '%REPOSIÇÃO%' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      `DATE(timezone('America/Sao_Paulo', serviceOrder.fimExecucao)) >= :executionFrom`,
+      { executionFrom: '2026-05-01' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      `DATE(timezone('America/Sao_Paulo', serviceOrder.fimExecucao)) <= :executionTo`,
+      { executionTo: '2026-05-31' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      `DATE(timezone('America/Sao_Paulo', inspection.finalizedAt)) >= :inspectionFrom`,
+      { inspectionFrom: '2026-06-01' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      `DATE(timezone('America/Sao_Paulo', inspection.finalizedAt)) <= :inspectionTo`,
+      { inspectionTo: '2026-06-30' },
+    );
+  });
+
   it('findMine deve retornar DTO enxuto para listagem do fiscal', async () => {
     const qb: any = {
       leftJoin: jest.fn().mockReturnThis(),
@@ -717,7 +785,10 @@ describe('InspectionsService', () => {
     evidencesRepository.find.mockResolvedValue([]);
     signaturesRepository.find.mockResolvedValue([]);
     teamsRepository.findOne.mockResolvedValue({ name: 'Equipe A' });
-    serviceOrderRepository.findOne.mockResolvedValue({ osNumber: 'OS-001' });
+    serviceOrderRepository.findOne.mockResolvedValue({
+      osNumber: 'OS-001',
+      fimExecucao: new Date('2026-04-30T18:00:00.000Z'),
+    });
     checklistItemsRepository.find.mockResolvedValue([
       {
         id: 'check-item-1',
@@ -747,5 +818,55 @@ describe('InspectionsService', () => {
     );
     expect(result.items[0].resolvedBy).toEqual({ name: 'Joao' });
     expect(result.items[0].resolutionNotes).toBe('Ajustado em campo');
+    expect(result.serviceOrder).toEqual({
+      osNumber: 'OS-001',
+      fimExecucao: new Date('2026-04-30T18:00:00.000Z'),
+    });
+  });
+
+  it('findOneDetail deve retornar OS sem data de execução quando o campo não estiver salvo', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'inspection-id',
+      externalId: 'ext-1',
+      checklistId: 'checklist-1',
+      createdByUserId: null,
+      teamId: null,
+      serviceOrderId: 'so-1',
+      investmentWorkId: null,
+      status: InspectionStatus.RASCUNHO,
+      module: ModuleType.CAMPO,
+      hasParalysisPenalty: false,
+      serviceDescription: null,
+      locationDescription: null,
+      createdAt: new Date('2026-05-01T10:00:00.000Z'),
+      finalizedAt: null,
+      updatedAt: new Date('2026-05-01T10:05:00.000Z'),
+      scorePercent: null,
+    });
+    inspectionItemsRepository.find.mockResolvedValue([]);
+    evidencesRepository.find.mockResolvedValue([]);
+    signaturesRepository.find.mockResolvedValue([]);
+    serviceOrderRepository.findOne.mockResolvedValue({
+      osNumber: 'OS-002',
+      fimExecucao: null,
+    });
+    checklistItemsRepository.find.mockResolvedValue([]);
+    (service as any).checklistsRepository = {
+      findOne: jest.fn().mockResolvedValue({ name: 'Checklist A' }),
+    };
+    dataSource.getRepository.mockImplementation((entity: any) => {
+      if (entity === Inspection) return inspectionsRepository;
+      return {
+        findOne: jest.fn().mockResolvedValue(null),
+        find: jest.fn().mockResolvedValue([]),
+      };
+    });
+
+    const result = await service.findOneDetail('inspection-id');
+
+    expect(result.serviceOrder).toEqual({
+      osNumber: 'OS-002',
+      fimExecucao: null,
+    });
   });
 });

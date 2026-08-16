@@ -354,9 +354,15 @@ export class InspectionsService {
       module?: ModuleType;
       inspectionScope?: InspectionScope;
       teamId?: string;
+      contractId?: string;
       status?: InspectionStatus;
       osNumber?: string;
       investmentWorkId?: string;
+      executionFrom?: string;
+      executionTo?: string;
+      inspectionFrom?: string;
+      inspectionTo?: string;
+      service?: string;
     },
     page: number = 1,
     limit: number = 10,
@@ -424,6 +430,11 @@ export class InspectionsService {
     if (filters.teamId) {
       query.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
     }
+    if (filters.contractId) {
+      query.andWhere('inspection.contractId = :filterContractId', {
+        filterContractId: filters.contractId,
+      });
+    }
     if (filters.status) {
       query.andWhere('inspection.status = :status', { status: filters.status });
     }
@@ -431,6 +442,35 @@ export class InspectionsService {
       query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
         osNumber: `%${filters.osNumber.trim()}%`,
       });
+    }
+    if (filters.service?.trim()) {
+      query.andWhere('serviceOrder.resultado ILIKE :service', {
+        service: `%${filters.service.trim()}%`,
+      });
+    }
+    if (filters.executionFrom) {
+      query.andWhere(
+        `DATE(timezone('America/Sao_Paulo', serviceOrder.fimExecucao)) >= :executionFrom`,
+        { executionFrom: filters.executionFrom },
+      );
+    }
+    if (filters.executionTo) {
+      query.andWhere(
+        `DATE(timezone('America/Sao_Paulo', serviceOrder.fimExecucao)) <= :executionTo`,
+        { executionTo: filters.executionTo },
+      );
+    }
+    if (filters.inspectionFrom) {
+      query.andWhere(
+        `DATE(timezone('America/Sao_Paulo', inspection.finalizedAt)) >= :inspectionFrom`,
+        { inspectionFrom: filters.inspectionFrom },
+      );
+    }
+    if (filters.inspectionTo) {
+      query.andWhere(
+        `DATE(timezone('America/Sao_Paulo', inspection.finalizedAt)) <= :inspectionTo`,
+        { inspectionTo: filters.inspectionTo },
+      );
     }
     if (filters.investmentWorkId) {
       query.andWhere('inspection.investmentWorkId = :investmentWorkId', {
@@ -799,7 +839,7 @@ export class InspectionsService {
       base.serviceOrderId
         ? this.serviceOrderRepository.findOne({
             where: { id: base.serviceOrderId },
-            select: { osNumber: true },
+            select: { osNumber: true, fimExecucao: true },
           })
         : Promise.resolve(null),
       base.investmentWorkId
@@ -891,10 +931,12 @@ export class InspectionsService {
       scorePercent: this.normalizeScorePercent(base.scorePercent),
       team: team?.name != null ? { name: team.name } : null,
       checklist: checklist?.name != null ? { name: checklist.name } : null,
-      serviceOrder:
-        serviceOrder?.osNumber != null
-          ? { osNumber: serviceOrder.osNumber }
-          : null,
+      serviceOrder: serviceOrder
+        ? {
+            osNumber: serviceOrder.osNumber ?? '',
+            fimExecucao: serviceOrder.fimExecucao ?? null,
+          }
+        : null,
       investmentWork: investmentWork
         ? {
             id: investmentWork.id,
