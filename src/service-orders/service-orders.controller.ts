@@ -46,6 +46,8 @@ export class ServiceOrdersController {
       query.field,
       query.remote,
       query.postWork,
+      query.equipe,
+      query.resultado,
     );
   }
 

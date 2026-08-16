@@ -53,3 +53,98 @@ describe('ServiceOrdersService.remove', () => {
     expect(serviceOrderRepository.delete).not.toHaveBeenCalled();
   });
 });
+
+describe('ServiceOrdersService.findAll', () => {
+  let service: ServiceOrdersService;
+  let qb: {
+    leftJoinAndSelect: jest.Mock;
+    andWhere: jest.Mock;
+    skip: jest.Mock;
+    take: jest.Mock;
+    orderBy: jest.Mock;
+    getManyAndCount: jest.Mock;
+  };
+  let serviceOrderRepository: {
+    createQueryBuilder: jest.Mock;
+  };
+
+  beforeEach(() => {
+    qb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    serviceOrderRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(qb),
+    };
+
+    service = new ServiceOrdersService(
+      serviceOrderRepository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+  });
+
+  it('aplica filtros de equipe PDA e resultado', async () => {
+    await service.findAll(
+      { role: 'ADMIN' },
+      1,
+      10,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'PDA 01',
+      'EXECUTADO',
+    );
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'serviceOrder.equipe ILIKE :equipe',
+      { equipe: '%PDA 01%' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'serviceOrder.resultado ILIKE :resultado',
+      { resultado: '%EXECUTADO%' },
+    );
+  });
+
+  it('ignora equipe e resultado vazios ou com menos de 3 caracteres', async () => {
+    await service.findAll(
+      { role: 'ADMIN' },
+      1,
+      10,
+      '12',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'ab',
+      'x',
+    );
+
+    expect(qb.andWhere).not.toHaveBeenCalledWith(
+      'serviceOrder.osNumber ILIKE :osNumber',
+      expect.anything(),
+    );
+    expect(qb.andWhere).not.toHaveBeenCalledWith(
+      'serviceOrder.equipe ILIKE :equipe',
+      expect.anything(),
+    );
+    expect(qb.andWhere).not.toHaveBeenCalledWith(
+      'serviceOrder.resultado ILIKE :resultado',
+      expect.anything(),
+    );
+  });
+});

@@ -27,6 +27,7 @@ export interface ImportResult {
 @Injectable()
 export class ServiceOrdersService {
   private readonly logger = new Logger(ServiceOrdersService.name);
+  private static readonly MIN_SEARCH_LENGTH = 3;
 
   constructor(
     @InjectRepository(ServiceOrder)
@@ -39,6 +40,14 @@ export class ServiceOrdersService {
     private readonly inspectionRepository: Repository<Inspection>,
     private readonly serviceOrderImportParser: ServiceOrderImportParserService,
   ) {}
+
+  private toSearchTerm(value?: string): string | undefined {
+    const trimmed = value?.trim();
+    if (!trimmed || trimmed.length < ServiceOrdersService.MIN_SEARCH_LENGTH) {
+      return undefined;
+    }
+    return trimmed;
+  }
 
   private buildImportKey(
     osNumber: string,
@@ -119,6 +128,8 @@ export class ServiceOrdersService {
     field?: boolean,
     remote?: boolean,
     postWork?: boolean,
+    equipe?: string,
+    resultado?: string,
   ): Promise<PaginatedResponseDto<ServiceOrder>> {
     const skip = (page - 1) * limit;
     const allowedContractIds = getAllowedContractIds(user);
@@ -128,9 +139,10 @@ export class ServiceOrdersService {
       .leftJoinAndSelect('serviceOrder.sector', 'sector')
       .leftJoinAndSelect('serviceOrder.contract', 'contract');
 
-    if (osNumber?.trim()) {
+    const osNumberTerm = this.toSearchTerm(osNumber);
+    if (osNumberTerm) {
       query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
-        osNumber: `%${osNumber.trim()}%`,
+        osNumber: `%${osNumberTerm}%`,
       });
     }
 
@@ -168,6 +180,18 @@ export class ServiceOrdersService {
     }
     if (postWork !== undefined) {
       query.andWhere('serviceOrder.postWork = :postWork', { postWork });
+    }
+    const equipeTerm = this.toSearchTerm(equipe);
+    if (equipeTerm) {
+      query.andWhere('serviceOrder.equipe ILIKE :equipe', {
+        equipe: `%${equipeTerm}%`,
+      });
+    }
+    const resultadoTerm = this.toSearchTerm(resultado);
+    if (resultadoTerm) {
+      query.andWhere('serviceOrder.resultado ILIKE :resultado', {
+        resultado: `%${resultadoTerm}%`,
+      });
     }
 
     applyContractScopeFilter(
