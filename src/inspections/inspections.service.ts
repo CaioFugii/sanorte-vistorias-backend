@@ -71,6 +71,7 @@ type PendingItemsSummary = {
 @Injectable()
 export class InspectionsService {
   private readonly logger = new Logger(InspectionsService.name);
+  private static readonly MIN_SEARCH_LENGTH = 3;
 
   constructor(
     @InjectRepository(Inspection)
@@ -99,6 +100,14 @@ export class InspectionsService {
     private dataSource: DataSource,
     private inspectionDomainService: InspectionDomainService,
   ) {}
+
+  private toSearchTerm(value?: string): string | undefined {
+    const trimmed = value?.trim();
+    if (!trimmed || trimmed.length < InspectionsService.MIN_SEARCH_LENGTH) {
+      return undefined;
+    }
+    return trimmed;
+  }
 
   async create(
     inspectionData: {
@@ -438,9 +447,10 @@ export class InspectionsService {
     if (filters.status) {
       query.andWhere('inspection.status = :status', { status: filters.status });
     }
-    if (filters.osNumber?.trim()) {
+    const osNumberTerm = this.toSearchTerm(filters.osNumber);
+    if (osNumberTerm) {
       query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
-        osNumber: `%${filters.osNumber.trim()}%`,
+        osNumber: `%${osNumberTerm}%`,
       });
     }
     if (filters.service?.trim()) {
@@ -554,9 +564,10 @@ export class InspectionsService {
       .where('inspection.createdByUserId = :userId', { userId })
       .orderBy('inspection.createdAt', 'DESC');
 
-    if (osNumber?.trim()) {
+    const osNumberTerm = this.toSearchTerm(osNumber);
+    if (osNumberTerm) {
       query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
-        osNumber: `%${osNumber.trim()}%`,
+        osNumber: `%${osNumberTerm}%`,
       });
     }
     if (inspectionScope) {

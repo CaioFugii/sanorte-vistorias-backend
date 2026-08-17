@@ -18,6 +18,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 ### Changed
 
 - Ranking de Qualidade (`GET /dashboards/ranking/teams`): média, quantidade e pendências consideram apenas `CAMPO`, `REMOTO` e `POS_OBRA` (excluem `OBRAS_INVESTIMENTO`)
+- `GET /inspections` e `GET /inspections/mine`: filtro `osNumber` só aplica com no mínimo 3 caracteres
 
 ### Fixed
 

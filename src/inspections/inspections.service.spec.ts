@@ -750,6 +750,66 @@ describe('InspectionsService', () => {
     expect((response.data[0] as any).id).toBeUndefined();
   });
 
+  it('findMine deve paginar com skip/take e ignorar osNumber curto', async () => {
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.findMine(
+      'user-id',
+      3,
+      50,
+      '12',
+      undefined,
+      { role: UserRole.ADMIN },
+    );
+
+    expect(qb.skip).toHaveBeenCalledWith(100);
+    expect(qb.take).toHaveBeenCalledWith(50);
+    expect(qb.andWhere).not.toHaveBeenCalledWith(
+      'serviceOrder.osNumber ILIKE :osNumber',
+      expect.anything(),
+    );
+  });
+
+  it('findMine deve filtrar osNumber com no mínimo 3 caracteres', async () => {
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.findMine(
+      'user-id',
+      1,
+      10,
+      'OS-9',
+      undefined,
+      { role: UserRole.ADMIN },
+    );
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'serviceOrder.osNumber ILIKE :osNumber',
+      { osNumber: '%OS-9%' },
+    );
+  });
+
   it('findOneDetail deve retornar checklistItem.description nos itens', async () => {
     inspectionsRepository.findOne.mockResolvedValue({
       id: 'inspection-id',

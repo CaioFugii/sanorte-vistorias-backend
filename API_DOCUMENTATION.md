@@ -121,8 +121,8 @@ Authorization: Bearer <token>
 - `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres).
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`.
-- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `contractId`, `status`, `osNumber` (busca parcial por número da OS), `service` (busca parcial em `serviceOrder.resultado`), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
-- `GET /inspections/mine`: filtro por `osNumber` (busca parcial por número da OS).
+- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
+- `GET /inspections/mine`: filtros por `page`, `limit` (máximo 100) e `osNumber` (busca parcial por número da OS, mínimo 3 caracteres).
 
 ### Contratos e padrões de resposta
 
@@ -1404,7 +1404,7 @@ Campos opcionais de pendências de ajuste na listagem:
 ### GET /inspections/mine
 
 - Auth: JWT + FISCAL
-- Query: `page`, `limit`, `osNumber` (busca parcial por número da OS), `inspectionScope`
+- Query: `page`, `limit` (máximo 100), `osNumber` (busca parcial por número da OS; termos com menos de 3 caracteres são ignorados), `inspectionScope`
 - Response: paginação do mesmo DTO enxuto de `GET /inspections` (`InspectionListDTO`)
 - Regras de serialização:
   - `externalId` sempre vem preenchido; quando não existir no banco, retorna fallback com `id` interno.
