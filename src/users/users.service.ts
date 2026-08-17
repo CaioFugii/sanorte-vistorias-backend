@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Contract, User } from '../entities';
 import { UserRole } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
+import { getAllowedContractIds } from '../common/auth/contract-scope.util';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -123,6 +124,51 @@ export class UsersService {
         hasPrev: page > 1,
       },
     };
+  }
+
+  async findFiscals(
+    user?: { role?: string; contracts?: Array<{ id: string }> },
+    contractId?: string,
+  ): Promise<{ data: Array<Pick<User, 'id' | 'name'>> }> {
+    const allowedContractIds = getAllowedContractIds(user);
+    const selectedContractId = contractId?.trim() || undefined;
+
+    if (allowedContractIds !== null && allowedContractIds.length === 0) {
+      return { data: [] };
+    }
+    if (
+      selectedContractId &&
+      allowedContractIds !== null &&
+      !allowedContractIds.includes(selectedContractId)
+    ) {
+      return { data: [] };
+    }
+
+    const query = this.usersRepository
+      .createQueryBuilder('u')
+      .select(['u.id', 'u.name'])
+      .where('u.role = :role', { role: UserRole.FISCAL })
+      .orderBy('u.name', 'ASC')
+      .distinct(true);
+
+    if (selectedContractId) {
+      query.innerJoin(
+        'u.contracts',
+        'filterContract',
+        'filterContract.id = :filterContractId',
+        { filterContractId: selectedContractId },
+      );
+    } else if (allowedContractIds !== null) {
+      query.innerJoin(
+        'u.contracts',
+        'allowedContract',
+        'allowedContract.id IN (:...allowedContractIds)',
+        { allowedContractIds },
+      );
+    }
+
+    const rows = await query.getMany();
+    return { data: rows.map((row) => ({ id: row.id, name: row.name })) };
   }
 
   async create(userData: {

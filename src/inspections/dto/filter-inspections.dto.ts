@@ -39,6 +39,10 @@ export class FilterInspectionsDto extends PaginationQueryDto {
   teamId?: string;
 
   @IsOptional()
+  @IsUUID('4', { message: 'createdByUserId must be a valid UUID' })
+  createdByUserId?: string;
+
+  @IsOptional()
   @IsUUID('4', { message: 'contractId must be a valid UUID' })
   contractId?: string;
 

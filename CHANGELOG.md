@@ -12,6 +12,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - `DOMAIN.md` — enums, entidades e regras de negócio
 - `CHANGELOG.md` — histórico de alterações
 - Filtros em `GET /inspections`: `contractId`, `service`, `executionFrom`/`executionTo` e `inspectionFrom`/`inspectionTo`
+- Filtro `createdByUserId` em `GET /inspections` (fiscal responsável)
+- `GET /users/fiscals` para ADMIN, GESTOR e SUPERVISOR listarem fiscais no escopo de contrato
 - Filtro `contractId` em `GET /users`
 - Filtros `equipe` e `resultado` em `GET /service-orders`
 
@@ -19,6 +21,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 - Ranking de Qualidade (`GET /dashboards/ranking/teams`): média, quantidade e pendências consideram apenas `CAMPO`, `REMOTO` e `POS_OBRA` (excluem `OBRAS_INVESTIMENTO`)
 - `GET /inspections` e `GET /inspections/mine`: filtro `osNumber` só aplica com no mínimo 3 caracteres
+- `GET /inspections`: filtro `service` só aplica com no mínimo 3 caracteres
 
 ### Fixed
 

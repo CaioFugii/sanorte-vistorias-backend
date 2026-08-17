@@ -363,6 +363,7 @@ export class InspectionsService {
       module?: ModuleType;
       inspectionScope?: InspectionScope;
       teamId?: string;
+      createdByUserId?: string;
       contractId?: string;
       status?: InspectionStatus;
       osNumber?: string;
@@ -439,6 +440,11 @@ export class InspectionsService {
     if (filters.teamId) {
       query.andWhere('inspection.teamId = :teamId', { teamId: filters.teamId });
     }
+    if (filters.createdByUserId) {
+      query.andWhere('inspection.createdByUserId = :createdByUserId', {
+        createdByUserId: filters.createdByUserId,
+      });
+    }
     if (filters.contractId) {
       query.andWhere('inspection.contractId = :filterContractId', {
         filterContractId: filters.contractId,
@@ -453,9 +459,10 @@ export class InspectionsService {
         osNumber: `%${osNumberTerm}%`,
       });
     }
-    if (filters.service?.trim()) {
+    const serviceTerm = this.toSearchTerm(filters.service);
+    if (serviceTerm) {
       query.andWhere('serviceOrder.resultado ILIKE :service', {
-        service: `%${filters.service.trim()}%`,
+        service: `%${serviceTerm}%`,
       });
     }
     if (filters.executionFrom) {

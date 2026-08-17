@@ -121,7 +121,7 @@ Authorization: Bearer <token>
 - `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres).
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`.
-- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
+- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `createdByUserId` (fiscal responsável), `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`, mínimo 3 caracteres), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
 - `GET /inspections/mine`: filtros por `page`, `limit` (máximo 100) e `osNumber` (busca parcial por número da OS, mínimo 3 caracteres).
 
 ### Contratos e padrões de resposta
@@ -682,6 +682,21 @@ Response 200:
 - Auth: JWT + ADMIN
 - Query: `page`, `limit`, `contractId` (UUID opcional; usuários que têm esse contrato disponível)
 - Response: paginação de `User` (sem `passwordHash`)
+
+### GET /users/fiscals
+
+- Auth: JWT + ADMIN, GESTOR ou SUPERVISOR
+- Query: `contractId` (UUID opcional)
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas fiscais vinculados aos seus contratos
+- Response:
+
+```json
+{
+  "data": [
+    { "id": "uuid", "name": "Ana Fiscal" }
+  ]
+}
+```
 
 ### POST /users
 
@@ -1343,6 +1358,7 @@ Observação importante para UI (FISCAL):
   - `module`
   - `inspectionScope` (`TEAM` | `COLLABORATOR`)
   - `teamId`
+  - `createdByUserId` (UUID do fiscal responsável pela vistoria)
   - `contractId` (UUID do contrato)
   - `status`
   - `osNumber` (busca parcial por número da OS; ex.: `?osNumber=OS-001`)

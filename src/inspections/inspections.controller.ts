@@ -55,6 +55,7 @@ export class InspectionsController {
         module: filterDto.module,
         inspectionScope: filterDto.inspectionScope,
         teamId: filterDto.teamId,
+        createdByUserId: filterDto.createdByUserId,
         contractId: filterDto.contractId,
         status: filterDto.status,
         osNumber: filterDto.osNumber,

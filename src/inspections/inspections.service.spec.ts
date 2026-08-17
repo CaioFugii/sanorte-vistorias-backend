@@ -648,6 +648,7 @@ describe('InspectionsService', () => {
       {
         contractId: 'contract-id',
         teamId: 'team-id',
+        createdByUserId: 'fiscal-id',
         service: 'REPOSIÇÃO',
         executionFrom: '2026-05-01',
         executionTo: '2026-05-31',
@@ -662,6 +663,10 @@ describe('InspectionsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
       teamId: 'team-id',
     });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.createdByUserId = :createdByUserId',
+      { createdByUserId: 'fiscal-id' },
+    );
     expect(qb.andWhere).toHaveBeenCalledWith(
       'inspection.contractId = :filterContractId',
       { filterContractId: 'contract-id' },
