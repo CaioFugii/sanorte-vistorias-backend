@@ -32,3 +32,39 @@ export function getRequestContext(request: Request) {
     userAgent: req.headers['user-agent'] ?? null,
   };
 }
+
+export type ProcessMemorySnapshot = {
+  rssMb: number;
+  heapUsedMb: number;
+  heapTotalMb: number;
+  externalMb: number;
+};
+
+export function bytesToMb(bytes: number): number {
+  return Math.round((bytes / (1024 * 1024)) * 10) / 10;
+}
+
+export function roundToOneDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+export function getProcessMemorySnapshot(): ProcessMemorySnapshot {
+  const mem = process.memoryUsage();
+  return {
+    rssMb: bytesToMb(mem.rss),
+    heapUsedMb: bytesToMb(mem.heapUsed),
+    heapTotalMb: bytesToMb(mem.heapTotal),
+    externalMb: bytesToMb(mem.external),
+  };
+}
+
+export function withMemoryDelta(
+  started: ProcessMemorySnapshot,
+  ended: ProcessMemorySnapshot = getProcessMemorySnapshot(),
+): ProcessMemorySnapshot & { rssDeltaMb: number; heapUsedDeltaMb: number } {
+  return {
+    ...ended,
+    rssDeltaMb: roundToOneDecimal(ended.rssMb - started.rssMb),
+    heapUsedDeltaMb: roundToOneDecimal(ended.heapUsedMb - started.heapUsedMb),
+  };
+}

@@ -7,7 +7,11 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { Observable, catchError, tap, throwError } from 'rxjs';
-import { getRequestContext } from '../logging/request.utils';
+import {
+  getProcessMemorySnapshot,
+  getRequestContext,
+  withMemoryDelta,
+} from '../logging/request.utils';
 
 @Injectable()
 export class HttpLoggingInterceptor implements NestInterceptor {
@@ -18,6 +22,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
     const request = httpContext.getRequest<Request>();
     const response = httpContext.getResponse<Response>();
     const requestContext = getRequestContext(request);
+    const memoryAtStart = getProcessMemorySnapshot();
     const start = Date.now();
 
     this.logger.log('Incoming request', requestContext);
@@ -28,6 +33,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
           ...requestContext,
           statusCode: response.statusCode,
           durationMs: Date.now() - start,
+          ...withMemoryDelta(memoryAtStart),
         });
       }),
       catchError((error: unknown) => {
@@ -35,6 +41,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
           ...requestContext,
           statusCode: response.statusCode,
           durationMs: Date.now() - start,
+          ...withMemoryDelta(memoryAtStart),
         });
         return throwError(() => error);
       }),

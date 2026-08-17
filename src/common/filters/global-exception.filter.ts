@@ -8,7 +8,10 @@ import {
 } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
 import { Request, Response } from 'express';
-import { getRequestContext } from '../logging/request.utils';
+import {
+  getProcessMemorySnapshot,
+  getRequestContext,
+} from '../logging/request.utils';
 import { isSentryEnabled } from '../monitoring/sentry';
 
 @Catch()
@@ -42,6 +45,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       statusCode: status,
       exceptionName: (exception as Error)?.name ?? 'UnknownError',
       message,
+      ...getProcessMemorySnapshot(),
     });
 
     if (isSentryEnabled() && status >= HttpStatus.INTERNAL_SERVER_ERROR) {

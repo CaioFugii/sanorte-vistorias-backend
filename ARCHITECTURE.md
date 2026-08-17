@@ -43,7 +43,7 @@ API REST em **NestJS** para gestão de vistorias de campo, cadastros operacionai
 
 - **ValidationPipe** global (`whitelist`, `forbidNonWhitelisted`, `transform`)
 - **CORS** habilitado
-- **HttpLoggingInterceptor** — log estruturado de requisições
+- **HttpLoggingInterceptor** — log estruturado de requisições, incluindo RSS/heap ao concluir cada request
 - **GlobalExceptionFilter** — respostas de erro padronizadas
 - **Sentry** — inicializado via `initSentry()` quando `SENTRY_DSN` está definido
 
@@ -211,6 +211,7 @@ Executar: `npm test`
 - Sentry configurado via variáveis `SENTRY_*`
 - `GET /monitoring/sentry-smoke-test` — protegido por header `x-monitoring-token`
 - Release automática em Heroku via `HEROKU_SLUG_COMMIT` / `SOURCE_VERSION`
+- Heroku: `log-runtime-metrics` (RSS do dyno) e log por request (`rssMb` / `heapUsedMb`) — ver `HEROKU_MEMORY.md`
 
 ## Enums compartilhados
 

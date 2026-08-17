@@ -176,6 +176,7 @@ Cenários manuais em staging Heroku:
 
 ## Referências
 
+- `HEROKU_MEMORY.md` — registro de picos, `log-runtime-metrics` e como avaliar o próximo crash
 - `ARCHITECTURE.md` — uploads e integrações
 - `DOMAIN.md` — sync offline (sem dataUrl)
 - Skill `sanorte-backend` — padrões NestJS
