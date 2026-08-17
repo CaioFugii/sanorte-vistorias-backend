@@ -63,4 +63,11 @@ describe('LocalAssetStorageAdapter', () => {
     expect(result.format).toBe('png');
     expect(existsSync(path.join(storagePath, result.publicId))).toBe(true);
   });
+
+  it('createDirectUpload should fall back to proxy mode', async () => {
+    const adapter = new LocalAssetStorageAdapter();
+    await expect(adapter.createDirectUpload({ contentType: 'image/jpeg' })).resolves.toEqual({
+      mode: 'proxy',
+    });
+  });
 });

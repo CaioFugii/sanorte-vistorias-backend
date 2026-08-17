@@ -33,7 +33,7 @@ API REST em **NestJS** para gestão de vistorias de campo, cadastros operacionai
 | ORM | TypeORM |
 | Banco | PostgreSQL |
 | Auth | Passport JWT |
-| Upload | Cloudinary (via `cloudinary` + `multer`) |
+| Upload | Cloudinary / S3 / local (`ASSET_STORAGE`); evidência de vistoria nova no S3 via URL pré-assinada |
 | Monitoramento | Sentry |
 | Testes | Jest |
 

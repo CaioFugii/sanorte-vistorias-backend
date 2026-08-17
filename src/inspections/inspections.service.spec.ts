@@ -26,6 +26,9 @@ describe('InspectionsService', () => {
     uploadImage: jest.Mock;
     uploadImageFromPath: jest.Mock;
     deleteAsset: jest.Mock;
+    createDirectUpload: jest.Mock;
+    getPublicUrl: jest.Mock;
+    statObject: jest.Mock;
   };
   let assetStorageRegistry: {
     deleteStoredAsset: jest.Mock;
@@ -93,6 +96,9 @@ describe('InspectionsService', () => {
       uploadImage: jest.fn(),
       uploadImageFromPath: jest.fn(),
       deleteAsset: jest.fn(),
+      createDirectUpload: jest.fn(),
+      getPublicUrl: jest.fn(),
+      statObject: jest.fn(),
     };
 
     dataSource = {
@@ -933,5 +939,109 @@ describe('InspectionsService', () => {
       osNumber: 'OS-002',
       fimExecucao: null,
     });
+  });
+
+  it('presign de evidência deve recusar fiscal após finalização', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'insp-1',
+      status: InspectionStatus.FINALIZADA,
+      createdByUserId: 'user-1',
+    });
+
+    await expect(
+      service.presignEvidenceUpload(
+        'insp-1',
+        { contentType: 'image/jpeg', contentLength: 1024 },
+        UserRole.FISCAL,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('presign de evidência deve devolver modo proxy quando o storage não é S3', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'insp-1',
+      status: InspectionStatus.RASCUNHO,
+      createdByUserId: 'user-1',
+    });
+    assetStorage.createDirectUpload.mockResolvedValue({ mode: 'proxy' });
+
+    const result = await service.presignEvidenceUpload(
+      'insp-1',
+      { contentType: 'image/jpeg', contentLength: 2048 },
+      UserRole.FISCAL,
+    );
+
+    expect(result).toEqual({ mode: 'proxy' });
+    expect(assetStorage.createDirectUpload).toHaveBeenCalledWith({
+      folder: 'quality/evidences',
+      contentType: 'image/jpeg',
+      expiresInSeconds: 60,
+    });
+  });
+
+  it('deve gravar evidência a partir do objeto já enviado ao S3', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'insp-1',
+      status: InspectionStatus.RASCUNHO,
+      createdByUserId: 'user-1',
+    });
+    const storageKey = 'quality/evidences/11111111-1111-1111-1111-111111111111.jpg';
+    const publicUrl = `https://bucket.s3.sa-east-1.amazonaws.com/${storageKey}`;
+    assetStorage.getPublicUrl.mockReturnValue(publicUrl);
+    assetStorage.statObject.mockResolvedValue({
+      contentLength: 1200,
+      contentType: 'image/jpeg',
+    });
+    evidencesRepository.create.mockImplementation((payload: unknown) => payload);
+    evidencesRepository.save.mockImplementation(async (payload: unknown) => ({
+      id: 'ev-1',
+      ...(payload as object),
+    }));
+
+    const result = await service.addEvidenceFromStorage(
+      'insp-1',
+      {
+        storageKey,
+        url: publicUrl,
+        fileName: 'foto.jpg',
+        mimeType: 'image/jpeg',
+        bytes: 1200,
+      },
+      'user-1',
+      UserRole.FISCAL,
+    );
+
+    expect(result.id).toBe('ev-1');
+    expect(evidencesRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inspectionId: 'insp-1',
+        storageKey,
+        url: publicUrl,
+        size: 1200,
+      }),
+    );
+  });
+
+  it('não deve confirmar evidência com storageKey fora do prefixo', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'insp-1',
+      status: InspectionStatus.RASCUNHO,
+      createdByUserId: 'user-1',
+    });
+
+    await expect(
+      service.addEvidenceFromStorage(
+        'insp-1',
+        {
+          storageKey: 'other/folder/file.jpg',
+          url: 'https://bucket.s3.sa-east-1.amazonaws.com/other/folder/file.jpg',
+          fileName: 'foto.jpg',
+          mimeType: 'image/jpeg',
+          bytes: 100,
+        },
+        'user-1',
+        UserRole.FISCAL,
+      ),
+    ).rejects.toThrow('storageKey inválida');
   });
 });

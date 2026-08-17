@@ -28,6 +28,8 @@ import { FilterInspectionsDto } from './dto/filter-inspections.dto';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
 import { ResolveItemDto } from './dto/resolve-item.dto';
 import { ParalyzeInspectionDto } from './dto/paralyze-inspection.dto';
+import { PresignEvidenceDto } from './dto/presign-evidence.dto';
+import { ConfirmEvidenceDto } from './dto/confirm-evidence.dto';
 
 @Controller('inspections')
 @UseGuards(JwtAuthGuard)
@@ -122,6 +124,37 @@ export class InspectionsController {
     @CurrentUser() user: any,
   ) {
     return this.inspectionsService.updateItems(id, items, user.id, user.role);
+  }
+
+  @Post(':id/evidences/presign')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
+  presignEvidence(
+    @Param('id') id: string,
+    @Body() dto: PresignEvidenceDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.inspectionsService.presignEvidenceUpload(
+      id,
+      dto,
+      user?.role,
+    );
+  }
+
+  @Post(':id/evidences/from-storage')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
+  addEvidenceFromStorage(
+    @Param('id') id: string,
+    @Body() dto: ConfirmEvidenceDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.inspectionsService.addEvidenceFromStorage(
+      id,
+      dto,
+      user?.id,
+      user?.role,
+    );
   }
 
   @Post(':id/evidences')

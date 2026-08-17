@@ -42,6 +42,8 @@ import {
   InspectionDetailSignatureDto,
 } from './dto/inspection-detail-response.dto';
 import { InspectionDomainService } from './inspection-domain.service';
+import { PresignEvidenceDto } from './dto/presign-evidence.dto';
+import { ConfirmEvidenceDto } from './dto/confirm-evidence.dto';
 import {
   SyncInspectionDto,
   SyncSignatureDto,
@@ -72,6 +74,16 @@ type PendingItemsSummary = {
 export class InspectionsService {
   private readonly logger = new Logger(InspectionsService.name);
   private static readonly MIN_SEARCH_LENGTH = 3;
+  private static readonly EVIDENCE_MAX_BYTES = 5 * 1024 * 1024;
+  private static readonly EVIDENCE_FOLDER = 'quality/evidences';
+  private static readonly EVIDENCE_STORAGE_KEY_PATTERN =
+    /^quality\/evidences\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|jpeg|png|webp)$/i;
+  private static readonly ALLOWED_EVIDENCE_MIME_TYPES = new Set([
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ]);
 
   constructor(
     @InjectRepository(Inspection)
@@ -1440,15 +1452,7 @@ export class InspectionsService {
     userRole?: UserRole,
   ): Promise<Evidence> {
     const inspection = await this.findInspectionCoreByIdOrExternalId(id);
-
-    if (
-      userRole === UserRole.FISCAL &&
-      inspection.status !== InspectionStatus.RASCUNHO
-    ) {
-      throw new ForbiddenException(
-        'Fiscal não pode editar vistoria após finalização',
-      );
-    }
+    this.assertCanMutateEvidence(inspection, userRole);
 
     if (!file?.path) {
       throw new BadRequestException('Arquivo inválido ou ausente');
@@ -1456,7 +1460,7 @@ export class InspectionsService {
 
     try {
       const uploaded = await this.assetStorage.uploadImageFromPath(file.path, {
-        folder: 'quality/evidences',
+        folder: InspectionsService.EVIDENCE_FOLDER,
       });
       const storedAsset = buildStoredAssetFields(uploaded);
 
@@ -1483,6 +1487,136 @@ export class InspectionsService {
     } finally {
       await fs.unlink(file.path).catch(() => undefined);
     }
+  }
+
+  async presignEvidenceUpload(
+    id: string,
+    dto: PresignEvidenceDto,
+    userRole?: UserRole,
+  ) {
+    const inspection = await this.findInspectionCoreByIdOrExternalId(id);
+    this.assertCanMutateEvidence(inspection, userRole);
+    this.assertEvidenceMimeType(dto.contentType);
+    this.assertEvidenceSize(dto.contentLength);
+
+    return this.assetStorage.createDirectUpload({
+      folder: InspectionsService.EVIDENCE_FOLDER,
+      contentType: this.normalizeEvidenceMimeType(dto.contentType),
+      expiresInSeconds: 60,
+    });
+  }
+
+  async addEvidenceFromStorage(
+    id: string,
+    dto: ConfirmEvidenceDto,
+    userId?: string,
+    userRole?: UserRole,
+  ): Promise<Evidence> {
+    const inspection = await this.findInspectionCoreByIdOrExternalId(id);
+    this.assertCanMutateEvidence(inspection, userRole);
+    this.assertEvidenceMimeType(dto.mimeType);
+    this.assertEvidenceSize(dto.bytes);
+    this.assertEvidenceStorageKey(dto.storageKey);
+
+    const expectedUrl = this.assetStorage.getPublicUrl(dto.storageKey);
+    if (!expectedUrl) {
+      throw new BadRequestException(
+        'Upload direto não está disponível para o storage atual',
+      );
+    }
+    if (this.normalizePublicUrl(dto.url) !== this.normalizePublicUrl(expectedUrl)) {
+      throw new BadRequestException('URL inválida para a chave informada');
+    }
+
+    const storedObject = await this.assetStorage.statObject(dto.storageKey);
+    if (!storedObject) {
+      this.logger.warn('Evidence object could not be stat-ed before confirm', {
+        inspectionId: inspection.id,
+        storageKey: dto.storageKey,
+      });
+    }
+    const size =
+      storedObject?.contentLength && storedObject.contentLength > 0
+        ? storedObject.contentLength
+        : dto.bytes;
+    this.assertEvidenceSize(size);
+
+    const format = dto.storageKey.split('.').pop()?.toLowerCase() || 'jpg';
+    const uploaded = {
+      publicId: dto.storageKey,
+      url: expectedUrl,
+      resourceType: 'image',
+      bytes: size,
+      format,
+      width: 0,
+      height: 0,
+    };
+    const storedAsset = buildStoredAssetFields(uploaded);
+
+    const evidence = this.evidencesRepository.create({
+      inspectionId: inspection.id,
+      inspectionItemId: dto.inspectionItemId,
+      filePath: storedAsset.url,
+      fileName: dto.fileName,
+      mimeType: this.normalizeEvidenceMimeType(dto.mimeType),
+      size,
+      cloudinaryPublicId: storedAsset.cloudinaryPublicId,
+      storageProvider: storedAsset.storageProvider,
+      storageKey: storedAsset.storageKey,
+      storageBucket: storedAsset.storageBucket,
+      url: storedAsset.url,
+      bytes: size,
+      format,
+      width: 0,
+      height: 0,
+      uploadedByUserId: userId || inspection.createdByUserId,
+    });
+
+    return this.evidencesRepository.save(evidence);
+  }
+
+  private assertCanMutateEvidence(
+    inspection: Pick<Inspection, 'status'>,
+    userRole?: UserRole,
+  ): void {
+    if (
+      userRole === UserRole.FISCAL &&
+      inspection.status !== InspectionStatus.RASCUNHO
+    ) {
+      throw new ForbiddenException(
+        'Fiscal não pode editar vistoria após finalização',
+      );
+    }
+  }
+
+  private assertEvidenceMimeType(mimeType: string): void {
+    const normalized = mimeType.trim().toLowerCase();
+    if (!InspectionsService.ALLOWED_EVIDENCE_MIME_TYPES.has(normalized)) {
+      throw new BadRequestException(
+        'Tipo de arquivo inválido. Use jpg, jpeg, png ou webp.',
+      );
+    }
+  }
+
+  private assertEvidenceSize(bytes: number): void {
+    if (bytes < 1 || bytes > InspectionsService.EVIDENCE_MAX_BYTES) {
+      throw new BadRequestException('Arquivo excede o limite de 5MB');
+    }
+  }
+
+  private assertEvidenceStorageKey(storageKey: string): void {
+    if (!InspectionsService.EVIDENCE_STORAGE_KEY_PATTERN.test(storageKey.trim())) {
+      throw new BadRequestException('storageKey inválida');
+    }
+  }
+
+  private normalizeEvidenceMimeType(mimeType: string): string {
+    const normalized = mimeType.trim().toLowerCase();
+    return normalized === 'image/jpg' ? 'image/jpeg' : normalized;
+  }
+
+  private normalizePublicUrl(url: string): string {
+    return url.trim().replace(/\/+$/, '');
   }
 
   async removeEvidence(

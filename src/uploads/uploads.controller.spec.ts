@@ -10,6 +10,9 @@ describe('UploadsController', () => {
       uploadImageFromPath: jest.fn(),
       uploadImage: jest.fn(),
       deleteAsset: jest.fn(),
+      createDirectUpload: jest.fn(),
+      getPublicUrl: jest.fn(),
+      statObject: jest.fn(),
     };
     controller = new UploadsController(assetStorage);
   });

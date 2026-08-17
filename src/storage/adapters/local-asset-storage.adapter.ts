@@ -10,6 +10,9 @@ import {
   AssetStorage,
   AssetUploadOptions,
   AssetUploadResult,
+  DirectUploadDescriptor,
+  DirectUploadOptions,
+  StoredObjectStat,
 } from '../asset-storage.interface';
 
 export function getLocalStorageRoot(): string {
@@ -66,6 +69,24 @@ export class LocalAssetStorageAdapter implements AssetStorage {
     options: AssetUploadOptions = {},
   ): Promise<AssetUploadResult> {
     return this.writeBuffer(buffer, 'jpg', options);
+  }
+
+  async createDirectUpload(
+    _options: DirectUploadOptions,
+  ): Promise<DirectUploadDescriptor> {
+    return { mode: 'proxy' };
+  }
+
+  getPublicUrl(storageKey: string): string | null {
+    const key = storageKey.trim();
+    if (!key) {
+      return null;
+    }
+    return `${this.publicBaseUrl}/files/${key}`;
+  }
+
+  async statObject(_storageKey: string): Promise<StoredObjectStat | null> {
+    return null;
   }
 
   async deleteAsset(assetId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { InternalServerErrorException } from '@nestjs/common';
 import { S3AssetStorageAdapter } from './s3-asset-storage.adapter';
 
@@ -8,6 +8,11 @@ jest.mock('@aws-sdk/client-s3', () => ({
   S3Client: jest.fn().mockImplementation(() => ({ send: sendMock })),
   PutObjectCommand: jest.fn().mockImplementation((input) => input),
   DeleteObjectCommand: jest.fn().mockImplementation((input) => input),
+  HeadObjectCommand: jest.fn().mockImplementation((input) => input),
+}));
+
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn().mockResolvedValue('https://s3.amazonaws.com/presigned-put'),
 }));
 
 jest.mock('fs/promises', () => ({
@@ -92,6 +97,37 @@ describe('S3AssetStorageAdapter', () => {
       Bucket: 'sanorte-files-test',
       Key: 'quality/evidences/test-uuid.jpg',
     });
+  });
+
+  it('createDirectUpload should return a presigned PUT descriptor', async () => {
+    const adapter = new S3AssetStorageAdapter();
+    const result = await adapter.createDirectUpload({
+      folder: 'quality/evidences',
+      contentType: 'image/jpeg',
+    });
+
+    expect(result).toEqual({
+      mode: 'direct',
+      method: 'PUT',
+      uploadUrl: 'https://s3.amazonaws.com/presigned-put',
+      headers: { 'Content-Type': 'image/jpeg' },
+      storageKey: 'quality/evidences/test-uuid.jpg',
+      publicUrl:
+        'https://sanorte-files-test.s3.sa-east-1.amazonaws.com/quality/evidences/test-uuid.jpg',
+      expiresInSeconds: 60,
+    });
+  });
+
+  it('statObject should return content length from HeadObject', async () => {
+    sendMock.mockResolvedValueOnce({ ContentLength: 2048, ContentType: 'image/jpeg' });
+    const adapter = new S3AssetStorageAdapter();
+    const result = await adapter.statObject('quality/evidences/test-uuid.jpg');
+
+    expect(HeadObjectCommand).toHaveBeenCalledWith({
+      Bucket: 'sanorte-files-test',
+      Key: 'quality/evidences/test-uuid.jpg',
+    });
+    expect(result).toEqual({ contentLength: 2048, contentType: 'image/jpeg' });
   });
 
   it('should throw when S3 is not configured', async () => {

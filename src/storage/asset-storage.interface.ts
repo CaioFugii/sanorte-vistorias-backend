@@ -12,6 +12,29 @@ export interface AssetUploadResult {
   height: number;
 }
 
+export type DirectUploadDescriptor =
+  | { mode: 'proxy' }
+  | {
+      mode: 'direct';
+      method: 'PUT';
+      uploadUrl: string;
+      headers: Record<string, string>;
+      storageKey: string;
+      publicUrl: string;
+      expiresInSeconds: number;
+    };
+
+export type DirectUploadOptions = {
+  folder?: string;
+  contentType: string;
+  expiresInSeconds?: number;
+};
+
+export type StoredObjectStat = {
+  contentLength: number;
+  contentType?: string;
+};
+
 export interface AssetStorage {
   uploadImageFromPath(
     filePath: string,
@@ -24,6 +47,14 @@ export interface AssetStorage {
   ): Promise<AssetUploadResult>;
 
   deleteAsset(assetId: string): Promise<void>;
+
+  createDirectUpload(
+    options: DirectUploadOptions,
+  ): Promise<DirectUploadDescriptor>;
+
+  getPublicUrl(storageKey: string): string | null;
+
+  statObject(storageKey: string): Promise<StoredObjectStat | null>;
 }
 
 export const ASSET_STORAGE = Symbol('ASSET_STORAGE');

@@ -9,6 +9,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 ### Added
 
 - Log de memória do processo (`rssMb`, `heapUsedMb` e delta) em `Request completed` / `Request failed`
+- Upload direto ao S3 na evidência de vistoria nova (`POST /inspections/:id/evidences/presign` + `from-storage`)
 - `HEROKU_MEMORY.md` — registro do pico/crash na Heroku (2026-08-17) e como avaliar o próximo
 - `ARCHITECTURE.md` — documentação de arquitetura da API
 - `DOMAIN.md` — enums, entidades e regras de negócio

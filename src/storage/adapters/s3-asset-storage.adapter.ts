@@ -1,8 +1,10 @@
 import {
   DeleteObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   Injectable,
   InternalServerErrorException,
@@ -16,6 +18,9 @@ import {
   AssetStorage,
   AssetUploadOptions,
   AssetUploadResult,
+  DirectUploadDescriptor,
+  DirectUploadOptions,
+  StoredObjectStat,
 } from '../asset-storage.interface';
 
 @Injectable()
@@ -93,6 +98,75 @@ export class S3AssetStorageAdapter implements AssetStorage {
     this.logger.log(`Uploaded S3 object key=${key} bytes=${buffer.length}`);
 
     return this.buildResult(key, buffer.length, ext);
+  }
+
+  async createDirectUpload(
+    options: DirectUploadOptions,
+  ): Promise<DirectUploadDescriptor> {
+    this.assertConfigured();
+
+    const folder = options.folder || 'quality/evidences';
+    const ext = this.extensionForContentType(options.contentType);
+    const key = `${folder}/${randomUUID()}.${ext}`;
+    const expiresInSeconds = options.expiresInSeconds ?? 60;
+    const contentType = options.contentType;
+
+    const uploadUrl = await getSignedUrl(
+      this.client!,
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: contentType,
+      }),
+      { expiresIn: expiresInSeconds },
+    );
+
+    return {
+      mode: 'direct',
+      method: 'PUT',
+      uploadUrl,
+      headers: { 'Content-Type': contentType },
+      storageKey: key,
+      publicUrl: this.buildPublicUrl(key),
+      expiresInSeconds,
+    };
+  }
+
+  getPublicUrl(storageKey: string): string | null {
+    const key = storageKey.trim();
+    if (!key) {
+      return null;
+    }
+    return this.buildPublicUrl(key);
+  }
+
+  async statObject(storageKey: string): Promise<StoredObjectStat | null> {
+    this.assertConfigured();
+
+    const key = storageKey.trim();
+    if (!key) {
+      return null;
+    }
+
+    try {
+      const result = await this.client!.send(
+        new HeadObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+      );
+      return {
+        contentLength: result.ContentLength ?? 0,
+        contentType: result.ContentType,
+      };
+    } catch (error) {
+      const status = (error as { $metadata?: { httpStatusCode?: number } })
+        .$metadata?.httpStatusCode;
+      if (status === 404 || status === 403) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async deleteAsset(assetId: string): Promise<void> {
@@ -173,6 +247,19 @@ export class S3AssetStorageAdapter implements AssetStorage {
   private resolveExtension(filePath: string): string {
     const ext = extname(filePath).replace(/^\./, '').toLowerCase();
     return ext || 'jpg';
+  }
+
+  private extensionForContentType(contentType: string): string {
+    switch (contentType.toLowerCase()) {
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      case 'image/jpeg':
+      case 'image/jpg':
+      default:
+        return 'jpg';
+    }
   }
 
   private contentTypeForExtension(ext: string): string {

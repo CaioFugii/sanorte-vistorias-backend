@@ -5,6 +5,9 @@ import {
   AssetStorage,
   AssetUploadOptions,
   AssetUploadResult,
+  DirectUploadDescriptor,
+  DirectUploadOptions,
+  StoredObjectStat,
 } from '../asset-storage.interface';
 
 @Injectable()
@@ -31,6 +34,20 @@ export class CloudinaryAssetStorageAdapter implements AssetStorage {
 
   async deleteAsset(assetId: string): Promise<void> {
     await this.cloudinaryService.deleteAsset(assetId);
+  }
+
+  async createDirectUpload(
+    _options: DirectUploadOptions,
+  ): Promise<DirectUploadDescriptor> {
+    return { mode: 'proxy' };
+  }
+
+  getPublicUrl(_storageKey: string): string | null {
+    return null;
+  }
+
+  async statObject(_storageKey: string): Promise<StoredObjectStat | null> {
+    return null;
   }
 
   private mapResult(uploaded: UploadApiResponse): AssetUploadResult {

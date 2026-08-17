@@ -96,14 +96,15 @@ rg -n "findOne\(" src/inspections/ src/uploads/ src/service-orders/
 
 Revisar primeiro (maior impacto histórico no projeto):
 
-1. **`POST /inspections/:id/evidences`** — multipart
-2. **`POST /uploads`** — multipart genérico
-3. **`POST /sync/inspections`** — batch JSON
-4. **`POST /inspections/:id/signature`** — base64 no body
-5. **`POST .../items/:itemId/resolve`** — `resolutionEvidence` base64
-6. **`GET /inspections/:id`** — `findOneDetail` vs `findOne`
-7. **Import OS** — `service-orders.service.ts` + `XLSX.read(file.buffer)`
-8. **Fluxos que ainda chamam `findOne()`** após update (paralyze/unparalyze/resolve)
+1. **`POST /inspections/:id/evidences/presign` + `from-storage`** — bytes vão ao S3; dyno só assina e grava metadados
+2. **`POST /inspections/:id/evidences`** — multipart (fallback local / Cloudinary)
+3. **`POST /uploads`** — multipart genérico
+4. **`POST /sync/inspections`** — batch JSON
+5. **`POST /inspections/:id/signature`** — base64 no body
+6. **`POST .../items/:itemId/resolve`** — `resolutionEvidence` base64
+7. **`GET /inspections/:id`** — `findOneDetail` vs `findOne`
+8. **Import OS** — `service-orders.service.ts` + `XLSX.read(file.buffer)`
+9. **Fluxos que ainda chamam `findOne()`** após update (paralyze/unparalyze/resolve)
 
 ## Processo de auditoria
 

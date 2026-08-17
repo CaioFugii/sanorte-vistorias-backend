@@ -34,7 +34,7 @@ Authorization: Bearer <token>
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
-  - anexos e assinatura: `POST /inspections/:id/evidences`, `DELETE /inspections/:id/evidences/:evidenceId`, `POST /inspections/:id/signature`
+  - anexos e assinatura: `POST /inspections/:id/evidences/presign`, `POST /inspections/:id/evidences/from-storage`, `POST /inspections/:id/evidences`, `DELETE /inspections/:id/evidences/:evidenceId`, `POST /inspections/:id/signature`
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
 - Relatórios dinâmicos:
   - tipos e schema: `GET /reports/types`, `GET /reports/types/:code/fields`
@@ -82,7 +82,7 @@ Authorization: Bearer <token>
   - Sempre recalcula `scorePercent`.
   - Para GESTOR/SUPERVISOR/ADMIN, reavalia status automaticamente (`FINALIZADA` <-> `PENDENTE_AJUSTE`) quando aplicável.
   - Exceção: para módulo `SEGURANCA_TRABALHO`, o status não vai para `PENDENTE_AJUSTE` (permanece/retorna `FINALIZADA`).
-- `POST /inspections/:id/evidences` e `DELETE /inspections/:id/evidences/:evidenceId`:
+- `POST /inspections/:id/evidences/presign`, `POST /inspections/:id/evidences/from-storage`, `POST /inspections/:id/evidences` e `DELETE /inspections/:id/evidences/:evidenceId`:
   - FISCAL só em `RASCUNHO`.
   - GESTOR/SUPERVISOR/ADMIN em qualquer status.
 - `POST /inspections/:id/paralyze`:
@@ -1597,6 +1597,70 @@ Response 200:
   }
 ]
 ```
+
+### POST /inspections/:id/evidences/presign
+
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
+- Uso: preenchimento de vistoria nova. Com `STORAGE_PROVIDER=s3`, o front envia o arquivo **direto ao S3** e depois confirma em `from-storage`. Em local/Cloudinary a API devolve `{ "mode": "proxy" }` e o front usa o multipart abaixo.
+- Regras de perfil: iguais ao POST multipart de evidência (FISCAL só em `RASCUNHO`).
+- Request JSON:
+
+```json
+{
+  "contentType": "image/jpeg",
+  "contentLength": 120031
+}
+```
+
+- `contentType`: `image/jpeg`, `image/jpg`, `image/png` ou `image/webp`
+- `contentLength`: 1–5242880 (5MB)
+
+Response 201 (S3):
+
+```json
+{
+  "mode": "direct",
+  "method": "PUT",
+  "uploadUrl": "https://bucket.s3.sa-east-1.amazonaws.com/quality/evidences/uuid.jpg?X-Amz-Algorithm=...",
+  "headers": { "Content-Type": "image/jpeg" },
+  "storageKey": "quality/evidences/uuid.jpg",
+  "publicUrl": "https://bucket.s3.sa-east-1.amazonaws.com/quality/evidences/uuid.jpg",
+  "expiresInSeconds": 60
+}
+```
+
+`uploadUrl` é só para o PUT (expira em 60s). **Não** use no PDF nem na tela. A URL permanente é `publicUrl` (gravada em `evidences.url`).
+
+Response 201 (local / Cloudinary):
+
+```json
+{ "mode": "proxy" }
+```
+
+O bucket S3 precisa de CORS permitindo `PUT` a partir da origem do app (Netlify), header `Content-Type`.
+
+### POST /inspections/:id/evidences/from-storage
+
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
+- Uso: após o PUT no S3. Grava a evidência com a URL pública (a mesma usada em detalhe e relatórios PDF).
+- Request JSON:
+
+```json
+{
+  "storageKey": "quality/evidences/uuid.jpg",
+  "url": "https://bucket.s3.sa-east-1.amazonaws.com/quality/evidences/uuid.jpg",
+  "inspectionItemId": "uuid",
+  "fileName": "evidencia.jpg",
+  "mimeType": "image/jpeg",
+  "bytes": 120031
+}
+```
+
+- `storageKey` deve ser `quality/evidences/<uuid>.(jpg|jpeg|png|webp)`
+- `url` deve ser exatamente a URL pública gerada para essa key
+- `inspectionItemId` é opcional (foto geral da vistoria quando omitido)
+
+Response 201: mesmo payload de `POST /inspections/:id/evidences`.
 
 ### POST /inspections/:id/evidences
 

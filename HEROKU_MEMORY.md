@@ -67,6 +67,8 @@ Hipótese principal: várias evidências simultâneas no dyno de 512 MB. Sem o l
 ## Pendências
 
 - [ ] Deploy do log por request (`HttpLoggingInterceptor` + `getProcessMemorySnapshot`)
+- [x] Evidência da vistoria nova: upload direto ao S3 (presign + `from-storage`); multipart permanece como fallback local
+- [ ] CORS no bucket S3: `PUT` + header `Content-Type` para a origem do Netlify (sem localhost em PRD)
 - [ ] Log drain se for preciso guardar janelas de horas (o Metrics da Heroku não substitui path)
 - [ ] Sentry Performance / Profiling (sample baixo) para transação + alocação
 - [ ] Tirar base64 de assinatura/resolução; import de OS sem `file.buffer`; não recarregar `findOne()` pesado após mutação
