@@ -1,4 +1,8 @@
-import { ModuleType, InspectionStatus } from '../../common/enums';
+import {
+  InspectionStatus,
+  InvestmentWorkEvaluationModule,
+  ModuleType,
+} from '../../common/enums';
 import { TeamRankingMetric } from './team-ranking-inspections-query.dto';
 
 export class TeamRankingInspectionItemDto {
@@ -8,6 +12,7 @@ export class TeamRankingInspectionItemDto {
   serviceOrderNumber: string | null;
   serviceOrderAddress: string | null;
   module: ModuleType;
+  evaluationModule: InvestmentWorkEvaluationModule | null;
   status: InspectionStatus;
   scorePercent: number;
   finishedAt: Date | null;

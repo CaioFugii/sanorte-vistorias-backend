@@ -51,6 +51,8 @@ Authorization: Bearer <token>
   - quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
   - quando `serviceOrderId` for enviado, o backend ignora `contractId` do payload e usa o contrato da OS.
   - quando `module = OBRAS_INVESTIMENTO` e `serviceOrderId` não for enviado, `investmentWorkId` passa a ser obrigatório.
+  - quando `module = OBRAS_INVESTIMENTO`, `evaluationModule` aceita `CAMPO` ou `POS_OBRA` (default `CAMPO` se omitido). Vistorias antigas foram migradas para `CAMPO`.
+  - `evaluationModule` só pode ser enviado quando `module = OBRAS_INVESTIMENTO`.
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
 - `GET /inspections` (GESTOR/SUPERVISOR/ADMIN) não retorna `RASCUNHO`.
@@ -1320,6 +1322,8 @@ Response 200:
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
   - `investmentWorkId` é opcional, mas só pode ser enviado quando `module = OBRAS_INVESTIMENTO`.
   - quando `module = OBRAS_INVESTIMENTO` e `serviceOrderId` não for enviado, `investmentWorkId` é obrigatório.
+  - quando `module = OBRAS_INVESTIMENTO`, `evaluationModule` aceita `CAMPO` ou `POS_OBRA` (default `CAMPO` se omitido).
+  - `evaluationModule` só pode ser enviado quando `module = OBRAS_INVESTIMENTO`.
   - quando ambos forem enviados (`serviceOrderId` e `investmentWorkId`), OS e obra devem pertencer ao mesmo contrato.
   - para `investmentWorkId` informado: a obra deve existir, estar ativa, não estar cancelada e dentro do escopo de contrato do usuário.
   - `inspectionScope` aceita `TEAM` (padrão) e `COLLABORATOR`.
@@ -1378,6 +1382,7 @@ Contrato por item (`InspectionListDTO`):
 {
   "externalId": "string",
   "module": "CAMPO|REMOTO|POS_OBRA|OBRAS_INVESTIMENTO|SEGURANCA_TRABALHO",
+  "evaluationModule": "CAMPO|POS_OBRA|null",
   "serviceDescription": "string",
   "locationDescription": "string",
   "status": "string",
@@ -1463,7 +1468,7 @@ Exemplo de item em `data`:
 |--------|-----|
 | `id`, `externalId` | Identificação; `serverId` === `id` (UUID interno para PUT/POST que exigem id do servidor) |
 | `checklistId` | Abrir checklist no cache da UI |
-| `status`, `module`, `hasParalysisPenalty` | Estado e chips |
+| `status`, `module`, `evaluationModule`, `hasParalysisPenalty` | Estado e chips. `evaluationModule` é `CAMPO` ou `POS_OBRA` quando `module = OBRAS_INVESTIMENTO`; `null` nos demais. |
 | `serviceOrderId`, `serviceOrder` | quando houver OS, `{ osNumber, fimExecucao }`; `osNumber` pode vir vazio e `fimExecucao` pode ser `null` |
 | `investmentWork` | quando existir vínculo, retorna `{ id, name }` da obra de investimento |
 | `createdBy` | usuário criador da vistoria, no formato `{ name }` |
@@ -1487,6 +1492,7 @@ Exemplo (truncado):
   "checklistId": "uuid",
   "status": "RASCUNHO",
   "module": "QUALIDADE",
+  "evaluationModule": null,
   "hasParalysisPenalty": false,
   "serviceOrderId": "uuid",
   "serviceDescription": "Vistoria",
@@ -2008,6 +2014,7 @@ Regras importantes:
 - `serviceOrderId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO` e `module != OBRAS_INVESTIMENTO` (OS deve estar cadastrada via `POST /service-orders/import`).
 - Quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
 - `teamId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO`.
+- `evaluationModule` (`CAMPO` | `POS_OBRA`) só se aplica a `OBRAS_INVESTIMENTO`; se omitido nesse módulo, assume `CAMPO`.
 - `inspectionScope` aceita `TEAM` (padrão) e `COLLABORATOR`.
 - Para `module = SEGURANCA_TRABALHO` e `inspectionScope = COLLABORATOR`, enviar exatamente 1 colaborador em `collaboratorIds`, com cadastro existente na plataforma.
 - Não aceita assets em `dataUrl`/`imageBase64` no sync.
@@ -2219,11 +2226,11 @@ Response 200:
 ]
 ```
 
-- `averagePercent`, `inspectionsCount` e `pendingCount` consideram apenas `CAMPO`, `REMOTO` e `POS_OBRA` (excluem `OBRAS_INVESTIMENTO`).
-- `postWorkPercent`: média (%) da equipe no módulo `POS_OBRA` no período (0 quando não houver vistoria no módulo).
+- `averagePercent`, `inspectionsCount` e `pendingCount` consideram `CAMPO`, `REMOTO`, `POS_OBRA` e `OBRAS_INVESTIMENTO`.
+- `postWorkPercent`: média (%) da equipe em `POS_OBRA` **e** em `OBRAS_INVESTIMENTO` com `evaluationModule = POS_OBRA` no período (0 quando não houver vistoria).
 - `remotePercent`: média (%) da equipe no módulo `REMOTO` no período (0 quando não houver vistoria no módulo).
-- `fieldPercent`: média (%) da equipe no módulo `CAMPO` no período (0 quando não houver vistoria no módulo).
-- `investmentWorksPercent`: média (%) da equipe no módulo `OBRAS_INVESTIMENTO` no período (0 quando não houver vistoria no módulo).
+- `fieldPercent`: média (%) da equipe em `CAMPO` **e** em `OBRAS_INVESTIMENTO` com `evaluationModule = CAMPO` no período (0 quando não houver vistoria).
+- `investmentWorksPercent`: média (%) da equipe no módulo `OBRAS_INVESTIMENTO` no período (0 quando não houver vistoria no módulo). O módulo continua disponível para consulta separada.
 
 ### GET /dashboards/ranking/teams/safety-work
 
@@ -2269,12 +2276,12 @@ Response 200:
   - `limit` (opcional, default `20`, máximo `100`)
   - `contractId` (`uuid`) opcional
 - Mapeamento de `metric` para módulo:
-  - `postWork` -> `POS_OBRA`
+  - `postWork` -> `POS_OBRA` **e** `OBRAS_INVESTIMENTO` com `evaluationModule = POS_OBRA`
   - `remote` -> `REMOTO`
-  - `field` -> `CAMPO`
+  - `field` -> `CAMPO` **e** `OBRAS_INVESTIMENTO` com `evaluationModule = CAMPO`
   - `investmentWorks` -> `OBRAS_INVESTIMENTO`
   - `safetyWork` -> `SEGURANCA_TRABALHO`
-  - `average` (setor `QUALITY`) -> `CAMPO`, `REMOTO` e `POS_OBRA` (exclui `OBRAS_INVESTIMENTO`)
+  - `average` (setor `QUALITY`) -> `CAMPO`, `REMOTO`, `POS_OBRA` e `OBRAS_INVESTIMENTO`
   - `average` (setor `SAFETY_WORK`) -> sem filtro extra por módulo além do setor
 - Regra de período:
   - `QUALITY` (métrica `average`, `postWork`, `remote`, `field`, `investmentWorks`): filtro por **data local** (`America/Sao_Paulo`) entre `from` e `to` (inclusive), com regra por módulo:
@@ -2308,6 +2315,7 @@ Response 200:
       "serviceOrderNumber": "OS-123456",
       "serviceOrderAddress": "Rua das Palmeiras, 100 - Centro",
       "module": "CAMPO",
+      "evaluationModule": null,
       "status": "FINALIZADA",
       "scorePercent": 96.8,
       "finishedAt": "2026-01-15T13:30:00.000Z",

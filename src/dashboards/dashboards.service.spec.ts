@@ -554,6 +554,7 @@ describe('DashboardsService', () => {
           ModuleType.CAMPO,
           ModuleType.POS_OBRA,
           ModuleType.REMOTO,
+          ModuleType.OBRAS_INVESTIMENTO,
         ],
       },
     );
@@ -825,6 +826,7 @@ describe('DashboardsService', () => {
           serviceOrderNumber: 'OS-001',
           serviceOrderAddress: 'Rua A, 123 - Centro',
           module: ModuleType.CAMPO,
+          evaluationModule: null,
           status: InspectionStatus.FINALIZADA,
           scorePercent: 97.5,
           finishedAt: new Date('2026-01-15T10:00:00.000Z'),
@@ -833,9 +835,17 @@ describe('DashboardsService', () => {
       ],
     });
 
-    expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
-      module: ModuleType.CAMPO,
-    });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      '(inspection.module = :rankingTargetModule OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:rankingTargetModule AS text)))',
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'rankingTargetModule',
+      ModuleType.CAMPO,
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'investmentWorksModule',
+      ModuleType.OBRAS_INVESTIMENTO,
+    );
     expect(qb.offset).toHaveBeenCalledWith(0);
     expect(qb.limit).toHaveBeenCalledWith(20);
   });
@@ -905,6 +915,36 @@ describe('DashboardsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
       module: ModuleType.OBRAS_INVESTIMENTO,
     });
+  });
+
+  it('deve incluir Obras de Investimento classificadas como Pós-obra no drill-down de Pós-obra', async () => {
+    teamRepository.findOne.mockResolvedValue({
+      id: 'team-1',
+      name: 'Equipe Norte',
+    });
+
+    const qb = createMockQueryBuilder({
+      rawMany: [],
+      count: 0,
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getTeamRankingInspections('team-1', {
+      from: '2026-01-01',
+      to: '2026-01-31',
+      metric: TeamRankingMetric.POST_WORK,
+      page: 1,
+      limit: 20,
+      sector: 'QUALITY' as any,
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      '(inspection.module = :rankingTargetModule OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:rankingTargetModule AS text)))',
+    );
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'rankingTargetModule',
+      ModuleType.POS_OBRA,
+    );
   });
 
   it('deve usar data e contrato da inspection no ranking inspections quando métrica for safetyWork', async () => {

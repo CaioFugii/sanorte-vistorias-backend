@@ -2,6 +2,7 @@ import {
   ModuleType,
   InspectionStatus,
   ChecklistAnswer,
+  InvestmentWorkEvaluationModule,
 } from '../../common/enums';
 
 /** Item de checklist na vistoria — sem checklistItem aninhado. */
@@ -63,6 +64,7 @@ export interface InspectionDetailResponseDto {
   checklistId: string;
   status: InspectionStatus;
   module: ModuleType;
+  evaluationModule: InvestmentWorkEvaluationModule | null;
   hasParalysisPenalty: boolean;
   serviceOrderId: string | null;
   serviceDescription: string | null;

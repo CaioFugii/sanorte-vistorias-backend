@@ -10,7 +10,12 @@ import {
   ManyToMany,
   JoinTable,
 } from 'typeorm';
-import { ModuleType, InspectionStatus, InspectionScope } from '../common/enums';
+import {
+  ModuleType,
+  InspectionStatus,
+  InspectionScope,
+  InvestmentWorkEvaluationModule,
+} from '../common/enums';
 import { Checklist } from './checklist.entity';
 import { Team } from './team.entity';
 import { User } from './user.entity';
@@ -33,6 +38,14 @@ export class Inspection {
     enum: ModuleType,
   })
   module: ModuleType;
+
+  @Column({
+    name: 'evaluation_module',
+    type: 'enum',
+    enum: InvestmentWorkEvaluationModule,
+    nullable: true,
+  })
+  evaluationModule: InvestmentWorkEvaluationModule | null;
 
   @Column({
     name: 'inspection_scope',

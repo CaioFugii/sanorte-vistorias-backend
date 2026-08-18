@@ -1,6 +1,7 @@
 import {
   ChecklistAnswer,
   InspectionScope,
+  InvestmentWorkEvaluationModule,
   ModuleType,
 } from '../../common/enums';
 
@@ -56,6 +57,7 @@ export type SyncInspectionDto = {
   serviceOrderId?: string;
   contractId?: string;
   investmentWorkId?: string;
+  evaluationModule?: InvestmentWorkEvaluationModule;
   serviceDescription?: string;
   locationDescription?: string;
   collaboratorIds?: string[];

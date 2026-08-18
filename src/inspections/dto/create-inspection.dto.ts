@@ -8,7 +8,11 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
-import { InspectionScope, ModuleType } from '../../common/enums';
+import {
+  InspectionScope,
+  InvestmentWorkEvaluationModule,
+  ModuleType,
+} from '../../common/enums';
 
 export class CreateInspectionDto {
   @IsEnum(ModuleType, { message: 'module deve ser um tipo válido' })
@@ -60,6 +64,12 @@ export class CreateInspectionDto {
   @IsOptional()
   @IsUUID('4', { message: 'investmentWorkId deve ser um UUID válido' })
   investmentWorkId?: string;
+
+  @IsOptional()
+  @IsEnum(InvestmentWorkEvaluationModule, {
+    message: 'evaluationModule deve ser CAMPO ou POS_OBRA',
+  })
+  evaluationModule?: InvestmentWorkEvaluationModule;
 
   @IsOptional()
   @IsString()

@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- `evaluationModule` (`CAMPO` | `POS_OBRA`) em vistorias de `OBRAS_INVESTIMENTO`; vistorias antigas do módulo foram migradas para `CAMPO`
 - Log de memória do processo (`rssMb`, `heapUsedMb` e delta) em `Request completed` / `Request failed`
 - Upload direto ao S3 na evidência de vistoria nova (`POST /inspections/:id/evidences/presign` + `from-storage`)
 - `HEROKU_MEMORY.md` — registro do pico/crash na Heroku (2026-08-17) e como avaliar o próximo
@@ -22,7 +23,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Changed
 
-- Ranking de Qualidade (`GET /dashboards/ranking/teams`): média, quantidade e pendências consideram apenas `CAMPO`, `REMOTO` e `POS_OBRA` (excluem `OBRAS_INVESTIMENTO`)
+- Ranking de Qualidade (`GET /dashboards/ranking/teams`): média, quantidade e pendências incluem `OBRAS_INVESTIMENTO`; `fieldPercent` junta Campo + OI classificado como Campo; `postWorkPercent` junta Pós-obra + OI classificado como Pós-obra
 - `GET /inspections` e `GET /inspections/mine`: filtro `osNumber` só aplica com no mínimo 3 caracteres
 - `GET /inspections`: filtro `service` só aplica com no mínimo 3 caracteres
 

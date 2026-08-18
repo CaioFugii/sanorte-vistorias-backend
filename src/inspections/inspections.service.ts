@@ -31,6 +31,7 @@ import {
   PendingStatus,
   UserRole,
   InvestmentWorkStatus,
+  InvestmentWorkEvaluationModule,
 } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { InspectionMineListItem } from './dto/inspection-mine-list-item.dto';
@@ -130,6 +131,7 @@ export class InspectionsService {
       serviceOrderId?: string;
       contractId?: string;
       investmentWorkId?: string;
+      evaluationModule?: InvestmentWorkEvaluationModule;
       serviceDescription?: string;
       locationDescription?: string;
       collaboratorIds?: string[];
@@ -154,6 +156,10 @@ export class InspectionsService {
     );
     const isInvestmentModule =
       inspectionData.module === ModuleType.OBRAS_INVESTIMENTO;
+    const evaluationModule = this.resolveEvaluationModule(
+      inspectionData.module,
+      inspectionData.evaluationModule,
+    );
 
     if (this.isTeamRequired(inspectionData.module) && !teamId) {
       throw new BadRequestException(
@@ -293,6 +299,7 @@ export class InspectionsService {
       serviceOrderId,
       contractId: resolvedContractId,
       investmentWorkId,
+      evaluationModule,
       serviceDescription,
       createdByUserId: userId,
       status: InspectionStatus.RASCUNHO,
@@ -416,6 +423,7 @@ export class InspectionsService {
         'inspection.id',
         'inspection.externalId',
         'inspection.module',
+        'inspection.evaluationModule',
         'inspection.serviceDescription',
         'inspection.locationDescription',
         'inspection.status',
@@ -569,6 +577,7 @@ export class InspectionsService {
         'inspection.id',
         'inspection.externalId',
         'inspection.module',
+        'inspection.evaluationModule',
         'inspection.serviceDescription',
         'inspection.locationDescription',
         'inspection.status',
@@ -636,6 +645,7 @@ export class InspectionsService {
     return {
       externalId: inspection.externalId ?? inspection.id,
       module: inspection.module,
+      evaluationModule: inspection.evaluationModule ?? null,
       serviceDescription: inspection.serviceDescription ?? null,
       locationDescription: inspection.locationDescription ?? null,
       status: inspection.status,
@@ -779,6 +789,7 @@ export class InspectionsService {
         investmentWorkId: true,
         status: true,
         module: true,
+        evaluationModule: true,
         hasParalysisPenalty: true,
         serviceDescription: true,
         locationDescription: true,
@@ -951,6 +962,7 @@ export class InspectionsService {
       checklistId: base.checklistId,
       status: base.status,
       module: base.module,
+      evaluationModule: base.evaluationModule ?? null,
       hasParalysisPenalty: base.hasParalysisPenalty === true,
       serviceOrderId: base.serviceOrderId ?? null,
       serviceDescription: base.serviceDescription ?? null,
@@ -1898,6 +1910,7 @@ export class InspectionsService {
           serviceOrderId: payload.serviceOrderId,
           contractId: payload.contractId,
           investmentWorkId: payload.investmentWorkId,
+          evaluationModule: payload.evaluationModule,
           serviceDescription: payload.serviceDescription,
           locationDescription: payload.locationDescription,
           collaboratorIds: payload.collaboratorIds || [],
@@ -1972,6 +1985,14 @@ export class InspectionsService {
         teamId: nextTeamId,
         investmentWorkId:
           payload.investmentWorkId ?? inspection.investmentWorkId,
+        evaluationModule: this.resolveEvaluationModule(
+          nextModule,
+          nextModule === ModuleType.OBRAS_INVESTIMENTO
+            ? Object.prototype.hasOwnProperty.call(payload, 'evaluationModule')
+              ? payload.evaluationModule
+              : inspection.evaluationModule
+            : null,
+        ),
         serviceDescription: nextServiceDescription,
         locationDescription:
           payload.locationDescription ?? inspection.locationDescription,
@@ -2194,6 +2215,22 @@ export class InspectionsService {
     if (!team) {
       throw new BadRequestException('Equipe não encontrada');
     }
+  }
+
+  private resolveEvaluationModule(
+    module: ModuleType,
+    evaluationModule?: InvestmentWorkEvaluationModule | null,
+  ): InvestmentWorkEvaluationModule | null {
+    if (module !== ModuleType.OBRAS_INVESTIMENTO) {
+      if (evaluationModule) {
+        throw new BadRequestException(
+          'evaluationModule só pode ser informado para o módulo OBRAS_INVESTIMENTO.',
+        );
+      }
+      return null;
+    }
+
+    return evaluationModule ?? InvestmentWorkEvaluationModule.CAMPO;
   }
 
   private isServiceOrderRequired(module: ModuleType): boolean {

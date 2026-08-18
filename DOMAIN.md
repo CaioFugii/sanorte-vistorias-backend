@@ -30,6 +30,12 @@ Alinhamento com frontend: `sanorte-vistorias/src/domain/enums.ts` e `types.ts`.
 
 O frontend expõe apenas os cinco módulos operacionais ativos. Valores legados permanecem no banco para compatibilidade.
 
+### `InvestmentWorkEvaluationModule`
+
+Usado em vistorias com `module = OBRAS_INVESTIMENTO` para classificar a avaliação no ranking de Qualidade:
+
+`CAMPO` | `POS_OBRA`
+
 ### `UserRole`
 
 `ADMIN` | `GESTOR` | `SUPERVISOR` | `FISCAL`
@@ -92,6 +98,7 @@ ReportRecord ── ReportFile
 | Campo | Descrição |
 |-------|-----------|
 | `module` | `ModuleType` — define regras de status e campos obrigatórios |
+| `evaluationModule` | `CAMPO` ou `POS_OBRA` quando `module = OBRAS_INVESTIMENTO`; `null` nos demais. Vistorias antigas de OI foram migradas para `CAMPO`. |
 | `inspectionScope` | `TEAM` ou `COLLABORATOR` |
 | `status` | Ciclo de vida da vistoria |
 | `externalId` | UUID idempotente para sync offline |

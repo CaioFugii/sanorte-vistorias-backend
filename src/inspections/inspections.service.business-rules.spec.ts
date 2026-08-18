@@ -8,6 +8,8 @@ import {
   PendingStatus,
   ModuleType,
   InspectionScope,
+  InvestmentWorkEvaluationModule,
+  InvestmentWorkStatus,
 } from '../common/enums';
 import { InspectionDomainService } from './inspection-domain.service';
 
@@ -706,6 +708,99 @@ describe('InspectionsService - Regras de Negócio', () => {
       ),
     ).rejects.toThrow(
       'Todos os colaboradores informados devem existir na plataforma.',
+    );
+  });
+
+  it('deve gravar evaluationModule CAMPO por padrão em vistoria de Obras de Investimento', async () => {
+    inspectionsRepository.create.mockImplementation((payload: any) => payload);
+    inspectionsRepository.save.mockResolvedValue({ id: 'inspection-oi-id' });
+    investmentWorkRepository.findOne.mockResolvedValue({
+      id: 'iw-id',
+      contractId: 'contract-id',
+      active: true,
+      status: InvestmentWorkStatus.EM_ANDAMENTO,
+    });
+    dataSource.getRepository.mockReturnValue({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      id: 'inspection-oi-id',
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
+    } as Inspection);
+
+    await service.create(
+      {
+        module: ModuleType.OBRAS_INVESTIMENTO,
+        checklistId: 'checklist-id',
+        teamId: 'team-id',
+        contractId: 'contract-id',
+        investmentWorkId: 'iw-id',
+        serviceDescription: 'Vistoria de obra',
+      },
+      'user-id',
+    );
+
+    expect(inspectionsRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
+      }),
+    );
+  });
+
+  it('deve gravar evaluationModule POS_OBRA quando informado em vistoria de Obras de Investimento', async () => {
+    inspectionsRepository.create.mockImplementation((payload: any) => payload);
+    inspectionsRepository.save.mockResolvedValue({ id: 'inspection-oi-id' });
+    investmentWorkRepository.findOne.mockResolvedValue({
+      id: 'iw-id',
+      contractId: 'contract-id',
+      active: true,
+      status: InvestmentWorkStatus.EM_ANDAMENTO,
+    });
+    dataSource.getRepository.mockReturnValue({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    jest.spyOn(service, 'findOne').mockResolvedValue({
+      id: 'inspection-oi-id',
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA,
+    } as Inspection);
+
+    await service.create(
+      {
+        module: ModuleType.OBRAS_INVESTIMENTO,
+        checklistId: 'checklist-id',
+        teamId: 'team-id',
+        contractId: 'contract-id',
+        investmentWorkId: 'iw-id',
+        evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA,
+        serviceDescription: 'Vistoria de obra',
+      },
+      'user-id',
+    );
+
+    expect(inspectionsRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA,
+      }),
+    );
+  });
+
+  it('deve rejeitar evaluationModule fora do módulo Obras de Investimento', async () => {
+    await expect(
+      service.create(
+        {
+          module: ModuleType.CAMPO,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
+          evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
+          serviceDescription: 'Vistoria de campo',
+        },
+        'user-id',
+      ),
+    ).rejects.toThrow(
+      'evaluationModule só pode ser informado para o módulo OBRAS_INVESTIMENTO.',
     );
   });
 });

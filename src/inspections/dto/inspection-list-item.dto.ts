@@ -1,8 +1,13 @@
-import { ModuleType, InspectionStatus } from '../../common/enums';
+import {
+  InspectionStatus,
+  InvestmentWorkEvaluationModule,
+  ModuleType,
+} from '../../common/enums';
 
 export interface InspectionListItemDto {
   externalId: string;
   module: ModuleType;
+  evaluationModule: InvestmentWorkEvaluationModule | null;
   serviceDescription: string | null;
   locationDescription: string | null;
   status: InspectionStatus;

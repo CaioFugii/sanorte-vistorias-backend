@@ -12,6 +12,7 @@ import {
   InspectionScope,
   InspectionStatus,
   ChecklistAnswer,
+  InvestmentWorkEvaluationModule,
 } from '../common/enums';
 import {
   applyContractScopeFilter,
@@ -60,8 +61,17 @@ const QUALITY_RANKING_MODULES = [
   ModuleType.CAMPO,
   ModuleType.POS_OBRA,
   ModuleType.REMOTO,
+  ModuleType.OBRAS_INVESTIMENTO,
 ];
 const SAFETY_WORK_DASHBOARD_MODULES = [ModuleType.SEGURANCA_TRABALHO];
+
+function rankingModuleScoreExpr(targetParam: 'fieldModule' | 'postWorkModule'): string {
+  return `AVG(CASE WHEN inspection.module = :${targetParam} OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:${targetParam} AS text)) THEN inspection.scorePercent ELSE NULL END)`;
+}
+
+function rankingTargetModuleWhere(): string {
+  return '(inspection.module = :rankingTargetModule OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:rankingTargetModule AS text)))';
+}
 
 /** Converte uma data YYYY-MM-DD para o fim do dia (23:59:59.999) em UTC. */
 function toEndOfDay(dateStr: string): Date {
@@ -525,7 +535,7 @@ export class DashboardsService {
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect(
-        `AVG(CASE WHEN inspection.module = :postWorkModule THEN inspection.scorePercent ELSE NULL END)`,
+        rankingModuleScoreExpr('postWorkModule'),
         'postWorkPercent',
       )
       .addSelect(
@@ -533,7 +543,7 @@ export class DashboardsService {
         'remotePercent',
       )
       .addSelect(
-        `AVG(CASE WHEN inspection.module = :fieldModule THEN inspection.scorePercent ELSE NULL END)`,
+        rankingModuleScoreExpr('fieldModule'),
         'fieldPercent',
       )
       .addSelect(
@@ -822,6 +832,7 @@ export class DashboardsService {
       .addSelect('serviceOrder.address', 'serviceOrderAddress')
       .addSelect('inspection.locationDescription', 'locationDescription')
       .addSelect('inspection.module', 'module')
+      .addSelect('inspection.evaluationModule', 'evaluationModule')
       .addSelect('inspection.status', 'status')
       .addSelect('inspection.scorePercent', 'scorePercent')
       .addSelect(finishedAtExpr, 'finishedAt')
@@ -840,14 +851,24 @@ export class DashboardsService {
       [TeamRankingMetric.SAFETY_WORK]: ModuleType.SEGURANCA_TRABALHO,
     };
 
-    if (metric !== TeamRankingMetric.AVERAGE) {
+    const joinsInvestmentWorkEvaluation =
+      metric === TeamRankingMetric.FIELD || metric === TeamRankingMetric.POST_WORK;
+
+    if (joinsInvestmentWorkEvaluation) {
+      qb.andWhere(rankingTargetModuleWhere())
+        .setParameter('rankingTargetModule', metricToModule[metric])
+        .setParameter('investmentWorksModule', ModuleType.OBRAS_INVESTIMENTO);
+    } else if (metric !== TeamRankingMetric.AVERAGE) {
       qb.andWhere('inspection.module = :module', {
         module: metricToModule[metric],
       });
     }
 
-    const metricModule =
-      metric !== TeamRankingMetric.AVERAGE ? metricToModule[metric] : undefined;
+    const metricModule = joinsInvestmentWorkEvaluation
+      ? undefined
+      : metric !== TeamRankingMetric.AVERAGE
+        ? metricToModule[metric]
+        : undefined;
 
     this.applyQualityFilters(qb, {
       sector: filters.sector,
@@ -896,6 +917,7 @@ export class DashboardsService {
           serviceOrderAddress: string | null;
           locationDescription: string | null;
           module: ModuleType;
+          evaluationModule: InvestmentWorkEvaluationModule | null;
           status: InspectionStatus;
           scorePercent: string;
           finishedAt: Date | null;
@@ -925,6 +947,7 @@ export class DashboardsService {
         serviceOrderNumber: row.serviceOrderNumber,
         serviceOrderAddress: row.serviceOrderAddress ?? row.locationDescription,
         module: row.module,
+        evaluationModule: row.evaluationModule ?? null,
         status: row.status,
         scorePercent: roundTo2(parseFloat(row.scorePercent ?? '0')),
         finishedAt: row.finishedAt,

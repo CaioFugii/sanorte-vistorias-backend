@@ -185,6 +185,7 @@ describe('InspectionsService', () => {
         ...createdInspection,
         id: 'server-id-1',
       });
+    teamsRepository.findOne.mockResolvedValue({ id: 'team-id' });
 
     const first = await service.syncInspections(
       [syncPayload],
@@ -217,6 +218,7 @@ describe('InspectionsService', () => {
       status: 'RASCUNHO',
       collaborators: [],
     });
+    teamsRepository.findOne.mockResolvedValue({ id: 'team-id' });
 
     const result = await service.syncInspections(
       [
@@ -550,6 +552,7 @@ describe('InspectionsService', () => {
     expect(response.data[0]).toEqual({
       externalId: 'inspection-id',
       module: ModuleType.CAMPO,
+      evaluationModule: null,
       serviceDescription: 'Servico',
       locationDescription: 'Local',
       status: InspectionStatus.FINALIZADA,
@@ -745,6 +748,7 @@ describe('InspectionsService', () => {
     expect(response.data[0]).toEqual({
       externalId: 'external-id-1',
       module: ModuleType.REMOTO,
+      evaluationModule: null,
       serviceDescription: null,
       locationDescription: null,
       status: InspectionStatus.RASCUNHO,
