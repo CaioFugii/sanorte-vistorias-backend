@@ -33,6 +33,11 @@ export class TeamsController {
     );
   }
 
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.teamsService.findOne(id);
+  }
+
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)

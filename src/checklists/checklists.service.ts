@@ -29,6 +29,8 @@ import { buildStoredAssetFields } from '../storage/asset-storage.util';
 
 @Injectable()
 export class ChecklistsService {
+  static readonly MAX_ITEMS = 50;
+
   constructor(
     @InjectRepository(Checklist)
     private checklistsRepository: Repository<Checklist>,
@@ -70,13 +72,36 @@ export class ChecklistsService {
       where.sectorId = sectorId;
     }
 
-    const [data, total] = await this.checklistsRepository.findAndCount({
-      where,
-      relations: ['sector', 'items', 'items.section', 'sections'],
-      skip,
-      take: limit,
-      order: { createdAt: 'DESC' },
-    });
+    const query = this.checklistsRepository
+      .createQueryBuilder('checklist')
+      .leftJoinAndSelect('checklist.sector', 'sector')
+      .loadRelationCountAndMap(
+        'checklist.sectionCount',
+        'checklist.sections',
+      )
+      .loadRelationCountAndMap('checklist.itemCount', 'checklist.items')
+      .orderBy('checklist.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    if (where.module) {
+      query.andWhere('checklist.module = :module', { module: where.module });
+    }
+    if (where.inspectionScope) {
+      query.andWhere('checklist.inspectionScope = :inspectionScope', {
+        inspectionScope: where.inspectionScope,
+      });
+    }
+    if (typeof where.active === 'boolean') {
+      query.andWhere('checklist.active = :active', { active: where.active });
+    }
+    if (where.sectorId) {
+      query.andWhere('checklist.sectorId = :sectorId', {
+        sectorId: where.sectorId,
+      });
+    }
+
+    const [data, total] = await query.getManyAndCount();
 
     const totalPages = Math.ceil(total / limit);
 
@@ -138,6 +163,15 @@ export class ChecklistsService {
       active?: boolean;
     },
   ): Promise<ChecklistItem> {
+    const itemCount = await this.checklistItemsRepository.count({
+      where: { checklistId },
+    });
+    if (itemCount >= ChecklistsService.MAX_ITEMS) {
+      throw new BadRequestException(
+        `O checklist não pode ter mais de ${ChecklistsService.MAX_ITEMS} perguntas.`,
+      );
+    }
+
     const defaultSection = await this.ensureDefaultSection(checklistId);
 
     const item = this.checklistItemsRepository.create({

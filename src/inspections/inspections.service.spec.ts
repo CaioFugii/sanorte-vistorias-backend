@@ -175,8 +175,8 @@ describe('InspectionsService', () => {
       createdOffline: true,
     } as unknown as Inspection;
 
-    const createSpy = jest
-      .spyOn(service, 'create')
+    const persistSpy = jest
+      .spyOn(service as any, 'persistNewInspection')
       .mockResolvedValue(createdInspection);
 
     inspectionsRepository.findOne
@@ -198,7 +198,7 @@ describe('InspectionsService', () => {
       UserRole.FISCAL,
     );
 
-    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(persistSpy).toHaveBeenCalledTimes(1);
     expect(first.results[0]).toMatchObject({
       externalId: syncPayload.externalId,
       serverId: 'server-id-1',
@@ -255,10 +255,10 @@ describe('InspectionsService', () => {
       hasParalysisPenalty: false,
     } as unknown as Inspection;
 
-    jest.spyOn(service, 'create').mockResolvedValue(createdInspection);
+    jest.spyOn(service as any, 'persistNewInspection').mockResolvedValue(createdInspection);
     const paralyzeSpy = jest
       .spyOn(service, 'paralyze')
-      .mockResolvedValue(createdInspection);
+      .mockResolvedValue(createdInspection as any);
 
     inspectionsRepository.findOne.mockResolvedValueOnce(null);
 
@@ -304,7 +304,7 @@ describe('InspectionsService', () => {
       inspectionScope: InspectionScope.TEAM,
     } as unknown as Inspection;
 
-    jest.spyOn(service, 'create').mockResolvedValue(createdInspection);
+    jest.spyOn(service as any, 'persistNewInspection').mockResolvedValue(createdInspection);
     inspectionsRepository.findOne.mockResolvedValueOnce(null);
 
     const result = await service.syncInspections(
@@ -366,7 +366,7 @@ describe('InspectionsService', () => {
       inspectionScope: InspectionScope.TEAM,
     } as unknown as Inspection;
 
-    jest.spyOn(service, 'create').mockResolvedValue(createdInspection);
+    jest.spyOn(service as any, 'persistNewInspection').mockResolvedValue(createdInspection);
     inspectionsRepository.findOne.mockResolvedValueOnce(null);
 
     const result = await service.syncInspections(

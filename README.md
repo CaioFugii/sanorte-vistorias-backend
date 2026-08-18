@@ -143,7 +143,7 @@ Authorization: Bearer <token>
 - `POST /checklists` (ADMIN)
 - `PUT /checklists/:id` (ADMIN)
 - `DELETE /checklists/:id` (ADMIN)
-- `POST /checklists/:id/items` (ADMIN)
+- `POST /checklists/:id/items` (ADMIN; no máximo 50 itens por checklist)
 - `PUT /checklists/:id/items/:itemId` (ADMIN)
 - `DELETE /checklists/:id/items/:itemId` (ADMIN)
 - `POST /checklists/:id/sections` (ADMIN)
@@ -186,6 +186,7 @@ Authorization: Bearer <token>
 - O sistema possui setores padrão (`ESGOTO`, `AGUA`, `REPOSICAO`) e permite cadastrar novos via endpoint de `sectors`.
 - `Collaborator` e `Checklist` podem ser vinculados a um setor por `sectorId`.
 - Checklist pode ser criado com `inspectionScope` (`TEAM` ou `COLLABORATOR`), com padrão `TEAM` quando omitido.
+- Checklist aceita no máximo **50** perguntas (`POST /checklists/:id/items` retorna `400` acima desse teto).
 - Ao informar `sectorId` em criação/edição de colaborador ou checklist, o setor precisa existir.
 - Não é permitido deletar setor vinculado a colaboradores ou checklists.
 - Em `POST /inspections`, `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e opcional para `SEGURANCA_TRABALHO`.

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, QueryFailedError } from 'typeorm';
 import { Team, Collaborator, Contract } from '../entities';
@@ -32,8 +32,11 @@ export class TeamsService {
 
     const query = this.teamsRepository
       .createQueryBuilder('team')
-      .leftJoinAndSelect('team.collaborators', 'collaborators')
-      .leftJoinAndSelect('team.contracts', 'contracts')
+      .leftJoin('team.contracts', 'contracts')
+      .loadRelationCountAndMap(
+        'team.collaboratorCount',
+        'team.collaborators',
+      )
       .distinct(true)
       .where('team.active = :active', { active: true });
 
@@ -66,10 +69,14 @@ export class TeamsService {
   }
 
   async findOne(id: string): Promise<Team> {
-    return this.teamsRepository.findOne({
+    const team = await this.teamsRepository.findOne({
       where: { id },
       relations: ['collaborators', 'contracts'],
     });
+    if (!team) {
+      throw new NotFoundException('Equipe não encontrada');
+    }
+    return team;
   }
 
   async create(teamData: {

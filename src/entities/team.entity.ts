@@ -41,6 +41,9 @@ export class Team {
   })
   collaborators: Collaborator[];
 
+  /** Preenchido só na listagem (`GET /teams`), sem hidratar `collaborators`. */
+  collaboratorCount?: number;
+
   @OneToMany(() => Inspection, (inspection) => inspection.team)
   inspections: Inspection[];
 

@@ -122,7 +122,7 @@ Authorization: Bearer <token>
 - Paginação padrão em listas: `page`, `limit`.
 - `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres).
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
-- `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`.
+- `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`. Listagem **não** inclui `items`/`sections` (só `sectionCount`/`itemCount`); o grafo completo fica em `GET /checklists/:id`.
 - `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `createdByUserId` (fiscal responsável), `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`, mínimo 3 caracteres), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
 - `GET /inspections/mine`: filtros por `page`, `limit` (máximo 100) e `osNumber` (busca parcial por número da OS, mínimo 3 caracteres).
 
@@ -825,8 +825,14 @@ Response 201: contrato criado
 
 - Auth: JWT
 - Query: `page`, `limit`, `name` (busca parcial), `contractId` (UUID opcional; apenas equipes ativas vinculadas a esse contrato)
-- Response: paginação de `Team` com `collaborators` e `contracts`
+- Response: paginação de `Team` com `collaboratorCount` (sem hidratar `collaborators` nem `contracts`). Para o grafo completo, use `GET /teams/:id`.
 - Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` enxergam apenas equipes vinculadas aos contratos permitidos. Se `contractId` estiver fora do escopo, a lista vem vazia.
+
+### GET /teams/:id
+
+- Auth: JWT
+- Response 200: `Team` com `collaborators` e `contracts`
+- Response 404: equipe não encontrada
 
 ### POST /teams
 
@@ -1019,7 +1025,7 @@ Response 200: `Collaborator` atualizado
   - `active` (`true`/`false`)
   - `sectorId` (UUID)
   - `page`, `limit`
-- Response: paginação de `Checklist` com `sector`, `sections` e `items`
+- Response: paginação de `Checklist` com `sector`, `sectionCount` e `itemCount` (sem `items` nem `sections`). Use `GET /checklists/:id` para o grafo completo.
 
 ### GET /checklists/:id
 
@@ -1044,6 +1050,8 @@ Request JSON:
 ```
 
 Response 201: `Checklist` criado (com seção padrão)
+
+Regra: o checklist começa vazio; cada pergunta é criada em `POST /checklists/:id/items`, com teto de **50** `ChecklistItem`.
 
 ### PUT /checklists/:id
 
@@ -1123,6 +1131,7 @@ Response 200: `ChecklistSection` atualizado
 ### POST /checklists/:id/items
 
 - Auth: JWT + ADMIN
+- Regra: retorna `400` se o checklist já tiver **50** perguntas (`ChecklistItem`)
 
 Request JSON:
 
@@ -1346,12 +1355,9 @@ Request JSON:
 }
 ```
 
-Response 201: `Inspection` completo (já com `items` baseados no checklist)
+Response 201: mesmo payload enxuto de `GET /inspections/:id` (`findOneDetail`). A UI deve usar `externalId` para navegar e recarregar o detalhe; o checklist completo vem de `GET /checklists/:id`.
 
-Observação importante para UI (FISCAL):
-
-- A imagem de referência do item vem em `items[].checklistItem.referenceImageUrl`.
-- O identificador do asset vem em `items[].checklistItem.referenceImagePublicId`.
+Observação: imagens de referência dos itens ficam no `GET /checklists/:id` (`items[].referenceImageUrl` / `referenceImagePublicId`), não neste payload.
 
 ### GET /inspections
 
@@ -1467,7 +1473,7 @@ Exemplo de item em `data`:
 | Campo | Uso |
 |--------|-----|
 | `id`, `externalId` | Identificação; `serverId` === `id` (UUID interno para PUT/POST que exigem id do servidor) |
-| `checklistId` | Abrir checklist no cache da UI |
+| `checklistId` | Buscar o checklist completo em `GET /checklists/:id` (a listagem `GET /checklists` não traz `items`/`sections`) |
 | `status`, `module`, `evaluationModule`, `hasParalysisPenalty` | Estado e chips. `evaluationModule` é `CAMPO` ou `POS_OBRA` quando `module = OBRAS_INVESTIMENTO`; `null` nos demais. |
 | `serviceOrderId`, `serviceOrder` | quando houver OS, `{ osNumber, fimExecucao }`; `osNumber` pode vir vazio e `fimExecucao` pode ser `null` |
 | `investmentWork` | quando existir vínculo, retorna `{ id, name }` da obra de investimento |
@@ -1558,7 +1564,7 @@ Request JSON (parcial):
 }
 ```
 
-Response 200: `Inspection` atualizado
+Response 200: mesmo payload enxuto de `GET /inspections/:id`
 
 ### PUT /inspections/:id/items
 
@@ -1755,7 +1761,7 @@ Response 201:
 - Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR
 - Request JSON: sem body
 
-Response 200: `Inspection` finalizada
+Response 200: mesmo payload enxuto de `GET /inspections/:id`
 
 Regras:
 
@@ -1784,7 +1790,7 @@ Request JSON:
 }
 ```
 
-Response 200: `Inspection` atualizado
+Response 200: mesmo payload enxuto de `GET /inspections/:id`
 
 ### POST /inspections/:id/unparalyze
 
@@ -1797,7 +1803,7 @@ Response 200: `Inspection` atualizado
 
 Request JSON: sem body
 
-Response 200: `Inspection` atualizado
+Response 200: mesmo payload enxuto de `GET /inspections/:id`
 
 ### POST /inspections/:id/items/:itemId/resolve
 
@@ -1850,7 +1856,7 @@ Request JSON:
 }
 ```
 
-Response 200: `Inspection` com `status = RESOLVIDA`
+Response 200: mesmo payload enxuto de `GET /inspections/:id` (`status = RESOLVIDA`)
 
 ## Reports (Relatórios dinâmicos)
 

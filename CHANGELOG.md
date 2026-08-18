@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- Limite de 50 perguntas (`ChecklistItem`) por checklist em `POST /checklists/:id/items`
 - `evaluationModule` (`CAMPO` | `POS_OBRA`) em vistorias de `OBRAS_INVESTIMENTO`; vistorias antigas do módulo foram migradas para `CAMPO`
 - Log de memória do processo (`rssMb`, `heapUsedMb` e delta) em `Request completed` / `Request failed`
 - Upload direto ao S3 na evidência de vistoria nova (`POST /inspections/:id/evidences/presign` + `from-storage`)
@@ -23,6 +24,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Changed
 
+- `GET /checklists` deixa de hidratar `items`/`sections` (só `sectionCount`/`itemCount`); `POST /inspections` e mutações devolvem `findOneDetail`
+- `GET /teams` lista sem hidratar `collaborators`/`contracts`; grafo completo em `GET /teams/:id`
 - Ranking de Qualidade (`GET /dashboards/ranking/teams`): média, quantidade e pendências incluem `OBRAS_INVESTIMENTO`; `fieldPercent` junta Campo + OI classificado como Campo; `postWorkPercent` junta Pós-obra + OI classificado como Pós-obra
 - `GET /inspections` e `GET /inspections/mine`: filtro `osNumber` só aplica com no mínimo 3 caracteres
 - `GET /inspections`: filtro `service` só aplica com no mínimo 3 caracteres

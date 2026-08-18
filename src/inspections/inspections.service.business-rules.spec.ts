@@ -133,7 +133,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     inspectionsRepository.findOne.mockResolvedValue({
       ...mockInspection,
       status: InspectionStatus.RASCUNHO,
-    } as Inspection);
+    } as any);
 
     await expect(service.remove('test-id')).resolves.toBeUndefined();
 
@@ -144,7 +144,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     inspectionsRepository.findOne.mockResolvedValue({
       ...mockInspection,
       status: InspectionStatus.FINALIZADA,
-    } as Inspection);
+    } as any);
 
     await expect(service.remove('test-id')).rejects.toThrow(
       BadRequestException,
@@ -162,6 +162,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       .spyOn(inspectionsRepository, 'findOne')
       .mockResolvedValue(finalizedInspection as Inspection);
     jest.spyOn(inspectionsRepository, 'update').mockResolvedValue(undefined);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
 
     await expect(
       service.update('test-id', {}, 'user-id', UserRole.GESTOR),
@@ -174,12 +175,13 @@ describe('InspectionsService - Regras de Negócio', () => {
       status: InspectionStatus.FINALIZADA,
       teamId: 'team-old-id',
       collaborators: [],
-    } as Inspection);
+    } as any);
     jest.spyOn(teamsRepository, 'findOne').mockResolvedValue({
       id: 'team-new-id',
       isContractor: false,
     });
     jest.spyOn(inspectionsRepository, 'update').mockResolvedValue(undefined);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
 
     await service.update(
       'test-id',
@@ -469,14 +471,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       ...mockInspection,
       hasParalysisPenalty: false,
     } as Inspection;
-    const paralyzedInspection = {
-      ...activeInspection,
-      hasParalysisPenalty: true,
-    } as Inspection;
 
-    inspectionsRepository.findOne
-      .mockResolvedValueOnce(activeInspection)
-      .mockResolvedValueOnce(paralyzedInspection);
+    inspectionsRepository.findOne.mockResolvedValue(activeInspection);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
     inspectionItemsRepository.find.mockResolvedValue([
       { answer: ChecklistAnswer.CONFORME },
       { answer: ChecklistAnswer.NAO_CONFORME },
@@ -502,6 +499,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     } as Inspection;
 
     inspectionsRepository.findOne.mockResolvedValue(alreadyParalyzed);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
 
     await service.paralyze('test-id', 'Motivo', 'gestor-id');
 
@@ -513,14 +511,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       ...mockInspection,
       hasParalysisPenalty: true,
     } as Inspection;
-    const unparalyzedInspection = {
-      ...mockInspection,
-      hasParalysisPenalty: false,
-    } as Inspection;
 
-    inspectionsRepository.findOne
-      .mockResolvedValueOnce(paralyzedInspection)
-      .mockResolvedValueOnce(unparalyzedInspection);
+    inspectionsRepository.findOne.mockResolvedValue(paralyzedInspection);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
     inspectionItemsRepository.find.mockResolvedValue([
       { answer: ChecklistAnswer.CONFORME },
       { answer: ChecklistAnswer.CONFORME },
@@ -547,6 +540,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     } as Inspection;
 
     inspectionsRepository.findOne.mockResolvedValue(activeInspection);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
 
     await service.unparalyze('test-id');
 
@@ -559,11 +553,11 @@ describe('InspectionsService - Regras de Negócio', () => {
     dataSource.getRepository.mockReturnValue({
       findOne: jest.fn().mockResolvedValue(null),
     });
-    jest.spyOn(service, 'findOne').mockResolvedValue({
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({
       id: 'inspection-st-id',
       module: ModuleType.SEGURANCA_TRABALHO,
       inspectionScope: InspectionScope.TEAM,
-    } as Inspection);
+    } as any);
 
     await expect(
       service.create(
@@ -622,12 +616,12 @@ describe('InspectionsService - Regras de Negócio', () => {
     dataSource.getRepository.mockReturnValue({
       findOne: jest.fn().mockResolvedValue(null),
     });
-    jest.spyOn(service, 'findOne').mockResolvedValue({
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({
       id: 'inspection-remote-id',
       module: ModuleType.REMOTO,
       inspectionScope: InspectionScope.TEAM,
       serviceDescription: null,
-    } as Inspection);
+    } as any);
 
     await expect(
       service.create(
@@ -723,11 +717,11 @@ describe('InspectionsService - Regras de Negócio', () => {
     dataSource.getRepository.mockReturnValue({
       findOne: jest.fn().mockResolvedValue(null),
     });
-    jest.spyOn(service, 'findOne').mockResolvedValue({
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({
       id: 'inspection-oi-id',
       module: ModuleType.OBRAS_INVESTIMENTO,
       evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
-    } as Inspection);
+    } as any);
 
     await service.create(
       {
@@ -760,11 +754,11 @@ describe('InspectionsService - Regras de Negócio', () => {
     dataSource.getRepository.mockReturnValue({
       findOne: jest.fn().mockResolvedValue(null),
     });
-    jest.spyOn(service, 'findOne').mockResolvedValue({
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({
       id: 'inspection-oi-id',
       module: ModuleType.OBRAS_INVESTIMENTO,
       evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA,
-    } as Inspection);
+    } as any);
 
     await service.create(
       {

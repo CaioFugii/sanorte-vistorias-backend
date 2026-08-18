@@ -57,6 +57,12 @@ export class Checklist {
   @OneToMany(() => ChecklistSection, (section) => section.checklist)
   sections: ChecklistSection[];
 
+  /** Preenchido só na listagem (`GET /checklists`), sem hidratar `sections`. */
+  sectionCount?: number;
+
+  /** Preenchido só na listagem (`GET /checklists`), sem hidratar `items`. */
+  itemCount?: number;
+
   @OneToMany(() => Inspection, (inspection) => inspection.checklist)
   inspections: Inspection[];
 

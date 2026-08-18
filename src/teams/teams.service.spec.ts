@@ -4,6 +4,8 @@ import { TeamsService } from './teams.service';
 function createQueryBuilderMock() {
   return {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    loadRelationCountAndMap: jest.fn().mockReturnThis(),
     distinct: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
@@ -38,6 +40,12 @@ describe('TeamsService', () => {
       expect.stringContaining('FROM team_contracts tc'),
       { filterContractId: 'contract-1' },
     );
+    expect(qb.leftJoin).toHaveBeenCalledWith('team.contracts', 'contracts');
+    expect(qb.loadRelationCountAndMap).toHaveBeenCalledWith(
+      'team.collaboratorCount',
+      'team.collaborators',
+    );
+    expect(qb.leftJoinAndSelect).not.toHaveBeenCalled();
   });
 
   it('retorna vazio quando o contrato está fora do escopo do gestor', async () => {

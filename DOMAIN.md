@@ -128,7 +128,7 @@ Registro 1:1 com vistoria quando há pendência de ajuste. Atualizado na finaliz
 | `Sector` | Seed: ESGOTO, AGUA, REPOSICAO; não deletável se vinculado |
 | `Team` | `isContractor = true` → não aceita colaboradores |
 | `Collaborator` | Vinculado a `sectorId`; opcionalmente `contractId` |
-| `Checklist` | `module`, `inspectionScope`, `sectorId`; seções e itens aninhados |
+| `Checklist` | `module`, `inspectionScope`, `sectorId`; seções e itens aninhados; no máximo **50** `ChecklistItem` |
 | `ServiceOrder` | Importável; mapeamento de setor na importação (AGUA, ESGOTO, REPOSICAO, etc.) |
 
 ---

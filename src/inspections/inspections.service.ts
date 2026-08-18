@@ -141,6 +141,34 @@ export class InspectionsService {
     },
     userId: string,
     userScope?: any,
+  ): Promise<InspectionDetailResponseDto> {
+    const savedInspection = await this.persistNewInspection(
+      inspectionData,
+      userId,
+      userScope,
+    );
+    return this.findOneDetail(savedInspection.id);
+  }
+
+  private async persistNewInspection(
+    inspectionData: {
+      module: ModuleType;
+      inspectionScope?: InspectionScope;
+      checklistId: string;
+      teamId?: string;
+      serviceOrderId?: string;
+      contractId?: string;
+      investmentWorkId?: string;
+      evaluationModule?: InvestmentWorkEvaluationModule;
+      serviceDescription?: string;
+      locationDescription?: string;
+      collaboratorIds?: string[];
+      externalId?: string;
+      createdOffline?: boolean;
+      syncedAt?: string;
+    },
+    userId: string,
+    userScope?: any,
   ): Promise<Inspection> {
     const allowedContractIds = getAllowedContractIds(userScope);
     const inspectionScope = this.resolveInspectionScope(
@@ -372,7 +400,7 @@ export class InspectionsService {
       }
     }
 
-    return this.findOne(savedInspection.id);
+    return savedInspection;
   }
 
   async findAll(
@@ -1220,7 +1248,7 @@ export class InspectionsService {
     inspectionData: Partial<Inspection>,
     userId: string,
     userRole: string,
-  ): Promise<Inspection> {
+  ): Promise<InspectionDetailResponseDto> {
     const inspection = await this.findInspectionCoreForManagement(id);
     const hasServiceOrderChange = Object.prototype.hasOwnProperty.call(
       inspectionData,
@@ -1328,7 +1356,7 @@ export class InspectionsService {
       updatedByRole: userRole,
       updatedFields: Object.keys(inspectionData),
     });
-    return this.findOne(inspection.id);
+    return this.findOneDetail(inspection.id);
   }
 
   async updateItems(
@@ -1410,11 +1438,11 @@ export class InspectionsService {
     id: string,
     reason: string,
     userId: string,
-  ): Promise<Inspection> {
+  ): Promise<InspectionDetailResponseDto> {
     const inspection = await this.findInspectionCoreForManagement(id);
 
     if (inspection.hasParalysisPenalty) {
-      return this.findOne(inspection.id);
+      return this.findOneDetail(inspection.id);
     }
 
     const scorePercent = await this.calculateFinalScorePercent(
@@ -1430,14 +1458,14 @@ export class InspectionsService {
       scorePercent,
     });
 
-    return this.findOne(inspection.id);
+    return this.findOneDetail(inspection.id);
   }
 
-  async unparalyze(id: string): Promise<Inspection> {
+  async unparalyze(id: string): Promise<InspectionDetailResponseDto> {
     const inspection = await this.findInspectionCoreForManagement(id);
 
     if (!inspection.hasParalysisPenalty) {
-      return this.findOne(inspection.id);
+      return this.findOneDetail(inspection.id);
     }
 
     const scorePercent = await this.calculateFinalScorePercent(
@@ -1453,7 +1481,7 @@ export class InspectionsService {
       scorePercent,
     });
 
-    return this.findOne(inspection.id);
+    return this.findOneDetail(inspection.id);
   }
 
   async addEvidence(
@@ -1901,7 +1929,7 @@ export class InspectionsService {
           'serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.',
         );
       }
-      inspection = await this.create(
+      inspection = await this.persistNewInspection(
         {
           module: payload.module,
           inspectionScope: payload.inspectionScope,
@@ -2426,7 +2454,7 @@ export class InspectionsService {
     },
     userId: string,
   ): Promise<InspectionItem> {
-    const inspection = await this.findOne(inspectionId);
+    const inspection = await this.findInspectionCoreForManagement(inspectionId);
 
     if (inspection.status !== InspectionStatus.PENDENTE_AJUSTE) {
       throw new BadRequestException('Vistoria não está pendente de ajuste');
@@ -2440,7 +2468,7 @@ export class InspectionsService {
       throw new NotFoundException('Item não encontrado');
     }
 
-    if (item.inspectionId !== inspectionId) {
+    if (item.inspectionId !== inspection.id) {
       throw new BadRequestException(
         `O item pertence à vistoria ${item.inspectionId}, não à vistoria informada na URL. Use o id da vistoria correta.`,
       );
@@ -2463,7 +2491,7 @@ export class InspectionsService {
     await this.inspectionItemsRepository.save(item);
 
     await this.tryMarkInspectionResolvedIfAllItemsResolved(
-      inspectionId,
+      inspection.id,
       userId,
     );
 
@@ -2577,15 +2605,15 @@ export class InspectionsService {
       resolutionEvidence?: string;
     },
     userId: string,
-  ): Promise<Inspection> {
-    const inspection = await this.findOne(id);
+  ): Promise<InspectionDetailResponseDto> {
+    const inspection = await this.findInspectionCoreForManagement(id);
 
     if (inspection.status !== InspectionStatus.PENDENTE_AJUSTE) {
       throw new BadRequestException('Vistoria não está pendente de ajuste');
     }
 
     const nonConformItems = await this.inspectionItemsRepository.find({
-      where: { inspectionId: id, answer: ChecklistAnswer.NAO_CONFORME },
+      where: { inspectionId: inspection.id, answer: ChecklistAnswer.NAO_CONFORME },
     });
 
     const pendingItems = nonConformItems.filter((i) => i.resolvedAt == null);
@@ -2627,6 +2655,6 @@ export class InspectionsService {
       resolvedByUserId: userId,
     });
 
-    return this.findOne(inspectionId);
+    return this.findOneDetail(inspectionId);
   }
 }
