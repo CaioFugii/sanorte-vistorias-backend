@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, QueryFailedError } from 'typeorm';
-import { Team, Collaborator, Contract } from '../entities';
+import { Team, Collaborator, Contract, Sector } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import {
   applyContractScopeFilter,
@@ -17,6 +17,8 @@ export class TeamsService {
     private collaboratorsRepository: Repository<Collaborator>,
     @InjectRepository(Contract)
     private contractsRepository: Repository<Contract>,
+    @InjectRepository(Sector)
+    private sectorsRepository: Repository<Sector>,
   ) {}
 
   async findAll(
@@ -25,6 +27,7 @@ export class TeamsService {
     limit: number = 10,
     name?: string,
     contractId?: string,
+    sectorId?: string,
   ): Promise<PaginatedResponseDto<Team>> {
     const skip = (page - 1) * limit;
     const trimmedName = name?.trim();
@@ -33,6 +36,7 @@ export class TeamsService {
     const query = this.teamsRepository
       .createQueryBuilder('team')
       .leftJoin('team.contracts', 'contracts')
+      .leftJoinAndSelect('team.sectors', 'sectors')
       .loadRelationCountAndMap(
         'team.collaboratorCount',
         'team.collaborators',
@@ -45,6 +49,7 @@ export class TeamsService {
     }
 
     this.applySelectedContractFilter(query, allowedContractIds, contractId);
+    this.applySelectedSectorFilter(query, sectorId);
     applyContractScopeFilter(query, allowedContractIds, 'contracts.id');
 
     const [data, total] = await query
@@ -71,7 +76,7 @@ export class TeamsService {
   async findOne(id: string): Promise<Team> {
     const team = await this.teamsRepository.findOne({
       where: { id },
-      relations: ['collaborators', 'contracts'],
+      relations: ['collaborators', 'contracts', 'sectors'],
     });
     if (!team) {
       throw new NotFoundException('Equipe não encontrada');
@@ -85,12 +90,13 @@ export class TeamsService {
     isContractor?: boolean;
     collaboratorIds?: string[];
     contractIds: string[];
+    sectorIds?: string[];
   }): Promise<Team> {
     if (!Array.isArray(teamData.contractIds)) {
       throw new BadRequestException('contractIds é obrigatório');
     }
 
-    const { collaboratorIds, contractIds, ...baseData } = teamData;
+    const { collaboratorIds, contractIds, sectorIds, ...baseData } = teamData;
     const normalizedName = this.normalizeTeamName(baseData.name);
     await this.ensureTeamNameIsAvailable(normalizedName);
     this.validateCollaboratorsForContractorTeam(
@@ -108,6 +114,9 @@ export class TeamsService {
     }
     if (contractIds !== undefined) {
       team.contracts = await this.resolveContracts(contractIds);
+    }
+    if (sectorIds !== undefined) {
+      team.sectors = await this.resolveSectors(sectorIds);
     }
 
     let saved: Team;
@@ -129,13 +138,14 @@ export class TeamsService {
     teamData: Partial<Team> & {
       collaboratorIds?: string[];
       contractIds: string[];
+      sectorIds?: string[];
     },
   ): Promise<Team> {
     if (!Array.isArray(teamData.contractIds)) {
       throw new BadRequestException('contractIds é obrigatório');
     }
 
-    const { collaboratorIds, contractIds, ...baseData } = teamData;
+    const { collaboratorIds, contractIds, sectorIds, ...baseData } = teamData;
     const dataToUpdate = { ...baseData };
     let nextIsContractor = teamData.isContractor;
 
@@ -174,6 +184,9 @@ export class TeamsService {
       team.collaborators = await this.resolveCollaborators(collaboratorIds);
     }
     team.contracts = await this.resolveContracts(contractIds);
+    if (sectorIds !== undefined) {
+      team.sectors = await this.resolveSectors(sectorIds);
+    }
 
     await this.teamsRepository.save(team);
 
@@ -210,6 +223,26 @@ export class TeamsService {
           AND tc.contract_id = :filterContractId
       )`,
       { filterContractId: selectedContractId },
+    );
+  }
+
+  private applySelectedSectorFilter(
+    query: ReturnType<Repository<Team>['createQueryBuilder']>,
+    sectorId?: string,
+  ): void {
+    const selectedSectorId = sectorId?.trim();
+    if (!selectedSectorId) {
+      return;
+    }
+
+    query.andWhere(
+      `EXISTS (
+        SELECT 1
+        FROM team_sectors ts
+        WHERE ts.team_id = team.id
+          AND ts.sector_id = :filterSectorId
+      )`,
+      { filterSectorId: selectedSectorId },
     );
   }
 
@@ -251,6 +284,25 @@ export class TeamsService {
     }
 
     return contracts;
+  }
+
+  private async resolveSectors(sectorIds: string[]): Promise<Sector[]> {
+    const uniqueIds = [...new Set(sectorIds)];
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const sectors = await this.sectorsRepository.findBy({
+      id: In(uniqueIds),
+    });
+
+    if (sectors.length !== uniqueIds.length) {
+      throw new BadRequestException(
+        'Um ou mais sectorIds informados não existem',
+      );
+    }
+
+    return sectors;
   }
 
   private normalizeTeamName(name?: string): string {

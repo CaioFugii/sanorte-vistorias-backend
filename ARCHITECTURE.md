@@ -57,7 +57,7 @@ Cada domínio segue o padrão `*.module.ts` + `*.controller.ts` + `*.service.ts`
 |--------|------------------|
 | `auth` | Login, JWT, guards (`JwtAuthGuard`, `RolesGuard`) |
 | `users` | CRUD de usuários (ADMIN) |
-| `teams` | Equipes vinculadas a contratos |
+| `teams` | Equipes vinculadas a contratos e setores |
 | `sectors` | Setores (ESGOTO, AGUA, REPOSICAO + customizados) |
 | `collaborators` | Colaboradores por setor/contrato |
 | `checklists` | Checklists, seções e itens |

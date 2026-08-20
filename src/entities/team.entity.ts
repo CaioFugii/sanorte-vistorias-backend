@@ -12,6 +12,7 @@ import { Collaborator } from './collaborator.entity';
 import { Inspection } from './inspection.entity';
 import { Contract } from './contract.entity';
 import { InvestmentWork } from './investment-work.entity';
+import { Sector } from './sector.entity';
 
 @Entity('teams')
 export class Team {
@@ -57,4 +58,12 @@ export class Team {
     inverseJoinColumn: { name: 'contract_id' },
   })
   contracts: Contract[];
+
+  @ManyToMany(() => Sector, (sector) => sector.teams)
+  @JoinTable({
+    name: 'team_sectors',
+    joinColumn: { name: 'team_id' },
+    inverseJoinColumn: { name: 'sector_id' },
+  })
+  sectors: Sector[];
 }

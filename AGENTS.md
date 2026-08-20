@@ -122,7 +122,7 @@ Detalhes completos: `DOMAIN.md`.
 
 ## Regras de negócio críticas
 
-1. **Setores** — colaboradores e checklists vinculados por `sectorId`; setor não deletável se em uso.
+1. **Setores** — colaboradores, checklists e equipes vinculados por setor; setor não deletável se em uso.
 2. **Checklist** — `inspectionScope`: `TEAM` (padrão) ou `COLLABORATOR`.
 3. **FISCAL** — edita vistoria apenas em `RASCUNHO`.
 4. **Criação** — `teamId` obrigatório exceto `SEGURANCA_TRABALHO`; `serviceDescription` obrigatório exceto `REMOTO`.

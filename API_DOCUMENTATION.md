@@ -68,6 +68,7 @@ Authorization: Bearer <token>
 - Equipes:
   - `POST /teams` exige `contractIds`.
   - `PUT /teams/:id` exige `contractIds`.
+  - `POST /teams` e `PUT /teams/:id` aceitam `sectorIds` (UUIDs dos setores em que a equipe atua).
 - Colaboradores:
   - `POST /collaborators` e `PUT /collaborators/:id` aceitam `contractId` (UUID) para vínculo direto com contrato.
   - quando `contractId` é informado, o contrato deve existir.
@@ -122,6 +123,7 @@ Authorization: Bearer <token>
 - Paginação padrão em listas: `page`, `limit`.
 - `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres).
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
+- `GET /teams`: filtros por `name` (busca parcial), `contractId` e `sectorId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`. Listagem **não** inclui `items`/`sections` (só `sectionCount`/`itemCount`); o grafo completo fica em `GET /checklists/:id`.
 - `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `createdByUserId` (fiscal responsável), `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`, mínimo 3 caracteres), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
 - `GET /inspections/mine`: filtros por `page`, `limit` (máximo 100) e `osNumber` (busca parcial por número da OS, mínimo 3 caracteres).
@@ -824,14 +826,14 @@ Response 201: contrato criado
 ### GET /teams
 
 - Auth: JWT
-- Query: `page`, `limit`, `name` (busca parcial), `contractId` (UUID opcional; apenas equipes ativas vinculadas a esse contrato)
-- Response: paginação de `Team` com `collaboratorCount` (sem hidratar `collaborators` nem `contracts`). Para o grafo completo, use `GET /teams/:id`.
+- Query: `page`, `limit`, `name` (busca parcial), `contractId` (UUID opcional; apenas equipes ativas vinculadas a esse contrato), `sectorId` (UUID opcional; apenas equipes ativas que atuam nesse setor)
+- Response: paginação de `Team` com `collaboratorCount` e `sectors` (sem hidratar `collaborators` nem `contracts`). Para o grafo completo, use `GET /teams/:id`.
 - Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` enxergam apenas equipes vinculadas aos contratos permitidos. Se `contractId` estiver fora do escopo, a lista vem vazia.
 
 ### GET /teams/:id
 
 - Auth: JWT
-- Response 200: `Team` com `collaborators` e `contracts`
+- Response 200: `Team` com `collaborators`, `contracts` e `sectors`
 - Response 404: equipe não encontrada
 
 ### POST /teams
@@ -845,7 +847,8 @@ Request JSON:
   "name": "Equipe Norte",
   "active": true,
   "collaboratorIds": ["uuid-1", "uuid-2"],
-  "contractIds": ["uuid-contrato-1"]
+  "contractIds": ["uuid-contrato-1"],
+  "sectorIds": ["uuid-setor-1", "uuid-setor-2"]
 }
 ```
 
@@ -857,6 +860,7 @@ Response 201:
   "name": "Equipe Norte",
   "active": true,
   "contracts": [{ "id": "uuid-contrato-1", "name": "CONTRATO_NORTE" }],
+  "sectors": [{ "id": "uuid-setor-1", "name": "AGUA" }],
   "collaborators": [
     { "id": "uuid-1", "name": "Colab 1", "active": true },
     { "id": "uuid-2", "name": "Colab 2", "active": true }
@@ -870,13 +874,14 @@ Response 201:
 
 - Auth: JWT + ADMIN
 
-Request JSON (parcial, `contractIds` obrigatório):
+Request JSON (parcial, `contractIds` obrigatório; `sectorIds` opcional):
 
 ```json
 {
   "name": "Equipe Norte Atualizada",
   "collaboratorIds": ["uuid-3"],
-  "contractIds": ["uuid-contrato-2"]
+  "contractIds": ["uuid-contrato-2"],
+  "sectorIds": ["uuid-setor-1"]
 }
 ```
 
@@ -944,7 +949,7 @@ Response 200: `Sector` atualizado
 
 - Auth: JWT + ADMIN
 - Response 200: vazio
-- Regra: retorna `400` se o setor estiver vinculado a colaboradores ou checklists
+- Regra: retorna `400` se o setor estiver vinculado a colaboradores, checklists, ordens de serviço ou equipes
 
 ## Collaborators
 
@@ -2726,6 +2731,7 @@ Mensagens relevantes do domínio:
 - `Não foi possível determinar o contractId da vistoria.`
 - `Você não tem acesso ao contrato informado para esta vistoria.`
 - `contractIds é obrigatório`
+- `Um ou mais sectorIds informados não existem`
 - `Um ou mais contratos não foram encontrados`
 - `contractId é obrigatório na importação`
 - `Contrato informado não encontrado`

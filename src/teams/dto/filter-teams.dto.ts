@@ -10,4 +10,8 @@ export class FilterTeamsDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID('4', { message: 'contractId deve ser um UUID válido' })
   contractId?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'sectorId deve ser um UUID válido' })
+  sectorId?: string;
 }

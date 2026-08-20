@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Sector, Collaborator, Checklist, ServiceOrder } from '../entities';
+import { Sector, Collaborator, Checklist, ServiceOrder, Team } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 @Injectable()
@@ -19,6 +19,8 @@ export class SectorsService {
     private checklistsRepository: Repository<Checklist>,
     @InjectRepository(ServiceOrder)
     private serviceOrdersRepository: Repository<ServiceOrder>,
+    @InjectRepository(Team)
+    private teamsRepository: Repository<Team>,
   ) {}
 
   async findAll(
@@ -81,20 +83,26 @@ export class SectorsService {
       throw new NotFoundException('Setor não encontrado');
     }
 
-    const [linkedCollaborators, linkedChecklists, linkedServiceOrders] =
+    const [linkedCollaborators, linkedChecklists, linkedServiceOrders, linkedTeams] =
       await Promise.all([
         this.collaboratorsRepository.count({ where: { sectorId: id } }),
         this.checklistsRepository.count({ where: { sectorId: id } }),
         this.serviceOrdersRepository.count({ where: { sectorId: id } }),
+        this.teamsRepository
+          .createQueryBuilder('team')
+          .innerJoin('team.sectors', 'sector')
+          .where('sector.id = :id', { id })
+          .getCount(),
       ]);
 
     if (
       linkedCollaborators > 0 ||
       linkedChecklists > 0 ||
-      linkedServiceOrders > 0
+      linkedServiceOrders > 0 ||
+      linkedTeams > 0
     ) {
       throw new BadRequestException(
-        'Não é possível deletar setor vinculado a colaboradores, checklists ou ordens de serviço',
+        'Não é possível deletar setor vinculado a colaboradores, checklists, ordens de serviço ou equipes',
       );
     }
 

@@ -185,10 +185,11 @@ Authorization: Bearer <token>
 
 - O sistema possui setores padrão (`ESGOTO`, `AGUA`, `REPOSICAO`) e permite cadastrar novos via endpoint de `sectors`.
 - `Collaborator` e `Checklist` podem ser vinculados a um setor por `sectorId`.
+- `Team` pode atuar em um ou mais setores (`sectorIds` em `POST/PUT /teams`; relação M:N em `team_sectors`).
 - Checklist pode ser criado com `inspectionScope` (`TEAM` ou `COLLABORATOR`), com padrão `TEAM` quando omitido.
 - Checklist aceita no máximo **50** perguntas (`POST /checklists/:id/items` retorna `400` acima desse teto).
 - Ao informar `sectorId` em criação/edição de colaborador ou checklist, o setor precisa existir.
-- Não é permitido deletar setor vinculado a colaboradores ou checklists.
+- Não é permitido deletar setor vinculado a colaboradores, checklists, ordens de serviço ou equipes.
 - Em `POST /inspections`, `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e opcional para `SEGURANCA_TRABALHO`.
 - FISCAL só edita vistoria em `RASCUNHO`.
 - Atualização de itens recalcula automaticamente a nota da vistoria (`scorePercent`).

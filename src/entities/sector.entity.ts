@@ -5,10 +5,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToMany,
 } from 'typeorm';
 import { Collaborator } from './collaborator.entity';
 import { Checklist } from './checklist.entity';
 import { ServiceOrder } from './service-order.entity';
+import { Team } from './team.entity';
 
 @Entity('sectors')
 export class Sector {
@@ -35,4 +37,7 @@ export class Sector {
 
   @OneToMany(() => ServiceOrder, (serviceOrder) => serviceOrder.sector)
   serviceOrders: ServiceOrder[];
+
+  @ManyToMany(() => Team, (team) => team.sectors)
+  teams: Team[];
 }

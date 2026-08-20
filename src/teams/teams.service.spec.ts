@@ -30,6 +30,7 @@ describe('TeamsService', () => {
       teamsRepository as any,
       {} as any,
       {} as any,
+      {} as any,
     );
   });
 
@@ -45,7 +46,24 @@ describe('TeamsService', () => {
       'team.collaboratorCount',
       'team.collaborators',
     );
-    expect(qb.leftJoinAndSelect).not.toHaveBeenCalled();
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('team.sectors', 'sectors');
+  });
+
+  it('filtra equipes ativas do setor informado', async () => {
+    await service.findAll(
+      { role: UserRole.ADMIN },
+      1,
+      10,
+      undefined,
+      undefined,
+      'sector-1',
+    );
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('FROM team_sectors ts'),
+      { filterSectorId: 'sector-1' },
+    );
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('team.sectors', 'sectors');
   });
 
   it('retorna vazio quando o contrato está fora do escopo do gestor', async () => {

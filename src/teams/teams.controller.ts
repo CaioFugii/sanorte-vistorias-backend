@@ -30,6 +30,7 @@ export class TeamsController {
       filters.limit || 10,
       filters.name,
       filters.contractId,
+      filters.sectorId,
     );
   }
 

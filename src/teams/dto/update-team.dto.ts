@@ -30,4 +30,10 @@ export class UpdateTeamDto {
   @ArrayUnique()
   @IsUUID('4', { each: true })
   contractIds: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  sectorIds?: string[];
 }

@@ -2,10 +2,10 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TeamsService } from './teams.service';
 import { TeamsController } from './teams.controller';
-import { Team, Collaborator, Contract } from '../entities';
+import { Team, Collaborator, Contract, Sector } from '../entities';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Team, Collaborator, Contract])],
+  imports: [TypeOrmModule.forFeature([Team, Collaborator, Contract, Sector])],
   controllers: [TeamsController],
   providers: [TeamsService],
   exports: [TeamsService],
