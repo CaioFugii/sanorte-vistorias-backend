@@ -702,6 +702,67 @@ describe('InspectionsService', () => {
     );
   });
 
+  it('findForExport deve reutilizar os filtros da listagem e limitar o volume', async () => {
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        {
+          id: 'inspection-id',
+          externalId: 'ext-1',
+          module: ModuleType.CAMPO,
+          serviceDescription: 'Servico',
+          locationDescription: 'Local',
+          status: InspectionStatus.FINALIZADA,
+          hasParalysisPenalty: false,
+          scorePercent: 88,
+          finalizedAt: null,
+          createdAt: new Date('2026-01-10T10:00:00.000Z'),
+          team: { name: 'Equipe A' },
+          serviceOrder: null,
+          investmentWork: null,
+        },
+      ]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const rows = await service.findForExport(
+      { teamId: 'team-id', service: 'REPOSIÇÃO' },
+      5000,
+      { role: UserRole.ADMIN },
+    );
+
+    expect(qb.take).toHaveBeenCalledWith(5001);
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
+      teamId: 'team-id',
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].externalId).toBe('ext-1');
+    expect(rows[0].pendingItemsCount).toBe(0);
+    expect(inspectionItemsRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('findForExport deve recusar volume acima do limite', async () => {
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }, { id: '3' }]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await expect(
+      service.findForExport({}, 2, { role: UserRole.ADMIN }),
+    ).rejects.toThrow('A exportação ultrapassa o limite de 2 vistorias');
+  });
+
   it('findMine deve retornar DTO enxuto para listagem do fiscal', async () => {
     const qb: any = {
       leftJoin: jest.fn().mockReturnThis(),

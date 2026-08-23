@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   HttpCode,
+  Res,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -17,6 +18,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { createTempDiskStorage } from '../common/multer/temp-disk.storage';
 import { InspectionsService } from './inspections.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -30,11 +32,18 @@ import { ResolveItemDto } from './dto/resolve-item.dto';
 import { ParalyzeInspectionDto } from './dto/paralyze-inspection.dto';
 import { PresignEvidenceDto } from './dto/presign-evidence.dto';
 import { ConfirmEvidenceDto } from './dto/confirm-evidence.dto';
+import { ExcelService } from '../excel/excel.service';
+import { InspectionListFilters } from './dto/inspection-list-filters';
+import { InspectionsExcelExporter } from './inspections-excel.exporter';
 
 @Controller('inspections')
 @UseGuards(JwtAuthGuard)
 export class InspectionsController {
-  constructor(private readonly inspectionsService: InspectionsService) {}
+  constructor(
+    private readonly inspectionsService: InspectionsService,
+    private readonly inspectionsExcelExporter: InspectionsExcelExporter,
+    private readonly excelService: ExcelService,
+  ) {}
 
   @Post()
   @UseGuards(RolesGuard)
@@ -51,27 +60,26 @@ export class InspectionsController {
   @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   findAll(@CurrentUser() user: any, @Query() filterDto: FilterInspectionsDto) {
     return this.inspectionsService.findAll(
-      {
-        periodFrom: filterDto.periodFrom,
-        periodTo: filterDto.periodTo,
-        module: filterDto.module,
-        inspectionScope: filterDto.inspectionScope,
-        teamId: filterDto.teamId,
-        createdByUserId: filterDto.createdByUserId,
-        contractId: filterDto.contractId,
-        status: filterDto.status,
-        osNumber: filterDto.osNumber,
-        investmentWorkId: filterDto.investmentWorkId,
-        executionFrom: filterDto.executionFrom,
-        executionTo: filterDto.executionTo,
-        inspectionFrom: filterDto.inspectionFrom,
-        inspectionTo: filterDto.inspectionTo,
-        service: filterDto.service,
-      },
+      this.toListFilters(filterDto),
       filterDto.page || 1,
       filterDto.limit || 10,
       user,
     );
+  }
+
+  @Get('export')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
+  async exportExcel(
+    @CurrentUser() user: any,
+    @Query() filterDto: FilterInspectionsDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const file = await this.inspectionsExcelExporter.export(
+      this.toListFilters(filterDto),
+      user,
+    );
+    return this.excelService.attachToResponse(file, res);
   }
 
   @Get('mine')
@@ -275,5 +283,25 @@ export class InspectionsController {
     @CurrentUser() user: any,
   ) {
     return this.inspectionsService.resolve(id, resolveDto, user.id);
+  }
+
+  private toListFilters(filterDto: FilterInspectionsDto): InspectionListFilters {
+    return {
+      periodFrom: filterDto.periodFrom,
+      periodTo: filterDto.periodTo,
+      module: filterDto.module,
+      inspectionScope: filterDto.inspectionScope,
+      teamId: filterDto.teamId,
+      createdByUserId: filterDto.createdByUserId,
+      contractId: filterDto.contractId,
+      status: filterDto.status,
+      osNumber: filterDto.osNumber,
+      investmentWorkId: filterDto.investmentWorkId,
+      executionFrom: filterDto.executionFrom,
+      executionTo: filterDto.executionTo,
+      inspectionFrom: filterDto.inspectionFrom,
+      inspectionTo: filterDto.inspectionTo,
+      service: filterDto.service,
+    };
   }
 }

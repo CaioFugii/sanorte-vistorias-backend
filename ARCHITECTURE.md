@@ -67,6 +67,7 @@ Cada domínio segue o padrão `*.module.ts` + `*.controller.ts` + `*.service.ts`
 | `contracts` | Contratos e escopo de acesso |
 | `investment-works` | Obras de investimento |
 | `reports` | Tipos e registros de relatórios de engenharia |
+| `excel` | Geração genérica de arquivos `.xlsx` (`ExcelService.build`) usada pelos exporters de domínio |
 | `uploads` / `files` / `cloudinary` | Upload e armazenamento de mídia |
 | `monitoring` | Smoke test Sentry |
 

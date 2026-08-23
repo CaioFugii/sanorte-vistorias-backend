@@ -25,6 +25,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.get<string[]>('app.corsOrigins') || [],
     credentials: false,
+    exposedHeaders: ['Content-Disposition'],
   });
   app.useGlobalInterceptors(new HttpLoggingInterceptor());
   app.useGlobalFilters(new GlobalExceptionFilter());

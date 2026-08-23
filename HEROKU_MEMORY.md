@@ -44,6 +44,7 @@ Candidatos deste projeto (ordem de impacto observada):
 - `POST /sync/inspections`
 - `POST /inspections/:id/signature` (ainda `imageBase64`)
 - `POST /service-orders/import` (`XLSX.read(file.buffer)` + Multer em memória)
+- `GET /inspections/export` (`XLSX.write` em buffer; limitado a 5000 linhas)
 - vários `GET /dashboards/*` em paralelo
 
 ## Registro — 2026-08-17

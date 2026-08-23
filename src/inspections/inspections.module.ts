@@ -17,8 +17,10 @@ import {
   InvestmentWork,
 } from '../entities';
 import { InspectionDomainService } from './inspection-domain.service';
+import { InspectionsExcelExporter } from './inspections-excel.exporter';
 import { SyncController } from './sync.controller';
 import { StorageModule } from '../storage/storage.module';
+import { ExcelModule } from '../excel/excel.module';
 
 @Module({
   imports: [
@@ -37,9 +39,10 @@ import { StorageModule } from '../storage/storage.module';
       InvestmentWork,
     ]),
     StorageModule,
+    ExcelModule,
   ],
   controllers: [InspectionsController, SyncController],
-  providers: [InspectionsService, InspectionDomainService],
+  providers: [InspectionsService, InspectionDomainService, InspectionsExcelExporter],
   exports: [InspectionsService],
 })
 export class InspectionsModule {}

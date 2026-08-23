@@ -35,6 +35,7 @@ import {
 } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { InspectionMineListItem } from './dto/inspection-mine-list-item.dto';
+import { InspectionListFilters } from './dto/inspection-list-filters';
 import { InspectionListItemDto } from './dto/inspection-list-item.dto';
 import {
   InspectionDetailEvidenceDto,
@@ -404,28 +405,11 @@ export class InspectionsService {
   }
 
   async findAll(
-    filters: {
-      periodFrom?: string;
-      periodTo?: string;
-      module?: ModuleType;
-      inspectionScope?: InspectionScope;
-      teamId?: string;
-      createdByUserId?: string;
-      contractId?: string;
-      status?: InspectionStatus;
-      osNumber?: string;
-      investmentWorkId?: string;
-      executionFrom?: string;
-      executionTo?: string;
-      inspectionFrom?: string;
-      inspectionTo?: string;
-      service?: string;
-    },
+    filters: InspectionListFilters,
     page: number = 1,
     limit: number = 10,
     userScope?: any,
   ): Promise<PaginatedResponseDto<InspectionListItemDto>> {
-    const allowedContractIds = getAllowedContractIds(userScope);
     if (filters.status === InspectionStatus.RASCUNHO) {
       return {
         data: [],
@@ -441,7 +425,147 @@ export class InspectionsService {
     }
 
     const skip = (page - 1) * limit;
+    const query = this.createListQuery(filters, userScope);
+    query.skip(skip).take(limit).orderBy('inspection.createdAt', 'DESC');
 
+    const [entities, total] = await query.getManyAndCount();
+    const pendingSummaryByInspectionId =
+      await this.getPendingItemsSummaryByInspectionIds(
+        entities.map((inspection) => inspection.id),
+      );
+    const data = entities.map((row) =>
+      this.toInspectionListItem(
+        row,
+        pendingSummaryByInspectionId.get(row.id) ?? {
+          pendingItemsCount: 0,
+          pendingItemsPreview: [],
+        },
+      ),
+    );
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
+  }
+
+  async findForExport(
+    filters: InspectionListFilters,
+    maxRows: number,
+    userScope?: any,
+  ): Promise<InspectionListItemDto[]> {
+    if (filters.status === InspectionStatus.RASCUNHO) {
+      return [];
+    }
+
+    const query = this.createListQuery(filters, userScope);
+    query.orderBy('inspection.createdAt', 'DESC').take(maxRows + 1);
+
+    const entities = await query.getMany();
+    if (entities.length > maxRows) {
+      throw new BadRequestException(
+        `A exportação ultrapassa o limite de ${maxRows} vistorias. Refine os filtros e tente novamente.`,
+      );
+    }
+
+    return entities.map((row) => this.toInspectionListItem(row));
+  }
+
+  async findMine(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    osNumber?: string,
+    inspectionScope?: InspectionScope,
+    userScope?: any,
+  ): Promise<PaginatedResponseDto<InspectionMineListItem>> {
+    const allowedContractIds = getAllowedContractIds(userScope);
+    const skip = (page - 1) * limit;
+
+    const query = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .leftJoin('inspection.team', 'team')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .leftJoin('inspection.investmentWork', 'investmentWork')
+      .select([
+        'inspection.id',
+        'inspection.externalId',
+        'inspection.module',
+        'inspection.evaluationModule',
+        'inspection.serviceDescription',
+        'inspection.locationDescription',
+        'inspection.status',
+        'inspection.hasParalysisPenalty',
+        'inspection.scorePercent',
+        'inspection.finalizedAt',
+        'inspection.createdAt',
+      ])
+      .addSelect(['team.name'])
+      .addSelect(['serviceOrder.id', 'serviceOrder.osNumber'])
+      .addSelect(['investmentWork.id', 'investmentWork.workName'])
+      .where('inspection.createdByUserId = :userId', { userId })
+      .orderBy('inspection.createdAt', 'DESC');
+
+    const osNumberTerm = this.toSearchTerm(osNumber);
+    if (osNumberTerm) {
+      query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
+        osNumber: `%${osNumberTerm}%`,
+      });
+    }
+    if (inspectionScope) {
+      query.andWhere('inspection.inspectionScope = :inspectionScope', {
+        inspectionScope,
+      });
+    }
+
+    if (allowedContractIds !== null) {
+      if (allowedContractIds.length === 0) {
+        query.andWhere('1 = 0');
+      } else {
+        query.andWhere('inspection.contractId IN (:...allowedContractIds)', {
+          allowedContractIds,
+        });
+      }
+    }
+
+    const [entities, total] = await query
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const data: InspectionMineListItem[] = entities.map((row) =>
+      this.toInspectionListItem(row),
+    );
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
+  }
+
+  private createListQuery(
+    filters: InspectionListFilters,
+    userScope?: any,
+  ) {
+    const allowedContractIds = getAllowedContractIds(userScope);
     const query = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .leftJoin('inspection.team', 'team')
@@ -553,117 +677,7 @@ export class InspectionsService {
       }
     }
 
-    query.skip(skip).take(limit).orderBy('inspection.createdAt', 'DESC');
-
-    const [entities, total] = await query.getManyAndCount();
-    const pendingSummaryByInspectionId =
-      await this.getPendingItemsSummaryByInspectionIds(
-        entities.map((inspection) => inspection.id),
-      );
-    const data = entities.map((row) =>
-      this.toInspectionListItem(
-        row,
-        pendingSummaryByInspectionId.get(row.id) ?? {
-          pendingItemsCount: 0,
-          pendingItemsPreview: [],
-        },
-      ),
-    );
-
-    const totalPages = Math.ceil(total / limit);
-
-    return {
-      data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1,
-      },
-    };
-  }
-
-  async findMine(
-    userId: string,
-    page: number = 1,
-    limit: number = 10,
-    osNumber?: string,
-    inspectionScope?: InspectionScope,
-    userScope?: any,
-  ): Promise<PaginatedResponseDto<InspectionMineListItem>> {
-    const allowedContractIds = getAllowedContractIds(userScope);
-    const skip = (page - 1) * limit;
-
-    const query = this.inspectionsRepository
-      .createQueryBuilder('inspection')
-      .leftJoin('inspection.team', 'team')
-      .leftJoin('inspection.serviceOrder', 'serviceOrder')
-      .leftJoin('inspection.investmentWork', 'investmentWork')
-      .select([
-        'inspection.id',
-        'inspection.externalId',
-        'inspection.module',
-        'inspection.evaluationModule',
-        'inspection.serviceDescription',
-        'inspection.locationDescription',
-        'inspection.status',
-        'inspection.hasParalysisPenalty',
-        'inspection.scorePercent',
-        'inspection.finalizedAt',
-        'inspection.createdAt',
-      ])
-      .addSelect(['team.name'])
-      .addSelect(['serviceOrder.id', 'serviceOrder.osNumber'])
-      .addSelect(['investmentWork.id', 'investmentWork.workName'])
-      .where('inspection.createdByUserId = :userId', { userId })
-      .orderBy('inspection.createdAt', 'DESC');
-
-    const osNumberTerm = this.toSearchTerm(osNumber);
-    if (osNumberTerm) {
-      query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
-        osNumber: `%${osNumberTerm}%`,
-      });
-    }
-    if (inspectionScope) {
-      query.andWhere('inspection.inspectionScope = :inspectionScope', {
-        inspectionScope,
-      });
-    }
-
-    if (allowedContractIds !== null) {
-      if (allowedContractIds.length === 0) {
-        query.andWhere('1 = 0');
-      } else {
-        query.andWhere('inspection.contractId IN (:...allowedContractIds)', {
-          allowedContractIds,
-        });
-      }
-    }
-
-    const [entities, total] = await query
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
-
-    const data: InspectionMineListItem[] = entities.map((row) =>
-      this.toInspectionListItem(row),
-    );
-
-    const totalPages = Math.ceil(total / limit);
-
-    return {
-      data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1,
-      },
-    };
+    return query;
   }
 
   private toInspectionListItem(

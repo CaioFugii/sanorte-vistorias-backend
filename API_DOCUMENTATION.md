@@ -32,7 +32,7 @@ Authorization: Bearer <token>
 - Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections`, `items` e upload de imagem de referência
 - Ordens de Serviço (OS): `GET /service-orders`, `POST /service-orders/import`, `DELETE /service-orders/:id` (ADMIN)
 - Vistorias:
-  - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/mine`, `GET /inspections/:id`
+  - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/export`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
   - anexos e assinatura: `POST /inspections/:id/evidences/presign`, `POST /inspections/:id/evidences/from-storage`, `POST /inspections/:id/evidences`, `DELETE /inspections/:id/evidences/:evidenceId`, `POST /inspections/:id/signature`
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
@@ -56,6 +56,7 @@ Authorization: Bearer <token>
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
 - `GET /inspections` (GESTOR/SUPERVISOR/ADMIN) não retorna `RASCUNHO`.
+- `GET /inspections/export` exporta a mesma listagem filtrada em Excel (`.xlsx`); não inclui rascunhos; máximo de 5000 linhas.
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
 - Escopo por contrato:
   - `ADMIN` vê todos os dados.
@@ -126,6 +127,7 @@ Authorization: Bearer <token>
 - `GET /teams`: filtros por `name` (busca parcial), `contractId` e `sectorId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`. Listagem **não** inclui `items`/`sections` (só `sectionCount`/`itemCount`); o grafo completo fica em `GET /checklists/:id`.
 - `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `createdByUserId` (fiscal responsável), `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`, mínimo 3 caracteres), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
+- `GET /inspections/export`: mesmos filtros de `GET /inspections` (sem paginação); resposta binária `.xlsx`.
 - `GET /inspections/mine`: filtros por `page`, `limit` (máximo 100) e `osNumber` (busca parcial por número da OS, mínimo 3 caracteres).
 
 ### Contratos e padrões de resposta
@@ -1386,6 +1388,20 @@ Observação: imagens de referência dos itens ficam no `GET /checklists/:id` (`
 - Regra: esta listagem não retorna vistorias com status `RASCUNHO`
 - Regra: se `status=RASCUNHO` for informado, o retorno é vazio (`data: []`)
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas vistorias vinculadas aos seus contratos (via `inspection.contractId`), inclusive quando não há OS
+
+### GET /inspections/export
+
+- Auth: JWT + GESTOR ou SUPERVISOR ou ADMIN
+- Query: os mesmos filtros de `GET /inspections` (`periodFrom`, `periodTo`, `module`, `inspectionScope`, `teamId`, `createdByUserId`, `contractId`, `status`, `osNumber`, `service`, `executionFrom`/`executionTo`, `inspectionFrom`/`inspectionTo`, `investmentWorkId`). `page` e `limit` são ignorados.
+- Response: arquivo Excel (`.xlsx`)
+  - `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+  - `Content-Disposition: attachment; filename="vistorias-YYYY-MM-DD.xlsx"`
+- Regras:
+  - reutiliza a mesma query e o mesmo escopo de contrato da listagem
+  - não inclui vistorias em `RASCUNHO`
+  - se `status=RASCUNHO`, retorna planilha só com cabeçalho
+  - máximo de **5000** linhas; acima disso retorna `400` pedindo para refinar os filtros
+- Colunas: Módulo, OS / Obra, Descrição do serviço, Serviço, Data de execução, Equipe, Localização, Status, Percentual, Data da vistoria
 
 Contrato por item (`InspectionListDTO`):
 
