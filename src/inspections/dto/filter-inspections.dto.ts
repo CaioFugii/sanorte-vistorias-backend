@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   IsOptional,
   IsEnum,
@@ -5,11 +6,13 @@ import {
   IsDateString,
   IsString,
   MaxLength,
+  IsArray,
 } from 'class-validator';
 import {
   ModuleType,
   InspectionStatus,
   InspectionScope,
+  InspectionExcelLayout,
 } from '../../common/enums';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -27,6 +30,24 @@ export class FilterInspectionsDto extends PaginationQueryDto {
     message: `module must be one of: ${Object.values(ModuleType).join(', ')}`,
   })
   module?: ModuleType;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value == null || value === '') {
+      return undefined;
+    }
+    const list = Array.isArray(value) ? value : String(value).split(',');
+    const modules = list
+      .map((item) => String(item).trim())
+      .filter((item) => item.length > 0);
+    return modules.length > 0 ? modules : undefined;
+  })
+  @IsArray()
+  @IsEnum(ModuleType, {
+    each: true,
+    message: `modules must be one of: ${Object.values(ModuleType).join(', ')}`,
+  })
+  modules?: ModuleType[];
 
   @IsOptional()
   @IsEnum(InspectionScope, {
@@ -80,4 +101,12 @@ export class FilterInspectionsDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID('4', { message: 'investmentWorkId must be a valid UUID' })
   investmentWorkId?: string;
+}
+
+export class ExportInspectionsDto extends FilterInspectionsDto {
+  @IsOptional()
+  @IsEnum(InspectionExcelLayout, {
+    message: `layout must be one of: ${Object.values(InspectionExcelLayout).join(', ')}`,
+  })
+  layout?: InspectionExcelLayout;
 }

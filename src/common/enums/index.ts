@@ -9,3 +9,4 @@ export * from './report-orientation.enum';
 export * from './investment-work-status.enum';
 export * from './investment-work-evaluation-module.enum';
 export * from './storage-provider.enum';
+export * from './inspection-excel-layout.enum';

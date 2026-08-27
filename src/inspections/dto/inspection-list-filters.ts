@@ -8,6 +8,7 @@ export type InspectionListFilters = {
   periodFrom?: string;
   periodTo?: string;
   module?: ModuleType;
+  modules?: ModuleType[];
   inspectionScope?: InspectionScope;
   teamId?: string;
   createdByUserId?: string;

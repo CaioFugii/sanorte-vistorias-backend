@@ -468,7 +468,11 @@ export class InspectionsService {
     }
 
     const query = this.createListQuery(filters, userScope);
-    query.orderBy('inspection.createdAt', 'DESC').take(maxRows + 1);
+    query
+      .leftJoin('inspection.createdBy', 'createdBy')
+      .addSelect(['createdBy.id', 'createdBy.name'])
+      .orderBy('inspection.createdAt', 'DESC')
+      .take(maxRows + 1);
 
     const entities = await query.getMany();
     if (entities.length > maxRows) {
@@ -477,7 +481,21 @@ export class InspectionsService {
       );
     }
 
-    return entities.map((row) => this.toInspectionListItem(row));
+    const pendingSummaryByInspectionId =
+      await this.getPendingItemsSummaryByInspectionIds(
+        entities.map((inspection) => inspection.id),
+        8,
+      );
+
+    return entities.map((row) =>
+      this.toInspectionListItem(
+        row,
+        pendingSummaryByInspectionId.get(row.id) ?? {
+          pendingItemsCount: 0,
+          pendingItemsPreview: [],
+        },
+      ),
+    );
   }
 
   async findMine(
@@ -603,6 +621,10 @@ export class InspectionsService {
     }
     if (filters.module) {
       query.andWhere('inspection.module = :module', { module: filters.module });
+    } else if (filters.modules && filters.modules.length > 0) {
+      query.andWhere('inspection.module IN (:...modules)', {
+        modules: filters.modules,
+      });
     }
     if (filters.inspectionScope) {
       query.andWhere('inspection.inspectionScope = :inspectionScope', {
@@ -712,11 +734,15 @@ export class InspectionsService {
         : null,
       pendingItemsCount: pendingSummary?.pendingItemsCount ?? 0,
       pendingItemsPreview: pendingSummary?.pendingItemsPreview ?? [],
+      ...(inspection.createdBy?.name
+        ? { createdBy: { name: inspection.createdBy.name } }
+        : {}),
     };
   }
 
   private async getPendingItemsSummaryByInspectionIds(
     inspectionIds: string[],
+    previewLimit: number = 3,
   ): Promise<Map<string, PendingItemsSummary>> {
     if (inspectionIds.length === 0) {
       return new Map<string, PendingItemsSummary>();
@@ -758,7 +784,7 @@ export class InspectionsService {
       };
 
       current.pendingItemsCount += 1;
-      if (current.pendingItemsPreview.length < 3) {
+      if (current.pendingItemsPreview.length < previewLimit) {
         current.pendingItemsPreview.push(
           this.resolvePendingItemPreviewText(row.title, row.description),
         );

@@ -28,4 +28,5 @@ export interface InspectionListItemDto {
   } | null;
   pendingItemsCount?: number;
   pendingItemsPreview?: string[];
+  createdBy?: { name: string } | null;
 }

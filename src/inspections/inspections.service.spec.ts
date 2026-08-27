@@ -729,6 +729,17 @@ describe('InspectionsService', () => {
       ]),
     };
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+    const pendingQb: any = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    };
+    inspectionItemsRepository.createQueryBuilder.mockReturnValue(pendingQb);
 
     const rows = await service.findForExport(
       { teamId: 'team-id', service: 'REPOSIÇÃO' },
@@ -743,7 +754,7 @@ describe('InspectionsService', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].externalId).toBe('ext-1');
     expect(rows[0].pendingItemsCount).toBe(0);
-    expect(inspectionItemsRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(inspectionItemsRepository.createQueryBuilder).toHaveBeenCalled();
   });
 
   it('findForExport deve recusar volume acima do limite', async () => {

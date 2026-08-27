@@ -56,7 +56,7 @@ Authorization: Bearer <token>
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
 - `GET /inspections` (GESTOR/SUPERVISOR/ADMIN) não retorna `RASCUNHO`.
-- `GET /inspections/export` exporta a mesma listagem filtrada em Excel (`.xlsx`); não inclui rascunhos; máximo de 5000 linhas.
+- `GET /inspections/export` exporta a listagem filtrada em Excel (`.xlsx`); não inclui rascunhos; máximo de 5000 linhas. `layout=avaliacoes` (Vistorias - Qualidade) ou `layout=pendencias` (Pendências de Ajuste).
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
 - Escopo por contrato:
   - `ADMIN` vê todos os dados.
@@ -127,7 +127,7 @@ Authorization: Bearer <token>
 - `GET /teams`: filtros por `name` (busca parcial), `contractId` e `sectorId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`. Listagem **não** inclui `items`/`sections` (só `sectionCount`/`itemCount`); o grafo completo fica em `GET /checklists/:id`.
 - `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `createdByUserId` (fiscal responsável), `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`, mínimo 3 caracteres), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
-- `GET /inspections/export`: mesmos filtros de `GET /inspections` (sem paginação); resposta binária `.xlsx`.
+- `GET /inspections/export`: mesmos filtros de `GET /inspections` (sem paginação) + `layout` (`avaliacoes` | `pendencias`) e `modules` (lista CSV); resposta binária `.xlsx`.
 - `GET /inspections/mine`: filtros por `page`, `limit` (máximo 100) e `osNumber` (busca parcial por número da OS, mínimo 3 caracteres).
 
 ### Contratos e padrões de resposta
@@ -1392,16 +1392,21 @@ Observação: imagens de referência dos itens ficam no `GET /checklists/:id` (`
 ### GET /inspections/export
 
 - Auth: JWT + GESTOR ou SUPERVISOR ou ADMIN
-- Query: os mesmos filtros de `GET /inspections` (`periodFrom`, `periodTo`, `module`, `inspectionScope`, `teamId`, `createdByUserId`, `contractId`, `status`, `osNumber`, `service`, `executionFrom`/`executionTo`, `inspectionFrom`/`inspectionTo`, `investmentWorkId`). `page` e `limit` são ignorados.
+- Query: os mesmos filtros de `GET /inspections` (`periodFrom`, `periodTo`, `module`, `modules` (CSV ou repetido), `inspectionScope`, `teamId`, `createdByUserId`, `contractId`, `status`, `osNumber`, `service`, `executionFrom`/`executionTo`, `inspectionFrom`/`inspectionTo`, `investmentWorkId`). `page` e `limit` são ignorados.
+- Query extra:
+  - `layout` (`avaliacoes` | `pendencias`) — define nome do arquivo, aba e colunas. Default `avaliacoes`.
+  - `modules` — quando `module` não é enviado, restringe a um conjunto de módulos (ex.: tela de Qualidade com "Todos os módulos")
 - Response: arquivo Excel (`.xlsx`)
   - `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
-  - `Content-Disposition: attachment; filename="vistorias-YYYY-MM-DD.xlsx"`
+  - `Content-Disposition: attachment; filename="vistorias-qualidade-YYYY-MM-DD.xlsx"` (`avaliacoes`) ou `pendencias-ajuste-YYYY-MM-DD.xlsx` (`pendencias`)
 - Regras:
   - reutiliza a mesma query e o mesmo escopo de contrato da listagem
+  - o recorte do arquivo é **somente o resultado dos filtros da tela**
   - não inclui vistorias em `RASCUNHO`
   - se `status=RASCUNHO`, retorna planilha só com cabeçalho
   - máximo de **5000** linhas; acima disso retorna `400` pedindo para refinar os filtros
-- Colunas: Módulo, OS / Obra, Descrição do serviço, Serviço, Data de execução, Equipe, Localização, Status, Percentual, Data da vistoria
+- Colunas `avaliacoes`: Módulo, Fiscal, OS / Obra, Descrição, Serviço, Data de execução, Equipe, Endereço, Status, Percentual, Data da vistoria, NC 1–8
+- Colunas `pendencias`: Módulo, OS / Obra, Descrição do serviço, Serviço, Data de execução, Localização, Equipe, Status, Percentual, Data da vistoria, NC 1–8
 
 Contrato por item (`InspectionListDTO`):
 

@@ -25,8 +25,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { UserRole } from '../common/enums';
-import { FilterInspectionsDto } from './dto/filter-inspections.dto';
+import { InspectionExcelLayout, UserRole } from '../common/enums';
+import { FilterInspectionsDto, ExportInspectionsDto } from './dto/filter-inspections.dto';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
 import { ResolveItemDto } from './dto/resolve-item.dto';
 import { ParalyzeInspectionDto } from './dto/paralyze-inspection.dto';
@@ -72,12 +72,13 @@ export class InspectionsController {
   @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   async exportExcel(
     @CurrentUser() user: any,
-    @Query() filterDto: FilterInspectionsDto,
+    @Query() filterDto: ExportInspectionsDto,
     @Res({ passthrough: true }) res: Response,
   ) {
     const file = await this.inspectionsExcelExporter.export(
       this.toListFilters(filterDto),
       user,
+      filterDto.layout || InspectionExcelLayout.AVALIACOES,
     );
     return this.excelService.attachToResponse(file, res);
   }
@@ -290,6 +291,7 @@ export class InspectionsController {
       periodFrom: filterDto.periodFrom,
       periodTo: filterDto.periodTo,
       module: filterDto.module,
+      modules: filterDto.modules,
       inspectionScope: filterDto.inspectionScope,
       teamId: filterDto.teamId,
       createdByUserId: filterDto.createdByUserId,
