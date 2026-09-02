@@ -1916,6 +1916,7 @@ Response 200:
 - Path:
   - `code`: código do tipo de relatório (ex.: `VISTORIA_OBRA`)
 - Response: schema dinâmico do formulário (`report_type_fields`) ordenado por `order`
+- Todos os tipos de relatório de engenharia incluem `data_emissao` (`date`, obrigatório, `order` 1). O frontend preenche o padrão com a data de hoje (calendário local); o usuário pode alterar antes de gerar o PDF.
 
 Response 200:
 
