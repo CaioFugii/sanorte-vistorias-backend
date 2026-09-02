@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- Campo `titulo_complemento` (select) nos relatórios `LIGACAO_PASSEIO` e `LIGACOES`; opções de `preco` passam a gravar só o código
 - Relação M:N entre equipes e setores (`team_sectors`); `sectorIds` em `POST/PUT /teams` e filtro `sectorId` em `GET /teams`
 - Limite de 50 perguntas (`ChecklistItem`) por checklist em `POST /checklists/:id/items`
 - `evaluationModule` (`CAMPO` | `POS_OBRA`) em vistorias de `OBRAS_INVESTIMENTO`; vistorias antigas do módulo foram migradas para `CAMPO`
