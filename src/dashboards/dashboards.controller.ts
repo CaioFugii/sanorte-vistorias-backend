@@ -361,6 +361,19 @@ export class DashboardsController {
     });
   }
 
+  @Get('safety-work/inspectors-production')
+  getSafetyWorkInspectorsProduction(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
+    return this.dashboardsService.getSafetyWorkInspectorsProduction({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
   @Get('team-performance-by-teams')
   getTeamPerformanceByTeams(
     @CurrentUser() user: any,

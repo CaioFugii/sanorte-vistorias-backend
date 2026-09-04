@@ -73,6 +73,12 @@ describe('DashboardsController (integration)', () => {
       lowScoreThreshold: 70,
       collaborators: [],
     }),
+    getSafetyWorkInspectorsProduction: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      days: [],
+      inspectors: [],
+    }),
     getTopNonConformitiesByChecklist: jest.fn().mockResolvedValue({
       from: '2025-11-01',
       to: '2025-11-30',
@@ -223,6 +229,22 @@ describe('DashboardsController (integration)', () => {
       .query({ from: '2025-11-01', to: '2025-11-30' })
       .set('x-role', 'ADMIN')
       .expect(200);
+  });
+
+  it('deve permitir ADMIN no endpoint de produção diária de fiscais de ST', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/safety-work/inspectors-production')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'ADMIN')
+      .expect(200);
+  });
+
+  it('deve bloquear FISCAL no endpoint de produção diária de fiscais de ST', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/safety-work/inspectors-production')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'FISCAL')
+      .expect(403);
   });
 
   it('deve permitir GESTOR no endpoint de não conformidades por checklist', async () => {

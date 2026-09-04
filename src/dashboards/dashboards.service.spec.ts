@@ -145,6 +145,29 @@ describe('DashboardsService', () => {
     ).rejects.toThrow('module inválido para o setor SAFETY_WORK');
   });
 
+  it('não restringe setores de qualidade na evolução mensal de Segurança do Trabalho', async () => {
+    const qb = createMockQueryBuilder({ rawMany: [] });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getQualityByService({
+      from: '2026-05-01',
+      to: '2026-09-04',
+      sector: 'SAFETY_WORK' as any,
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO],
+      },
+    );
+    expect(
+      qb.andWhere.mock.calls.some(([sql]: [string]) =>
+        String(sql).includes('IN (:...allowedSectors)'),
+      ),
+    ).toBe(false);
+  });
+
   it('deve aplicar filtros de module e teamId nas consultas de qualidade', async () => {
     const qb = createMockQueryBuilder({});
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
@@ -1128,5 +1151,102 @@ describe('DashboardsService', () => {
         dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO],
       },
     );
+  });
+
+  it('deve agregar produção diária por fiscal apenas em Segurança do Trabalho', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          userId: 'user-2',
+          userName: 'Richardson Constantino',
+          day: '2026-09-01',
+          inspectionsCount: '2',
+        },
+        {
+          userId: 'user-2',
+          userName: 'Richardson Constantino',
+          day: '2026-09-03',
+          inspectionsCount: '1',
+        },
+        {
+          userId: 'user-1',
+          userName: 'Daiana Freire',
+          day: '2026-09-01',
+          inspectionsCount: '3',
+        },
+        {
+          userId: 'user-1',
+          userName: 'Daiana Freire',
+          day: '2026-09-02',
+          inspectionsCount: '2',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getSafetyWorkInspectorsProduction({
+      from: '2026-09-01',
+      to: '2026-09-03',
+      contractId: 'contract-1',
+      user: { role: 'ADMIN' },
+    });
+
+    expect(result.from).toBe('2026-09-01');
+    expect(result.to).toBe('2026-09-03');
+    expect(result.days).toEqual(['2026-09-01', '2026-09-02', '2026-09-03']);
+    expect(result.inspectors).toEqual([
+      {
+        userId: 'user-1',
+        userName: 'Daiana Freire',
+        inspectionsCount: 5,
+        daysWithInspections: 2,
+        dailyAverage: 2.5,
+        dailyCounts: [
+          { date: '2026-09-01', count: 3 },
+          { date: '2026-09-02', count: 2 },
+          { date: '2026-09-03', count: 0 },
+        ],
+      },
+      {
+        userId: 'user-2',
+        userName: 'Richardson Constantino',
+        inspectionsCount: 3,
+        daysWithInspections: 2,
+        dailyAverage: 1.5,
+        dailyCounts: [
+          { date: '2026-09-01', count: 2 },
+          { date: '2026-09-02', count: 0 },
+          { date: '2026-09-03', count: 1 },
+        ],
+      },
+    ]);
+
+    expect(qb.innerJoin).toHaveBeenCalledWith(
+      'inspection.createdBy',
+      'createdBy',
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO],
+      },
+    );
+    expect(
+      qb.andWhere.mock.calls.some(([sql]: [string]) =>
+        sql.includes(
+          'COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('deve rejeitar intervalo invertido na produção de fiscais', async () => {
+    await expect(
+      service.getSafetyWorkInspectorsProduction({
+        from: '2026-09-04',
+        to: '2026-09-01',
+      }),
+    ).rejects.toThrow('A data inicial (from) não pode ser posterior');
+    expect(inspectionsRepository.createQueryBuilder).not.toHaveBeenCalled();
   });
 });

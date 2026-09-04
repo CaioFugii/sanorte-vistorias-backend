@@ -41,7 +41,7 @@ Authorization: Bearer <token>
   - consulta de formulário para renderização no frontend (sem persistência)
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
+- Dashboards: `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
 
 ### Regras críticas que impactam UI
 
@@ -2131,7 +2131,7 @@ Aliases de compatibilidade (mesmo contrato de query/response do endpoint-base co
 - `GET /dashboards/quality/teams/:teamId` → mesmo comportamento de `GET /dashboards/teams/:teamId` (setor `QUALITY`)
 - `GET /dashboards/safety-work/teams/:teamId` → mesmo comportamento de `GET /dashboards/teams/:teamId` (setor `SAFETY_WORK`)
 - `GET /dashboards/quality/quality-by-service` → mesmo comportamento de `GET /dashboards/quality-by-service` (setor `QUALITY`)
-- `GET /dashboards/safety-work/quality-by-service` → mesmo comportamento de `GET /dashboards/quality-by-service` (setor `SAFETY_WORK`)
+- `GET /dashboards/safety-work/quality-by-service` → mesmo comportamento de `GET /dashboards/quality-by-service` (setor `SAFETY_WORK`); não aplica o filtro de setores de Qualidade (`AGUA`, `ESGOTO`, etc.)
 - `GET /dashboards/quality/current-month-by-service` → mesmo comportamento de `GET /dashboards/current-month-by-service` (setor `QUALITY`)
 - `GET /dashboards/safety-work/current-month-by-service` → mesmo comportamento de `GET /dashboards/current-month-by-service` (setor `SAFETY_WORK`)
 - `GET /dashboards/quality/team-performance-by-teams` → mesmo comportamento de `GET /dashboards/team-performance-by-teams` (setor `QUALITY`)
@@ -2472,6 +2472,7 @@ Response 404 quando a equipe não existe:
   - `PENDENTE_AJUSTE`
   - `RESOLVIDA`
 - Observação: para `SEGURANCA_TRABALHO`, o fluxo não utiliza `PENDENTE_AJUSTE`.
+- Alias `GET /dashboards/safety-work/quality-by-service` restringe ao módulo `SEGURANCA_TRABALHO` e **não** aplica o whitelist de setores de Qualidade (`AGUA`, `DESOBSTRUCAO`, `ESGOTO`, `HIDROMETRIA`, `REPOSICAO`).
 - `qualityPercent` é `AVG(scorePercent)` no agrupamento mês + serviço.
 - `growthPercent` é a variação percentual do último mês do período versus o mês anterior.
 
@@ -2540,6 +2541,49 @@ Response 200:
   ]
 }
 ```
+
+### GET /dashboards/safety-work/inspectors-production
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `contractId` (`uuid`) opcional
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Considera apenas vistorias de `SEGURANCA_TRABALHO` (não mistura Qualidade nem Obras de Investimento), excluindo `RASCUNHO`.
+- Agrupa pelo usuário criador da vistoria (`createdBy`), no fuso `America/Sao_Paulo`, pela data de `COALESCE(inspection.finalizedAt, inspection.createdAt)`.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+
+Response 200:
+
+```json
+{
+  "from": "2026-09-01",
+  "to": "2026-09-04",
+  "days": ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"],
+  "inspectors": [
+    {
+      "userId": "uuid",
+      "userName": "Daiana Freire",
+      "inspectionsCount": 7,
+      "daysWithInspections": 3,
+      "dailyAverage": 2.33,
+      "dailyCounts": [
+        { "date": "2026-09-01", "count": 3 },
+        { "date": "2026-09-02", "count": 2 },
+        { "date": "2026-09-03", "count": 0 },
+        { "date": "2026-09-04", "count": 2 }
+      ]
+    }
+  ]
+}
+```
+
+- `inspectionsCount`: somatória de vistorias do fiscal no período.
+- `daysWithInspections`: quantidade de dias do período com ao menos uma vistoria.
+- `dailyAverage`: média de vistorias por dia trabalhado (`inspectionsCount / daysWithInspections`).
+- `dailyCounts`: quantidade de vistorias em cada dia do intervalo (`from`–`to`), inclusive dias com zero.
 
 ### GET /dashboards/safety-work/low-score-collaborators
 

@@ -20,6 +20,7 @@ import {
 } from '../common/auth/contract-scope.util';
 import {
   CurrentMonthByServiceResponseDto,
+  InspectorsProductionResponseDto,
   LowScoreCollaboratorsResponseDto,
   NonConformitiesByChecklistResponseDto,
   NonConformitiesByTeamResponseDto,
@@ -126,6 +127,19 @@ function serviceKeyFromLabel(label: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
+}
+
+function periodDays(from: string, to: string): string[] {
+  const result: string[] = [];
+  const current = new Date(`${from}T00:00:00.000Z`);
+  const end = new Date(`${to}T00:00:00.000Z`);
+
+  while (current <= end) {
+    result.push(toDateOnlyString(current));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  return result;
 }
 
 function periodMonths(from: string, to: string): string[] {
@@ -1082,12 +1096,16 @@ export class DashboardsService {
       .where('inspection.status IN (:...qualityStatuses)', {
         qualityStatuses: QUALITY_RELEVANT_STATUSES,
       })
-      .andWhere(`UPPER(TRIM(${serviceLabelExpr})) IN (:...allowedSectors)`, {
-        allowedSectors: QUALITY_BY_SERVICE_ALLOWED_SECTORS,
-      })
       .andWhere(`${dayExpr} >= :from`, { from: filters.from })
-      .andWhere(`${dayExpr} <= :to`, { to: filters.to })
-      .groupBy(monthExpr)
+      .andWhere(`${dayExpr} <= :to`, { to: filters.to });
+
+    if (filters.sector !== 'SAFETY_WORK') {
+      qb.andWhere(`UPPER(TRIM(${serviceLabelExpr})) IN (:...allowedSectors)`, {
+        allowedSectors: QUALITY_BY_SERVICE_ALLOWED_SECTORS,
+      });
+    }
+
+    qb.groupBy(monthExpr)
       .addGroupBy(serviceLabelExpr)
       .orderBy(monthExpr, 'ASC')
       .addOrderBy(serviceLabelExpr, 'ASC');
@@ -1816,6 +1834,114 @@ export class DashboardsService {
           checklistsCount,
         };
       }),
+    };
+  }
+
+  async getSafetyWorkInspectorsProduction(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<InspectorsProductionResponseDto> {
+    this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
+    const days = periodDays(filters.from, filters.to);
+    const dayExpr = `TO_CHAR(timezone('${DASHBOARD_TIMEZONE}', COALESCE(inspection.finalizedAt, inspection.createdAt)), 'YYYY-MM-DD')`;
+
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.createdBy', 'createdBy')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select('createdBy.id', 'userId')
+      .addSelect('createdBy.name', 'userName')
+      .addSelect(dayExpr, 'day')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .groupBy('createdBy.id')
+      .addGroupBy('createdBy.name')
+      .addGroupBy(dayExpr)
+      .orderBy('createdBy.name', 'ASC')
+      .addOrderBy(dayExpr, 'ASC');
+
+    this.applyQualityFilters(qb, { sector: 'SAFETY_WORK' });
+    const periodModule = this.resolvePeriodModule(undefined, 'SAFETY_WORK');
+    this.applyDashboardPeriodFilter(qb, {
+      from: filters.from,
+      to: toLimit,
+      module: periodModule,
+    });
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
+
+    const rows = await qb.getRawMany<{
+      userId: string;
+      userName: string;
+      day: string;
+      inspectionsCount: string;
+    }>();
+
+    const inspectorsMap = new Map<
+      string,
+      {
+        userId: string;
+        userName: string;
+        countsByDay: Map<string, number>;
+      }
+    >();
+
+    for (const row of rows) {
+      const existing = inspectorsMap.get(row.userId) ?? {
+        userId: row.userId,
+        userName: row.userName,
+        countsByDay: new Map<string, number>(),
+      };
+      existing.countsByDay.set(row.day, parseInt(row.inspectionsCount ?? '0', 10));
+      inspectorsMap.set(row.userId, existing);
+    }
+
+    const inspectors = Array.from(inspectorsMap.values())
+      .map((inspector) => {
+        const dailyCounts = days.map((date) => ({
+          date,
+          count: inspector.countsByDay.get(date) ?? 0,
+        }));
+        const inspectionsCount = dailyCounts.reduce(
+          (sum, item) => sum + item.count,
+          0,
+        );
+        const daysWithInspections = dailyCounts.filter(
+          (item) => item.count > 0,
+        ).length;
+
+        return {
+          userId: inspector.userId,
+          userName: inspector.userName,
+          inspectionsCount,
+          daysWithInspections,
+          dailyAverage:
+            daysWithInspections > 0
+              ? roundTo2(inspectionsCount / daysWithInspections)
+              : 0,
+          dailyCounts,
+        };
+      })
+      .sort((a, b) => {
+        if (b.inspectionsCount !== a.inspectionsCount) {
+          return b.inspectionsCount - a.inspectionsCount;
+        }
+        return a.userName.localeCompare(b.userName, 'pt-BR');
+      });
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      days,
+      inspectors,
     };
   }
 }
