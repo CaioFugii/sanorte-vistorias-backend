@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, StreamableFile } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  StreamableFile,
+} from '@nestjs/common';
 import { Response } from 'express';
 import * as XLSX from 'xlsx';
 import {
@@ -10,6 +14,7 @@ import {
 import {
   ExcelCellValue,
   ExcelFile,
+  ExcelGridWorkbookSpec,
   ExcelWorkbookSpec,
 } from './excel.types';
 
@@ -40,6 +45,53 @@ export class ExcelService {
       worksheet['!cols'] = sheet.columns.map((column) => ({
         wch: column.width ?? Math.max(column.header.length + 2, 14),
       }));
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        this.uniqueSheetName(sheet.name, usedNames),
+      );
+    }
+
+    const buffer = XLSX.write(workbook, {
+      type: 'buffer',
+      bookType: 'xlsx',
+    }) as Buffer;
+
+    return {
+      filename: sanitizeExcelFilename(spec.filename),
+      mimeType: EXCEL_MIME_TYPE,
+      buffer,
+    };
+  }
+
+  buildFromGrid(spec: ExcelGridWorkbookSpec): ExcelFile {
+    if (!spec.sheets?.length) {
+      throw new BadRequestException(
+        'A planilha precisa de pelo menos uma aba para ser gerada.',
+      );
+    }
+
+    const workbook = XLSX.utils.book_new();
+    const usedNames = new Set<string>();
+
+    for (const sheet of spec.sheets) {
+      if (!sheet.rows?.length) {
+        throw new BadRequestException(
+          `A aba "${sheet.name}" precisa de pelo menos uma linha.`,
+        );
+      }
+
+      const normalizedRows = sheet.rows.map((row) =>
+        row.map((cell) => this.normalizeCell(cell)),
+      );
+      const worksheet = XLSX.utils.aoa_to_sheet(normalizedRows);
+      if (sheet.cols?.length) {
+        worksheet['!cols'] = sheet.cols;
+      }
+      if (sheet.merges?.length) {
+        worksheet['!merges'] = sheet.merges;
+      }
 
       XLSX.utils.book_append_sheet(
         workbook,

@@ -1,10 +1,13 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { DashboardsService } from './dashboards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
+import { ExcelService } from '../excel/excel.service';
+import { QualityRankingExcelExporter } from './quality-ranking-excel.exporter';
 import {
   CurrentMonthByServiceQueryDto,
   DashboardQueryDto,
@@ -20,7 +23,11 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
 export class DashboardsController {
-  constructor(private readonly dashboardsService: DashboardsService) {}
+  constructor(
+    private readonly dashboardsService: DashboardsService,
+    private readonly qualityRankingExcelExporter: QualityRankingExcelExporter,
+    private readonly excelService: ExcelService,
+  ) {}
 
   private summaryFilters(
     user: any,
@@ -145,7 +152,10 @@ export class DashboardsController {
   }
 
   @Get('quality/summary')
-  getQualitySummary(@CurrentUser() user: any, @Query() query: DashboardQueryDto) {
+  getQualitySummary(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
     return this.dashboardsService.getSummary(
       this.summaryFilters(user, query, 'QUALITY', true),
     );
@@ -176,6 +186,24 @@ export class DashboardsController {
     return this.dashboardsService.getTeamsRanking(
       this.summaryFilters(user, query, 'QUALITY'),
     );
+  }
+
+  @Get('ranking/teams/export')
+  exportTeamsRankingExcel(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.exportQualityRanking(user, query, res);
+  }
+
+  @Get('quality/ranking/teams/export')
+  exportQualityTeamsRankingExcel(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.exportQualityRanking(user, query, res);
   }
 
   @Get('ranking/teams/safety-work')
@@ -421,5 +449,16 @@ export class DashboardsController {
     return this.dashboardsService.getTopNonConformitiesByTeam(
       this.nonConformitiesByTeamFilters(user, query, 'SAFETY_WORK'),
     );
+  }
+
+  private async exportQualityRanking(
+    user: any,
+    query: DashboardQueryDto,
+    res: Response,
+  ) {
+    const file = await this.qualityRankingExcelExporter.export(
+      this.summaryFilters(user, query, 'QUALITY'),
+    );
+    return this.excelService.attachToResponse(file, res);
   }
 }

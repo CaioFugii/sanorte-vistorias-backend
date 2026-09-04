@@ -65,8 +65,16 @@ const QUALITY_RANKING_MODULES = [
 ];
 const SAFETY_WORK_DASHBOARD_MODULES = [ModuleType.SEGURANCA_TRABALHO];
 
-function rankingModuleScoreExpr(targetParam: 'fieldModule' | 'postWorkModule'): string {
+function rankingModuleScoreExpr(
+  targetParam: 'fieldModule' | 'postWorkModule',
+): string {
   return `AVG(CASE WHEN inspection.module = :${targetParam} OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:${targetParam} AS text)) THEN inspection.scorePercent ELSE NULL END)`;
+}
+
+function rankingModuleCountExpr(
+  targetParam: 'fieldModule' | 'postWorkModule',
+): string {
+  return `SUM(CASE WHEN inspection.module = :${targetParam} OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:${targetParam} AS text)) THEN 1 ELSE 0 END)`;
 }
 
 function rankingTargetModuleWhere(): string {
@@ -416,7 +424,10 @@ export class DashboardsService {
       teamId: filters.teamId,
     });
 
-    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    const periodModule = this.resolvePeriodModule(
+      filters.module,
+      filters.sector,
+    );
     if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
       const toLimit = toEndOfDay(filters.to);
       this.applyDashboardPeriodFilter(qb, {
@@ -497,7 +508,9 @@ export class DashboardsService {
       };
       summary.postWork = {
         inspectionsCount: parseInt(row?.postWorkInspectionsCount ?? '0', 10),
-        averagePercent: roundTo2(parseFloat(row?.postWorkAveragePercent ?? '0')),
+        averagePercent: roundTo2(
+          parseFloat(row?.postWorkAveragePercent ?? '0'),
+        ),
       };
       summary.remote = {
         inspectionsCount: parseInt(row?.remoteInspectionsCount ?? '0', 10),
@@ -525,6 +538,93 @@ export class DashboardsService {
     module?: ModuleType;
     contractId?: string;
   }) {
+    const qb = this.createTeamsRankingQuery(filters);
+    const rows = await qb.getRawMany<{
+      teamId: string;
+      teamName: string;
+      inspectionsCount: string;
+      averagePercent: string | null;
+      postWorkPercent: string | null;
+      remotePercent: string | null;
+      fieldPercent: string | null;
+      investmentWorksPercent: string | null;
+      pendingCount: string;
+    }>();
+
+    return rows.map((row) => this.mapTeamsRankingRow(row));
+  }
+
+  async getTeamsRankingForExport(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    sector?: DashboardSector;
+    module?: ModuleType;
+    contractId?: string;
+  }) {
+    const qb = this.createTeamsRankingQuery(filters);
+    qb.addSelect(rankingModuleCountExpr('postWorkModule'), 'postWorkCount')
+      .addSelect(
+        `SUM(CASE WHEN inspection.module = :remoteModule THEN 1 ELSE 0 END)`,
+        'remoteCount',
+      )
+      .addSelect(rankingModuleCountExpr('fieldModule'), 'fieldCount');
+
+    const rows = await qb.getRawMany<{
+      teamId: string;
+      teamName: string;
+      inspectionsCount: string;
+      averagePercent: string | null;
+      postWorkPercent: string | null;
+      remotePercent: string | null;
+      fieldPercent: string | null;
+      investmentWorksPercent: string | null;
+      pendingCount: string;
+      postWorkCount: string | null;
+      remoteCount: string | null;
+      fieldCount: string | null;
+    }>();
+
+    const ranking = rows.map((row) => ({
+      ...this.mapTeamsRankingRow(row),
+      remoteInspectionsCount: parseInt(row.remoteCount ?? '0', 10),
+      fieldInspectionsCount: parseInt(row.fieldCount ?? '0', 10),
+      postWorkInspectionsCount: parseInt(row.postWorkCount ?? '0', 10),
+    }));
+
+    const teamIds = ranking.map((row) => row.teamId).filter(Boolean);
+    const teams = teamIds.length
+      ? await this.teamRepository.find({
+          where: { id: In(teamIds) },
+          relations: ['sectors'],
+        })
+      : [];
+    const teamsById = new Map(teams.map((team) => [team.id, team]));
+
+    return ranking.map((row) => {
+      const team = teamsById.get(row.teamId);
+      const sectorNames = (team?.sectors ?? [])
+        .map((sector) => sector.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+      return {
+        ...row,
+        teamType:
+          team == null ? '' : team.isContractor ? 'EMPREITEIRO' : 'PRÓPRIA',
+        segment: sectorNames.join(', '),
+      };
+    });
+  }
+
+  private createTeamsRankingQuery(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    sector?: DashboardSector;
+    module?: ModuleType;
+    contractId?: string;
+  }) {
     this.validateDateRange(filters.from, filters.to);
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -534,18 +634,12 @@ export class DashboardsService {
       .addSelect('COALESCE(team.name, :noTeam)', 'teamName')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
-      .addSelect(
-        rankingModuleScoreExpr('postWorkModule'),
-        'postWorkPercent',
-      )
+      .addSelect(rankingModuleScoreExpr('postWorkModule'), 'postWorkPercent')
       .addSelect(
         `AVG(CASE WHEN inspection.module = :remoteModule THEN inspection.scorePercent ELSE NULL END)`,
         'remotePercent',
       )
-      .addSelect(
-        rankingModuleScoreExpr('fieldModule'),
-        'fieldPercent',
-      )
+      .addSelect(rankingModuleScoreExpr('fieldModule'), 'fieldPercent')
       .addSelect(
         `AVG(CASE WHEN inspection.module = :investmentWorksModule THEN inspection.scorePercent ELSE NULL END)`,
         'investmentWorksPercent',
@@ -577,7 +671,10 @@ export class DashboardsService {
       module: filters.module,
     });
 
-    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    const periodModule = this.resolvePeriodModule(
+      filters.module,
+      filters.sector,
+    );
     if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
       const toLimit = toEndOfDay(filters.to);
       this.applyDashboardPeriodFilter(qb, {
@@ -602,43 +699,39 @@ export class DashboardsService {
       module: periodModule,
     });
 
-    const rows = await qb.getRawMany<{
-      teamId: string;
-      teamName: string;
-      inspectionsCount: string;
-      averagePercent: string | null;
-      postWorkPercent: string | null;
-      remotePercent: string | null;
-      fieldPercent: string | null;
-      investmentWorksPercent: string | null;
-      pendingCount: string;
-    }>();
+    return qb;
+  }
 
-    return rows.map((row) => {
-      const averagePercentRaw = row.averagePercent;
-      const averagePercent =
-        averagePercentRaw != null
-          ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
-          : 0;
-      const postWorkPercent = roundTo2(parseFloat(row.postWorkPercent ?? '0'));
-      const remotePercent = roundTo2(parseFloat(row.remotePercent ?? '0'));
-      const fieldPercent = roundTo2(parseFloat(row.fieldPercent ?? '0'));
-      const investmentWorksPercent = roundTo2(
+  private mapTeamsRankingRow(row: {
+    teamId: string;
+    teamName: string;
+    inspectionsCount: string;
+    averagePercent: string | null;
+    postWorkPercent: string | null;
+    remotePercent: string | null;
+    fieldPercent: string | null;
+    investmentWorksPercent: string | null;
+    pendingCount: string;
+  }) {
+    const averagePercentRaw = row.averagePercent;
+    const averagePercent =
+      averagePercentRaw != null
+        ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
+        : 0;
+
+    return {
+      teamId: row.teamId,
+      teamName: row.teamName,
+      averagePercent,
+      inspectionsCount: parseInt(row.inspectionsCount, 10),
+      postWorkPercent: roundTo2(parseFloat(row.postWorkPercent ?? '0')),
+      remotePercent: roundTo2(parseFloat(row.remotePercent ?? '0')),
+      fieldPercent: roundTo2(parseFloat(row.fieldPercent ?? '0')),
+      investmentWorksPercent: roundTo2(
         parseFloat(row.investmentWorksPercent ?? '0'),
-      );
-
-      return {
-        teamId: row.teamId,
-        teamName: row.teamName,
-        averagePercent,
-        inspectionsCount: parseInt(row.inspectionsCount, 10),
-        postWorkPercent,
-        remotePercent,
-        fieldPercent,
-        investmentWorksPercent,
-        pendingCount: parseInt(row.pendingCount, 10),
-      };
-    });
+      ),
+      pendingCount: parseInt(row.pendingCount, 10),
+    };
   }
 
   async getSafetyWorkTeamsRanking(filters: {
@@ -741,7 +834,10 @@ export class DashboardsService {
       .andWhere('inspection.teamId = :teamId', { teamId })
       .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
 
-    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    const periodModule = this.resolvePeriodModule(
+      filters.module,
+      filters.sector,
+    );
     if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
       this.applyDashboardPeriodFilter(qb, {
         from: filters.from,
@@ -852,7 +948,8 @@ export class DashboardsService {
     };
 
     const joinsInvestmentWorkEvaluation =
-      metric === TeamRankingMetric.FIELD || metric === TeamRankingMetric.POST_WORK;
+      metric === TeamRankingMetric.FIELD ||
+      metric === TeamRankingMetric.POST_WORK;
 
     if (joinsInvestmentWorkEvaluation) {
       qb.andWhere(rankingTargetModuleWhere())
@@ -1086,7 +1183,10 @@ export class DashboardsService {
     contractId?: string;
   }): Promise<CurrentMonthByServiceResponseDto> {
     const month = resolveMonthOrCurrent(filters.month);
-    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    const periodModule = this.resolvePeriodModule(
+      filters.module,
+      filters.sector,
+    );
 
     const serviceLabelExpr = `COALESCE(NULLIF(checklistSector.name, ''), NULLIF(serviceOrderSector.name, ''), NULLIF(inspection.serviceDescription, ''), 'SEM_SERVICO')`;
     const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
@@ -1530,7 +1630,10 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
     });
-    const periodModule = this.resolvePeriodModule(filters.module, filters.sector);
+    const periodModule = this.resolvePeriodModule(
+      filters.module,
+      filters.sector,
+    );
     this.applyDashboardContractScope(qb, {
       user: filters.user,
       contractId: filters.contractId,
@@ -1693,7 +1796,10 @@ export class DashboardsService {
       teamId: filters.teamId,
       limit,
       nonConformities: rows.map((row) => {
-        const nonConformitiesCount = parseInt(row.nonConformitiesCount ?? '0', 10);
+        const nonConformitiesCount = parseInt(
+          row.nonConformitiesCount ?? '0',
+          10,
+        );
         const answersCount = parseInt(row.answersCount ?? '0', 10);
         const checklistsCount = parseInt(row.checklistsCount ?? '0', 10);
         const nonConformityRatePercent =

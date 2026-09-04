@@ -47,6 +47,7 @@ describe('DashboardsService', () => {
 
     teamRepository = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
 
     service = new DashboardsService(
@@ -177,7 +178,9 @@ describe('DashboardsService', () => {
     });
 
     expect(qb.andWhere).toHaveBeenCalledWith(
-      expect.stringContaining('inspection.module = :dashboardSafetyModuleContract'),
+      expect.stringContaining(
+        'inspection.module = :dashboardSafetyModuleContract',
+      ),
       expect.objectContaining({
         dashboardSafetyModuleContract: ModuleType.SEGURANCA_TRABALHO,
         dashboardContractId: contractId,
@@ -560,6 +563,64 @@ describe('DashboardsService', () => {
     );
   });
 
+  it('deve montar ranking de exportação com tipo, segmento e contagens por módulo', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          teamId: 'team-1',
+          teamName: 'Equipe Norte',
+          inspectionsCount: '5',
+          averagePercent: '89.44',
+          postWorkPercent: '90.5',
+          remotePercent: '88.2',
+          fieldPercent: '91.9',
+          investmentWorksPercent: '84.6',
+          pendingCount: '1',
+          remoteCount: '2',
+          fieldCount: '2',
+          postWorkCount: '1',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+    teamRepository.find.mockResolvedValue([
+      {
+        id: 'team-1',
+        isContractor: true,
+        sectors: [{ name: 'AGUA' }, { name: 'ESGOTO' }],
+      },
+    ]);
+
+    const result = await service.getTeamsRankingForExport({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+    });
+
+    expect(result).toEqual([
+      {
+        teamId: 'team-1',
+        teamName: 'Equipe Norte',
+        averagePercent: 89.44,
+        inspectionsCount: 5,
+        postWorkPercent: 90.5,
+        remotePercent: 88.2,
+        fieldPercent: 91.9,
+        investmentWorksPercent: 84.6,
+        pendingCount: 1,
+        remoteInspectionsCount: 2,
+        fieldInspectionsCount: 2,
+        postWorkInspectionsCount: 1,
+        teamType: 'EMPREITEIRO',
+        segment: 'AGUA, ESGOTO',
+      },
+    ]);
+    expect(qb.addSelect).toHaveBeenCalledWith(
+      expect.stringContaining('SUM(CASE WHEN inspection.module = :remoteModule'),
+      'remoteCount',
+    );
+  });
+
   it('deve usar data e contrato da inspection no summary quando module for SEGURANCA_TRABALHO', async () => {
     const qb = createMockQueryBuilder({
       rawOne: {
@@ -584,15 +645,17 @@ describe('DashboardsService', () => {
 
     const andWhereCalls = qb.andWhere.mock.calls;
     expect(
-      andWhereCalls.some(
-        ([sql]: [string, any]) =>
-          sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from'),
+      andWhereCalls.some(([sql]: [string, any]) =>
+        sql.includes(
+          'COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from',
+        ),
       ),
     ).toBe(true);
     expect(
-      andWhereCalls.some(
-        ([sql]: [string, any]) =>
-          sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt) <= :to'),
+      andWhereCalls.some(([sql]: [string, any]) =>
+        sql.includes(
+          'COALESCE(inspection.finalizedAt, inspection.createdAt) <= :to',
+        ),
       ),
     ).toBe(true);
     expect(
@@ -647,16 +710,23 @@ describe('DashboardsService', () => {
           sql.includes('inspection.module = :dashboardSafetyModuleContract') &&
           sql.includes('inspection.contractId = :dashboardContractId') &&
           sql.includes('serviceOrder.contractId = :dashboardContractId') &&
-          params?.dashboardSafetyModuleContract === ModuleType.SEGURANCA_TRABALHO &&
+          params?.dashboardSafetyModuleContract ===
+            ModuleType.SEGURANCA_TRABALHO &&
           params?.dashboardContractId === 'contract-1',
       ),
     ).toBe(true);
     expect(
       andWhereCalls.some(
         ([sql, params]: [string, any]) =>
-          sql.includes('inspection.module = :dashboardSafetyModuleAllowedContracts') &&
-          sql.includes('inspection.contractId IN (:...dashboardAllowedContractIds)') &&
-          sql.includes('serviceOrder.contractId IN (:...dashboardAllowedContractIds)') &&
+          sql.includes(
+            'inspection.module = :dashboardSafetyModuleAllowedContracts',
+          ) &&
+          sql.includes(
+            'inspection.contractId IN (:...dashboardAllowedContractIds)',
+          ) &&
+          sql.includes(
+            'serviceOrder.contractId IN (:...dashboardAllowedContractIds)',
+          ) &&
           params?.dashboardSafetyModuleAllowedContracts ===
             ModuleType.SEGURANCA_TRABALHO &&
           Array.isArray(params?.dashboardAllowedContractIds),
@@ -757,15 +827,22 @@ describe('DashboardsService', () => {
           sql.includes('inspection.module = :dashboardSafetyModuleContract') &&
           sql.includes('inspection.contractId = :dashboardContractId') &&
           sql.includes('serviceOrder.contractId = :dashboardContractId') &&
-          params?.dashboardSafetyModuleContract === ModuleType.SEGURANCA_TRABALHO,
+          params?.dashboardSafetyModuleContract ===
+            ModuleType.SEGURANCA_TRABALHO,
       ),
     ).toBe(true);
     expect(
       andWhereCalls.some(
         ([sql, params]: [string, any]) =>
-          sql.includes('inspection.module = :dashboardSafetyModuleAllowedContracts') &&
-          sql.includes('inspection.contractId IN (:...dashboardAllowedContractIds)') &&
-          sql.includes('serviceOrder.contractId IN (:...dashboardAllowedContractIds)') &&
+          sql.includes(
+            'inspection.module = :dashboardSafetyModuleAllowedContracts',
+          ) &&
+          sql.includes(
+            'inspection.contractId IN (:...dashboardAllowedContractIds)',
+          ) &&
+          sql.includes(
+            'serviceOrder.contractId IN (:...dashboardAllowedContractIds)',
+          ) &&
           params?.dashboardSafetyModuleAllowedContracts ===
             ModuleType.SEGURANCA_TRABALHO &&
           Array.isArray(params?.dashboardAllowedContractIds),
@@ -974,15 +1051,17 @@ describe('DashboardsService', () => {
 
     const andWhereCalls = qb.andWhere.mock.calls;
     expect(
-      andWhereCalls.some(
-        ([sql]: [string, any]) =>
-          sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from'),
+      andWhereCalls.some(([sql]: [string, any]) =>
+        sql.includes(
+          'COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from',
+        ),
       ),
     ).toBe(true);
     expect(
-      andWhereCalls.some(
-        ([sql]: [string, any]) =>
-          sql.includes('COALESCE(inspection.finalizedAt, inspection.createdAt) <= :to'),
+      andWhereCalls.some(([sql]: [string, any]) =>
+        sql.includes(
+          'COALESCE(inspection.finalizedAt, inspection.createdAt) <= :to',
+        ),
       ),
     ).toBe(true);
     expect(
@@ -1000,7 +1079,9 @@ describe('DashboardsService', () => {
       ),
     ).toBe(true);
     expect(qb.orderBy).toHaveBeenCalledWith(
-      expect.stringContaining('COALESCE(inspection.finalizedAt, inspection.createdAt)'),
+      expect.stringContaining(
+        'COALESCE(inspection.finalizedAt, inspection.createdAt)',
+      ),
       'DESC',
       'NULLS LAST',
     );

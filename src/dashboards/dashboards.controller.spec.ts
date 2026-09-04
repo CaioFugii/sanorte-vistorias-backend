@@ -9,6 +9,8 @@ import { DashboardsController } from './dashboards.controller';
 import { DashboardsService } from './dashboards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { QualityRankingExcelExporter } from './quality-ranking-excel.exporter';
+import { ExcelService } from '../excel/excel.service';
 
 class HeaderDrivenJwtGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
@@ -93,6 +95,19 @@ describe('DashboardsController (integration)', () => {
     }),
   };
 
+  const qualityRankingExcelExporterMock = {
+    export: jest.fn().mockResolvedValue({
+      filename: 'ranking-qualidade-2026-09-04.xlsx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: Buffer.from('xlsx'),
+    }),
+  };
+
+  const excelServiceMock = {
+    attachToResponse: jest.fn().mockReturnValue({}),
+  };
+
   beforeAll(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [DashboardsController],
@@ -101,6 +116,14 @@ describe('DashboardsController (integration)', () => {
         {
           provide: DashboardsService,
           useValue: dashboardsServiceMock,
+        },
+        {
+          provide: QualityRankingExcelExporter,
+          useValue: qualityRankingExcelExporterMock,
+        },
+        {
+          provide: ExcelService,
+          useValue: excelServiceMock,
         },
       ],
     })
@@ -168,6 +191,19 @@ describe('DashboardsController (integration)', () => {
       })
       .set('x-role', 'ADMIN')
       .expect(200);
+  });
+
+  it('deve permitir ADMIN no endpoint de exportação do ranking de qualidade', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/quality/ranking/teams/export')
+      .query({
+        from: '2026-09-01',
+        to: '2026-09-04',
+      })
+      .set('x-role', 'ADMIN')
+      .expect(200);
+
+    expect(qualityRankingExcelExporterMock.export).toHaveBeenCalled();
   });
 
   it('deve permitir ADMIN no novo endpoint de ranking safety work', async () => {

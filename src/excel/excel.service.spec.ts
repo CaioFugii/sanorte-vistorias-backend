@@ -12,7 +12,10 @@ describe('ExcelService', () => {
         {
           name: 'Vistorias',
           columns: [
-            { header: 'Módulo', value: (row: { module: string }) => row.module },
+            {
+              header: 'Módulo',
+              value: (row: { module: string }) => row.module,
+            },
             { header: 'Nota', value: (row: { score: number }) => row.score },
           ],
           rows: [
@@ -51,10 +54,9 @@ describe('ExcelService', () => {
     });
 
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-    const rows = XLSX.utils.sheet_to_json<string[]>(
-      workbook.Sheets.Vazio,
-      { header: 1 },
-    );
+    const rows = XLSX.utils.sheet_to_json<string[]>(workbook.Sheets.Vazio, {
+      header: 1,
+    });
     expect(file.filename).toBe('vazio.xlsx');
     expect(rows).toEqual([['Coluna']]);
   });
@@ -66,7 +68,10 @@ describe('ExcelService', () => {
         {
           name: 'Aba:inválida?*',
           columns: [
-            { header: 'Valor', value: (row: { value?: string | null }) => row.value },
+            {
+              header: 'Valor',
+              value: (row: { value?: string | null }) => row.value,
+            },
           ],
           rows: [{ value: null }, { value: undefined }],
         },
@@ -82,6 +87,31 @@ describe('ExcelService', () => {
     );
     expect(rows[1]).toEqual(['']);
     expect(rows[2]).toEqual(['']);
+  });
+
+  it('gera workbook a partir de grade com mesclas', () => {
+    const file = service.buildFromGrid({
+      filename: 'ranking.xlsx',
+      sheets: [
+        {
+          name: 'Ranking',
+          rows: [['TÍTULO'], ['EQUIPE', 'TIPO'], ['Equipe A', 'PRÓPRIA']],
+          merges: [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }],
+          cols: [{ wch: 20 }, { wch: 12 }],
+        },
+      ],
+    });
+
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets.Ranking;
+    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 });
+    expect(file.filename).toBe('ranking.xlsx');
+    expect(rows[0]?.[0]).toBe('TÍTULO');
+    expect(rows[2]).toEqual(['Equipe A', 'PRÓPRIA']);
+    expect(sheet['!merges']?.[0]).toEqual({
+      s: { r: 0, c: 0 },
+      e: { r: 0, c: 1 },
+    });
   });
 
   it('rejeita spec sem abas ou sem colunas', () => {

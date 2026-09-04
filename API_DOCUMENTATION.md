@@ -41,7 +41,7 @@ Authorization: Bearer <token>
   - consulta de formulário para renderização no frontend (sem persistência)
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
+- Dashboards: `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
 
 ### Regras críticas que impactam UI
 
@@ -57,6 +57,7 @@ Authorization: Bearer <token>
   - para `SEGURANCA_TRABALHO`, `teamId` é opcional.
 - `GET /inspections` (GESTOR/SUPERVISOR/ADMIN) não retorna `RASCUNHO`.
 - `GET /inspections/export` exporta a listagem filtrada em Excel (`.xlsx`); não inclui rascunhos; máximo de 5000 linhas. `layout=avaliacoes` (Vistorias - Qualidade) ou `layout=pendencias` (Pendências de Ajuste).
+- `GET /dashboards/ranking/teams/export` (alias `GET /dashboards/quality/ranking/teams/export`) exporta o ranking de qualidade em Excel (`.xlsx`) no layout da classificação avaliativa.
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
 - Escopo por contrato:
   - `ADMIN` vê todos os dados.
@@ -2106,6 +2107,7 @@ Regras de consistência aplicadas aos dashboards de qualidade:
 Aliases de compatibilidade (mesmo contrato de query/response do endpoint-base correspondente):
 
 - `GET /dashboards/quality/ranking/teams` → mesmo comportamento de `GET /dashboards/ranking/teams` (setor `QUALITY`)
+- `GET /dashboards/ranking/teams/export` e `GET /dashboards/quality/ranking/teams/export` → Excel do ranking de qualidade
 - `GET /dashboards/quality/ranking/teams/:teamId/inspections` → mesmo comportamento de `GET /dashboards/ranking/teams/:teamId/inspections` (setor `QUALITY`)
 - `GET /dashboards/safety-work/ranking/teams/:teamId/inspections` → mesmo comportamento de `GET /dashboards/ranking/teams/:teamId/inspections` (setor `SAFETY_WORK`)
 - `GET /dashboards/quality/teams/:teamId` → mesmo comportamento de `GET /dashboards/teams/:teamId` (setor `QUALITY`)
@@ -2264,6 +2266,22 @@ Response 200:
 - `remotePercent`: média (%) da equipe no módulo `REMOTO` no período (0 quando não houver vistoria no módulo).
 - `fieldPercent`: média (%) da equipe em `CAMPO` **e** em `OBRAS_INVESTIMENTO` com `evaluationModule = CAMPO` no período (0 quando não houver vistoria).
 - `investmentWorksPercent`: média (%) da equipe no módulo `OBRAS_INVESTIMENTO` no período (0 quando não houver vistoria no módulo). O módulo continua disponível para consulta separada.
+
+### GET /dashboards/ranking/teams/export
+
+- Auth: JWT
+- Roles: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Alias: `GET /dashboards/quality/ranking/teams/export`
+- Query: mesmos filtros de `GET /dashboards/ranking/teams` (`from`, `to`, `module` opcional, `contractId` opcional)
+- Response: arquivo Excel (`.xlsx`)
+  - `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+  - `Content-Disposition: attachment; filename="ranking-qualidade-YYYY-MM-DD.xlsx"`
+- Layout (modelo de classificação avaliativa):
+  - título, período filtrado e data/hora de geração
+  - colunas: `EQUIPE`, `TIPO` (`EMPREITEIRO` / `PRÓPRIA`), `SEGMENTO` (setores da equipe)
+  - grupos `AVALIAÇÃO REMOTA`, `AVALIAÇÃO EM CAMPO`, `AVALIAÇÃO PÓS OBRA` e `MÉDIA FINAL`, cada um com `PORCENTAGEM` e `VISTORIAS`
+  - módulo sem vistoria no período fica em branco (não grava 0%)
+  - `MÉDIA FINAL` usa a média e a quantidade já calculadas no ranking (não inventa cidade, fórmula extra ou coluna inexistente)
 
 ### GET /dashboards/ranking/teams/safety-work
 
