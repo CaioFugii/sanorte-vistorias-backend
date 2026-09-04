@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- `GET /service-orders/export` — Excel das ordens de serviço no layout da listagem (máximo 5000 linhas)
 - `GET /dashboards/ranking/teams/export` e alias `GET /dashboards/quality/ranking/teams/export` — Excel do ranking de qualidade no layout da classificação avaliativa
 - Campo `data_emissao` (date) no schema de todos os tipos de relatório de engenharia
 - Campo `titulo_complemento` (select) nos relatórios `LIGACAO_PASSEIO` e `LIGACOES`; opções de `preco` passam a gravar só o código

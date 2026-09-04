@@ -30,7 +30,7 @@ Authorization: Bearer <token>
 - Setores: `GET/POST/PUT/DELETE /sectors`
 - Colaboradores: `GET/POST/PUT/DELETE /collaborators`
 - Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections`, `items` e upload de imagem de referência
-- Ordens de Serviço (OS): `GET /service-orders`, `POST /service-orders/import`, `DELETE /service-orders/:id` (ADMIN)
+- Ordens de Serviço (OS): `GET /service-orders`, `GET /service-orders/export`, `POST /service-orders/import`, `DELETE /service-orders/:id` (ADMIN)
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/export`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
@@ -58,6 +58,7 @@ Authorization: Bearer <token>
 - `GET /inspections` (GESTOR/SUPERVISOR/ADMIN) não retorna `RASCUNHO`.
 - `GET /inspections/export` exporta a listagem filtrada em Excel (`.xlsx`); não inclui rascunhos; máximo de 5000 linhas. `layout=avaliacoes` (Vistorias - Qualidade) ou `layout=pendencias` (Pendências de Ajuste).
 - `GET /dashboards/ranking/teams/export` (alias `GET /dashboards/quality/ranking/teams/export`) exporta o ranking de qualidade em Excel (`.xlsx`) no layout da classificação avaliativa.
+- `GET /service-orders/export` exporta a listagem filtrada de OS em Excel (`.xlsx`); máximo de 5000 linhas.
 - `GET /inspections/mine` é a listagem do FISCAL (onde rascunho aparece).
 - Escopo por contrato:
   - `ADMIN` vê todos os dados.
@@ -124,6 +125,7 @@ Authorization: Bearer <token>
 
 - Paginação padrão em listas: `page`, `limit`.
 - `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres).
+- `GET /service-orders/export`: mesmos filtros de `GET /service-orders` (sem paginação); resposta binária `.xlsx`.
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /teams`: filtros por `name` (busca parcial), `contractId` e `sectorId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`. Listagem **não** inclui `items`/`sections` (só `sectionCount`/`itemCount`); o grafo completo fica em `GET /checklists/:id`.
@@ -1237,6 +1239,22 @@ Response 201:
 - Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`
 - Uso: listar OS disponíveis para vincular a novas vistorias; filtrar por uso por módulo (field/remote/postWork)
 - Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` veem apenas OS dos contratos permitidos (`serviceOrder.contractId`)
+
+### GET /service-orders/export
+
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
+- Query: os mesmos filtros de `GET /service-orders` (`osNumber`, `sectorId`, `contractId`, `from`/`to`, `field`, `remote`, `postWork`, `equipe`, `resultado`). `page` e `limit` são ignorados.
+- Response: arquivo Excel (`.xlsx`)
+  - `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+  - `Content-Disposition: attachment; filename="ordens-de-servico-YYYY-MM-DD.xlsx"`
+- Regras:
+  - reutiliza a mesma query e o mesmo escopo de contrato da listagem
+  - o recorte do arquivo é **somente o resultado dos filtros da tela**
+  - máximo de **5000** linhas; acima disso retorna `400` pedindo para refinar os filtros
+  - não inclui a coluna "Equipe Real" (campo inexistente no sistema)
+- Colunas: Número da OS, Setor, Endereço, Campo, Remota, Pós-obra, Status, Equipe PDA, Fim execução, Tempo execução efetivo, Resultado, Atualizada/Inserida em
+- Aba: `O.S`
+- Cabeçalho: `ORDENS DE SERVIÇOS CADASTRADAS` e linha `PERÍODO: DD/MM/YYYY A DD/MM/YYYY    CONTRATO: {nome|TODOS}`
 
 ### POST /service-orders/import
 

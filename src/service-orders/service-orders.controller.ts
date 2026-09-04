@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Post,
+  Res,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -17,6 +18,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { ServiceOrdersService } from './service-orders.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -24,11 +26,17 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import { FilterServiceOrdersDto } from './dto/filter-service-orders.dto';
+import { ExcelService } from '../excel/excel.service';
+import { ServiceOrdersExcelExporter } from './service-orders-excel.exporter';
 
 @Controller('service-orders')
 @UseGuards(JwtAuthGuard)
 export class ServiceOrdersController {
-  constructor(private readonly serviceOrdersService: ServiceOrdersService) {}
+  constructor(
+    private readonly serviceOrdersService: ServiceOrdersService,
+    private readonly serviceOrdersExcelExporter: ServiceOrdersExcelExporter,
+    private readonly excelService: ExcelService,
+  ) {}
 
   @Get()
   @UseGuards(RolesGuard)
@@ -49,6 +57,32 @@ export class ServiceOrdersController {
       query.equipe,
       query.resultado,
     );
+  }
+
+  @Get('export')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.FISCAL)
+  async exportExcel(
+    @CurrentUser() user: any,
+    @Query() query: FilterServiceOrdersDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const file = await this.serviceOrdersExcelExporter.export(
+      {
+        osNumber: query.osNumber,
+        contractId: query.contractId,
+        from: query.from,
+        to: query.to,
+        sectorId: query.sectorId,
+        field: query.field,
+        remote: query.remote,
+        postWork: query.postWork,
+        equipe: query.equipe,
+        resultado: query.resultado,
+      },
+      user,
+    );
+    return this.excelService.attachToResponse(file, res);
   }
 
   @Post('import')

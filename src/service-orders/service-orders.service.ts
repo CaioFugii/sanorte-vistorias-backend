@@ -116,6 +116,94 @@ export class ServiceOrdersService {
     }
   }
 
+  private applyListFilters(
+    query: ReturnType<Repository<ServiceOrder>['createQueryBuilder']>,
+    user: any,
+    filters: {
+      osNumber?: string;
+      contractId?: string;
+      from?: string;
+      to?: string;
+      sectorId?: string;
+      field?: boolean;
+      remote?: boolean;
+      postWork?: boolean;
+      equipe?: string;
+      resultado?: string;
+    },
+  ): void {
+    const osNumberTerm = this.toSearchTerm(filters.osNumber);
+    if (osNumberTerm) {
+      query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
+        osNumber: `%${osNumberTerm}%`,
+      });
+    }
+
+    if (filters.contractId) {
+      query.andWhere('serviceOrder.contractId = :contractId', {
+        contractId: filters.contractId,
+      });
+    }
+
+    if (filters.from || filters.to) {
+      const fromDate = filters.from
+        ? this.parseFimExecucaoBoundary(filters.from, 'start')
+        : undefined;
+      const toDate = filters.to
+        ? this.parseFimExecucaoBoundary(filters.to, 'end')
+        : undefined;
+
+      if (fromDate && toDate) {
+        this.assertFimExecucaoRangeAtMostTwoYears(fromDate, toDate);
+        query.andWhere('serviceOrder.fimExecucao BETWEEN :from AND :to', {
+          from: fromDate,
+          to: toDate,
+        });
+      } else if (fromDate) {
+        query.andWhere('serviceOrder.fimExecucao >= :from', { from: fromDate });
+      } else if (toDate) {
+        query.andWhere('serviceOrder.fimExecucao <= :to', { to: toDate });
+      }
+    }
+
+    if (filters.sectorId) {
+      query.andWhere('serviceOrder.sectorId = :sectorId', {
+        sectorId: filters.sectorId,
+      });
+    }
+    if (filters.field !== undefined) {
+      query.andWhere('serviceOrder.field = :field', { field: filters.field });
+    }
+    if (filters.remote !== undefined) {
+      query.andWhere('serviceOrder.remote = :remote', {
+        remote: filters.remote,
+      });
+    }
+    if (filters.postWork !== undefined) {
+      query.andWhere('serviceOrder.postWork = :postWork', {
+        postWork: filters.postWork,
+      });
+    }
+    const equipeTerm = this.toSearchTerm(filters.equipe);
+    if (equipeTerm) {
+      query.andWhere('serviceOrder.equipe ILIKE :equipe', {
+        equipe: `%${equipeTerm}%`,
+      });
+    }
+    const resultadoTerm = this.toSearchTerm(filters.resultado);
+    if (resultadoTerm) {
+      query.andWhere('serviceOrder.resultado ILIKE :resultado', {
+        resultado: `%${resultadoTerm}%`,
+      });
+    }
+
+    applyContractScopeFilter(
+      query,
+      getAllowedContractIds(user),
+      'serviceOrder.contractId',
+    );
+  }
+
   async findAll(
     user: any,
     page: number = 1,
@@ -132,73 +220,24 @@ export class ServiceOrdersService {
     resultado?: string,
   ): Promise<PaginatedResponseDto<ServiceOrder>> {
     const skip = (page - 1) * limit;
-    const allowedContractIds = getAllowedContractIds(user);
 
     const query = this.serviceOrderRepository
       .createQueryBuilder('serviceOrder')
       .leftJoinAndSelect('serviceOrder.sector', 'sector')
       .leftJoinAndSelect('serviceOrder.contract', 'contract');
 
-    const osNumberTerm = this.toSearchTerm(osNumber);
-    if (osNumberTerm) {
-      query.andWhere('serviceOrder.osNumber ILIKE :osNumber', {
-        osNumber: `%${osNumberTerm}%`,
-      });
-    }
-
-    if (contractId) {
-      query.andWhere('serviceOrder.contractId = :contractId', { contractId });
-    }
-
-    if (from || to) {
-      const fromDate = from
-        ? this.parseFimExecucaoBoundary(from, 'start')
-        : undefined;
-      const toDate = to ? this.parseFimExecucaoBoundary(to, 'end') : undefined;
-
-      if (fromDate && toDate) {
-        this.assertFimExecucaoRangeAtMostTwoYears(fromDate, toDate);
-        query.andWhere('serviceOrder.fimExecucao BETWEEN :from AND :to', {
-          from: fromDate,
-          to: toDate,
-        });
-      } else if (fromDate) {
-        query.andWhere('serviceOrder.fimExecucao >= :from', { from: fromDate });
-      } else if (toDate) {
-        query.andWhere('serviceOrder.fimExecucao <= :to', { to: toDate });
-      }
-    }
-
-    if (sectorId) {
-      query.andWhere('serviceOrder.sectorId = :sectorId', { sectorId });
-    }
-    if (field !== undefined) {
-      query.andWhere('serviceOrder.field = :field', { field });
-    }
-    if (remote !== undefined) {
-      query.andWhere('serviceOrder.remote = :remote', { remote });
-    }
-    if (postWork !== undefined) {
-      query.andWhere('serviceOrder.postWork = :postWork', { postWork });
-    }
-    const equipeTerm = this.toSearchTerm(equipe);
-    if (equipeTerm) {
-      query.andWhere('serviceOrder.equipe ILIKE :equipe', {
-        equipe: `%${equipeTerm}%`,
-      });
-    }
-    const resultadoTerm = this.toSearchTerm(resultado);
-    if (resultadoTerm) {
-      query.andWhere('serviceOrder.resultado ILIKE :resultado', {
-        resultado: `%${resultadoTerm}%`,
-      });
-    }
-
-    applyContractScopeFilter(
-      query,
-      allowedContractIds,
-      'serviceOrder.contractId',
-    );
+    this.applyListFilters(query, user, {
+      osNumber,
+      contractId,
+      from,
+      to,
+      sectorId,
+      field,
+      remote,
+      postWork,
+      equipe,
+      resultado,
+    });
 
     const [data, total] = await query
       .skip(skip)
@@ -219,6 +258,72 @@ export class ServiceOrdersService {
         hasPrev: page > 1,
       },
     };
+  }
+
+  async findForExport(
+    user: any,
+    filters: {
+      osNumber?: string;
+      contractId?: string;
+      from?: string;
+      to?: string;
+      sectorId?: string;
+      field?: boolean;
+      remote?: boolean;
+      postWork?: boolean;
+      equipe?: string;
+      resultado?: string;
+    },
+    maxRows: number,
+  ): Promise<ServiceOrder[]> {
+    const query = this.serviceOrderRepository
+      .createQueryBuilder('serviceOrder')
+      .leftJoin('serviceOrder.sector', 'sector')
+      .leftJoin('serviceOrder.contract', 'contract')
+      .select([
+        'serviceOrder.id',
+        'serviceOrder.osNumber',
+        'serviceOrder.address',
+        'serviceOrder.field',
+        'serviceOrder.remote',
+        'serviceOrder.postWork',
+        'serviceOrder.status',
+        'serviceOrder.equipe',
+        'serviceOrder.fimExecucao',
+        'serviceOrder.tempoExecucaoEfetivo',
+        'serviceOrder.resultado',
+        'serviceOrder.updatedAt',
+        'sector.id',
+        'sector.name',
+        'contract.id',
+        'contract.name',
+      ]);
+
+    this.applyListFilters(query, user, filters);
+
+    const rows = await query
+      .orderBy('serviceOrder.osNumber', 'ASC')
+      .take(maxRows + 1)
+      .getMany();
+
+    if (rows.length > maxRows) {
+      throw new BadRequestException(
+        `A exportação ultrapassa o limite de ${maxRows} ordens de serviço. Refine os filtros e tente novamente.`,
+      );
+    }
+
+    return rows;
+  }
+
+  async findContractName(contractId?: string): Promise<string | null> {
+    if (!contractId) {
+      return null;
+    }
+    const contract = await this.contractsRepository.findOne({
+      where: { id: contractId },
+      select: ['id', 'name'],
+    });
+    return contract?.name ?? null;
   }
 
   async importFromExcel(
