@@ -544,6 +544,97 @@ export class DashboardsService {
     return summary;
   }
 
+  async getSafetyWorkSummary(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    module?: ModuleType;
+    teamId?: string;
+    contractId?: string;
+  }): Promise<{
+    averagePercent: number;
+    inspectionsCount: number;
+    pendingCount: number;
+    checklists: Array<{
+      checklistId: string;
+      checklistName: string;
+      averagePercent: number;
+      inspectionsCount: number;
+    }>;
+  }> {
+    const summary = await this.getSummary({
+      ...filters,
+      sector: 'SAFETY_WORK',
+    });
+    const checklists = await this.findSafetyWorkChecklistSummaries(filters);
+    return {
+      ...summary,
+      checklists,
+    };
+  }
+
+  private async findSafetyWorkChecklistSummaries(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    module?: ModuleType;
+    teamId?: string;
+    contractId?: string;
+  }): Promise<
+    Array<{
+      checklistId: string;
+      checklistName: string;
+      averagePercent: number;
+      inspectionsCount: number;
+    }>
+  > {
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.checklist', 'checklist')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select('checklist.id', 'checklistId')
+      .addSelect('checklist.name', 'checklistName')
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .andWhere('inspection.teamId IS NOT NULL')
+      .groupBy('checklist.id')
+      .addGroupBy('checklist.name')
+      .orderBy('checklist.name', 'ASC');
+
+    this.applyQualityFilters(qb, {
+      sector: 'SAFETY_WORK',
+      module: filters.module,
+      teamId: filters.teamId,
+    });
+    this.applyDashboardPeriodFilter(qb, {
+      from: filters.from,
+      to: toEndOfDay(filters.to),
+      module: ModuleType.SEGURANCA_TRABALHO,
+    });
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: ModuleType.SEGURANCA_TRABALHO,
+    });
+
+    const rows = await qb.getRawMany<{
+      checklistId: string;
+      checklistName: string;
+      averagePercent: string | null;
+      inspectionsCount: string;
+    }>();
+
+    return rows.map((row) => ({
+      checklistId: row.checklistId,
+      checklistName: row.checklistName,
+      averagePercent: roundTo2(parseFloat(row.averagePercent ?? '0')),
+      inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
+    }));
+  }
+
   async getTeamsRanking(filters: {
     user?: any;
     from: string;

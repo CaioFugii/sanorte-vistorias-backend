@@ -830,6 +830,69 @@ describe('DashboardsService', () => {
     });
   });
 
+  it('deve agregar média e vistorias por checklist no resumo de Segurança do Trabalho', async () => {
+    const summaryQb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '35',
+        pendingCount: '0',
+        averagePercent: '99.0',
+      },
+    });
+    const checklistsQb = createMockQueryBuilder({
+      rawMany: [
+        {
+          checklistId: 'cl-1',
+          checklistName: 'Canteiro',
+          averagePercent: '99.2',
+          inspectionsCount: '20',
+        },
+        {
+          checklistId: 'cl-2',
+          checklistName: 'EPI',
+          averagePercent: '98.5',
+          inspectionsCount: '15',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder
+      .mockReturnValueOnce(summaryQb)
+      .mockReturnValueOnce(checklistsQb);
+
+    const result = await service.getSafetyWorkSummary({
+      from: '2026-09-01',
+      to: '2026-09-10',
+    });
+
+    expect(result).toEqual({
+      averagePercent: 99,
+      inspectionsCount: 35,
+      pendingCount: 0,
+      checklists: [
+        {
+          checklistId: 'cl-1',
+          checklistName: 'Canteiro',
+          averagePercent: 99.2,
+          inspectionsCount: 20,
+        },
+        {
+          checklistId: 'cl-2',
+          checklistName: 'EPI',
+          averagePercent: 98.5,
+          inspectionsCount: 15,
+        },
+      ],
+    });
+    expect(checklistsQb.innerJoin).toHaveBeenCalledWith(
+      'inspection.checklist',
+      'checklist',
+    );
+    expect(checklistsQb.groupBy).toHaveBeenCalledWith('checklist.id');
+    expect(checklistsQb.addSelect).toHaveBeenCalledWith(
+      'AVG(inspection.scorePercent)',
+      'averagePercent',
+    );
+  });
+
   it('deve usar regra híbrida de contrato em não conformidades por checklist quando module não for informado', async () => {
     const qb = createMockQueryBuilder({ rawMany: [] });
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);

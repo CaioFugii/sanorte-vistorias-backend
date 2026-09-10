@@ -166,7 +166,7 @@ export class DashboardsController {
     @CurrentUser() user: any,
     @Query() query: DashboardQueryDto,
   ) {
-    return this.dashboardsService.getSummary(
+    return this.dashboardsService.getSafetyWorkSummary(
       this.summaryFilters(user, query, 'SAFETY_WORK'),
     );
   }

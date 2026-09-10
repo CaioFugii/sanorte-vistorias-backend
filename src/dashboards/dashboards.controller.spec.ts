@@ -29,6 +29,12 @@ describe('DashboardsController (integration)', () => {
       inspectionsCount: 10,
       pendingCount: 1,
     }),
+    getSafetyWorkSummary: jest.fn().mockResolvedValue({
+      averagePercent: 70,
+      inspectionsCount: 10,
+      pendingCount: 1,
+      checklists: [],
+    }),
     getTeamsRanking: jest.fn().mockResolvedValue([]),
     getSafetyWorkTeamsRanking: jest.fn().mockResolvedValue([]),
     getTeamRankingInspections: jest.fn().mockResolvedValue({

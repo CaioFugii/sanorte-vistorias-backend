@@ -2224,6 +2224,7 @@ Response 200:
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Comportamento: mesmo contrato de retorno de `GET /dashboards/summary`, com agregação no setor `SAFETY_WORK`.
+- `checklists`: média (`AVG(scorePercent)`) e quantidade de vistorias por checklist no período. Inclui apenas checklists com pelo menos uma vistoria (mesmas regras do resumo: exclui `RASCUNHO` e exige `teamId`).
 
 Response 200:
 
@@ -2231,7 +2232,15 @@ Response 200:
 {
   "averagePercent": 92.45,
   "inspectionsCount": 34,
-  "pendingCount": 5
+  "pendingCount": 5,
+  "checklists": [
+    {
+      "checklistId": "uuid",
+      "checklistName": "Canteiro",
+      "averagePercent": 99.2,
+      "inspectionsCount": 20
+    }
+  ]
 }
 ```
 
