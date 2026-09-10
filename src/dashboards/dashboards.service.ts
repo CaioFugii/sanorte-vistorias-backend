@@ -1253,6 +1253,7 @@ export class DashboardsService {
       .select(serviceLabelExpr, 'serviceLabel')
       .addSelect('AVG(inspection.scorePercent)', 'qualityPercent')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect('COUNT(DISTINCT inspection.teamId)', 'teamsCount')
       .groupBy(serviceLabelExpr)
       .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
       .addOrderBy(serviceLabelExpr, 'ASC');
@@ -1274,6 +1275,7 @@ export class DashboardsService {
         serviceLabel: string;
         qualityPercent: string | null;
         inspectionsCount: string;
+        teamsCount: string;
       }>(),
     ]);
 
@@ -1292,6 +1294,7 @@ export class DashboardsService {
         serviceLabel: row.serviceLabel,
         qualityPercent: roundTo2(parseFloat(row.qualityPercent ?? '0')),
         inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
+        teamsCount: parseInt(row.teamsCount ?? '0', 10),
       })),
     };
   }

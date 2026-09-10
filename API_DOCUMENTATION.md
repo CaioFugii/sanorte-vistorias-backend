@@ -2519,6 +2519,7 @@ Response 200:
 - Apenas inspeções com equipe vinculada entram no cálculo (`teamId IS NOT NULL`).
 - `pendingAdjustmentsCount` contabiliza inspeções do mês com status `PENDENTE_AJUSTE`.
 - `qualityPercent` por serviço é `AVG(scorePercent)` no mês.
+- `teamsCount` por serviço é a quantidade de equipes distintas (`COUNT(DISTINCT teamId)`) com pelo menos uma vistoria daquele serviço no mês.
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 
 Response 200:
@@ -2536,7 +2537,8 @@ Response 200:
       "serviceKey": "cavalete_hm",
       "serviceLabel": "CAVALETE / HM",
       "qualityPercent": 83.1,
-      "inspectionsCount": 328
+      "inspectionsCount": 328,
+      "teamsCount": 5
     }
   ]
 }

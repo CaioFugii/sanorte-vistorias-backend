@@ -9,6 +9,7 @@ export class CurrentMonthServiceItemDto {
   serviceLabel: string;
   qualityPercent: number;
   inspectionsCount: number;
+  teamsCount: number;
 }
 
 export class CurrentMonthByServiceResponseDto {

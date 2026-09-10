@@ -225,6 +225,7 @@ describe('DashboardsService', () => {
           serviceLabel: 'CAVALETE / HM',
           qualityPercent: '83.1',
           inspectionsCount: '328',
+          teamsCount: '5',
         },
       ],
     });
@@ -251,6 +252,7 @@ describe('DashboardsService', () => {
         serviceLabel: 'CAVALETE / HM',
         qualityPercent: 83.1,
         inspectionsCount: 328,
+        teamsCount: 5,
       },
     ]);
 
@@ -278,14 +280,14 @@ describe('DashboardsService', () => {
         teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
       },
     );
+    expect(rankingQb.addSelect).toHaveBeenCalledWith(
+      'COUNT(DISTINCT inspection.teamId)',
+      'teamsCount',
+    );
     expect(summaryQb.where).toHaveBeenCalledWith(
-      'inspection.status IN (:...qualityStatuses)',
+      'inspection.status != :draft',
       {
-        qualityStatuses: [
-          InspectionStatus.FINALIZADA,
-          InspectionStatus.PENDENTE_AJUSTE,
-          InspectionStatus.RESOLVIDA,
-        ],
+        draft: InspectionStatus.RASCUNHO,
       },
     );
   });

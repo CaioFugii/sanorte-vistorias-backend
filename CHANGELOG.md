@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- `teamsCount` em `GET /dashboards/current-month-by-service` — equipes distintas que geraram o resultado de cada serviço no mês
 - `GET /dashboards/safety-work/inspectors-production` — produção diária por fiscal (apenas `SEGURANCA_TRABALHO`)
 - `GET /dashboards/safety-work/quality-by-service` inclui vistorias de ST mesmo quando o serviço/setor não é de Qualidade
 - `GET /service-orders/export` — Excel das ordens de serviço no layout da listagem (máximo 5000 linhas)
