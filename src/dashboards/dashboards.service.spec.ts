@@ -549,7 +549,7 @@ describe('DashboardsService', () => {
       {
         teamId: 'team-1',
         teamName: 'Equipe Norte',
-        averagePercent: 89.44,
+        averagePercent: 90.2,
         inspectionsCount: 5,
         postWorkPercent: 90.5,
         remotePercent: 88.2,
@@ -626,7 +626,7 @@ describe('DashboardsService', () => {
       {
         teamId: 'team-1',
         teamName: 'Equipe Norte',
-        averagePercent: 89.44,
+        averagePercent: 90.2,
         inspectionsCount: 5,
         postWorkPercent: 90.5,
         remotePercent: 88.2,
@@ -644,6 +644,135 @@ describe('DashboardsService', () => {
       expect.stringContaining('SUM(CASE WHEN inspection.module = :remoteModule'),
       'remoteCount',
     );
+  });
+
+  it('deve calcular a média final como média das notas dos três módulos, sem ponderar pela quantidade de O.S.', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          teamId: 'team-jonatas',
+          teamName: 'JONATAS SILVA',
+          inspectionsCount: '65',
+          averagePercent: '93.35',
+          postWorkPercent: '66.67',
+          remotePercent: '94.64',
+          fieldPercent: null,
+          investmentWorksPercent: null,
+          pendingCount: '1',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTeamsRanking({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+    });
+
+    expect(result[0]).toMatchObject({
+      teamId: 'team-jonatas',
+      fieldPercent: 0,
+      remotePercent: 94.64,
+      postWorkPercent: 66.67,
+      averagePercent: 80.66,
+    });
+  });
+
+  it('não deve tratar módulo sem vistoria como 0% na média final do ranking', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          teamId: 'team-diego',
+          teamName: 'DIEGO SANTOS',
+          inspectionsCount: '45',
+          averagePercent: '98.67',
+          postWorkPercent: null,
+          remotePercent: '98.67',
+          fieldPercent: null,
+          investmentWorksPercent: null,
+          pendingCount: '0',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTeamsRanking({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+    });
+
+    expect(result[0].averagePercent).toBe(98.67);
+  });
+
+  it('deve incluir nota 0% real na média final quando o módulo teve vistoria', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          teamId: 'team-zero',
+          teamName: 'Equipe Zero',
+          inspectionsCount: '3',
+          postWorkPercent: '100',
+          remotePercent: '100',
+          fieldPercent: '0',
+          investmentWorksPercent: null,
+          pendingCount: '0',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTeamsRanking({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+    });
+
+    expect(result[0].averagePercent).toBe(66.67);
+  });
+
+  it('deve ordenar o ranking pela média dos três módulos, não pela média de todas as O.S.', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          teamId: 'team-volume',
+          teamName: 'Equipe Volume',
+          inspectionsCount: '50',
+          averagePercent: '98',
+          postWorkPercent: '50',
+          remotePercent: '99',
+          fieldPercent: null,
+          investmentWorksPercent: null,
+          pendingCount: '0',
+        },
+        {
+          teamId: 'team-equilibrio',
+          teamName: 'Equipe Equilibrio',
+          inspectionsCount: '3',
+          averagePercent: '90',
+          postWorkPercent: '90',
+          remotePercent: '90',
+          fieldPercent: '90',
+          investmentWorksPercent: null,
+          pendingCount: '0',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getTeamsRanking({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+    });
+
+    expect(result.map((row) => row.teamId)).toEqual([
+      'team-equilibrio',
+      'team-volume',
+    ]);
+    expect(result[0].averagePercent).toBe(90);
+    expect(result[1].averagePercent).toBe(74.5);
   });
 
   it('deve usar data e contrato da inspection no summary quando module for SEGURANCA_TRABALHO', async () => {

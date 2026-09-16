@@ -2266,7 +2266,7 @@ Response 200:
   {
     "teamId": "uuid",
     "teamName": "Equipe Norte",
-    "averagePercent": 95.1,
+    "averagePercent": 94.83,
     "inspectionsCount": 12,
     "postWorkPercent": 94.2,
     "remotePercent": 96.5,
@@ -2277,7 +2277,7 @@ Response 200:
   {
     "teamId": "uuid-2",
     "teamName": "Equipe Sul",
-    "averagePercent": 90.2,
+    "averagePercent": 90.37,
     "inspectionsCount": 10,
     "postWorkPercent": 89.3,
     "remotePercent": 91.7,
@@ -2288,11 +2288,12 @@ Response 200:
 ]
 ```
 
-- `averagePercent`, `inspectionsCount` e `pendingCount` consideram `CAMPO`, `REMOTO`, `POS_OBRA` e `OBRAS_INVESTIMENTO`.
+- `inspectionsCount` e `pendingCount` consideram `CAMPO`, `REMOTO`, `POS_OBRA` e `OBRAS_INVESTIMENTO`.
+- `averagePercent` (média final): média aritmética das notas de `fieldPercent`, `remotePercent` e `postWorkPercent` **que tiverem vistoria no período**. Não é a média de todas as O.S. juntas. Quando os três módulos têm vistoria, equivale a `(Campo + Remoto + Pós-obra) / 3`. Módulo sem vistoria não entra como 0%.
 - `postWorkPercent`: média (%) da equipe em `POS_OBRA` **e** em `OBRAS_INVESTIMENTO` com `evaluationModule = POS_OBRA` no período (0 quando não houver vistoria).
 - `remotePercent`: média (%) da equipe no módulo `REMOTO` no período (0 quando não houver vistoria no módulo).
 - `fieldPercent`: média (%) da equipe em `CAMPO` **e** em `OBRAS_INVESTIMENTO` com `evaluationModule = CAMPO` no período (0 quando não houver vistoria).
-- `investmentWorksPercent`: média (%) da equipe no módulo `OBRAS_INVESTIMENTO` no período (0 quando não houver vistoria no módulo). O módulo continua disponível para consulta separada.
+- `investmentWorksPercent`: média (%) da equipe no módulo `OBRAS_INVESTIMENTO` no período (0 quando não houver vistoria no módulo). O módulo continua disponível para consulta separada. Não entra como quarto termo da média final.
 
 ### GET /dashboards/ranking/teams/export
 
@@ -2308,7 +2309,7 @@ Response 200:
   - colunas: `EQUIPE`, `TIPO` (`EMPREITEIRO` / `PRÓPRIA`), `SEGMENTO` (setores da equipe)
   - grupos `AVALIAÇÃO REMOTA`, `AVALIAÇÃO EM CAMPO`, `AVALIAÇÃO PÓS OBRA` e `MÉDIA FINAL`, cada um com `PORCENTAGEM` e `VISTORIAS`
   - módulo sem vistoria no período fica em branco (não grava 0%)
-  - `MÉDIA FINAL` usa a média e a quantidade já calculadas no ranking (não inventa cidade, fórmula extra ou coluna inexistente)
+  - `MÉDIA FINAL` usa a média já calculada no ranking: média das notas de Remoto, Campo e Pós-obra com vistoria no período (não pondera pela quantidade de O.S.; módulo em branco não entra como 0%)
 
 ### GET /dashboards/ranking/teams/safety-work
 

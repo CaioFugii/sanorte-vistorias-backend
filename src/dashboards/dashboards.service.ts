@@ -93,6 +93,41 @@ function roundTo2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function parseRankingPercent(value: string | null): number | null {
+  if (value == null) {
+    return null;
+  }
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? roundTo2(parsed) : null;
+}
+
+/**
+ * Média final do ranking de Qualidade: média aritmética das notas de
+ * Campo, Remoto e Pós-obra. Não pondera pela quantidade de O.S.
+ * Módulo sem vistoria no período não entra (não conta como 0%).
+ */
+function qualityRankingFinalAverage(
+  fieldPercent: number | null,
+  remotePercent: number | null,
+  postWorkPercent: number | null,
+): number {
+  const scores = [fieldPercent, remotePercent, postWorkPercent].filter(
+    (value): value is number => value != null,
+  );
+  if (scores.length === 0) {
+    return 0;
+  }
+  return roundTo2(
+    scores.reduce((sum, value) => sum + value, 0) / scores.length,
+  );
+}
+
+function sortTeamsRankingByAverage<T extends { averagePercent: number }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort((a, b) => b.averagePercent - a.averagePercent);
+}
+
 function toDateOnlyString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -648,7 +683,6 @@ export class DashboardsService {
       teamId: string;
       teamName: string;
       inspectionsCount: string;
-      averagePercent: string | null;
       postWorkPercent: string | null;
       remotePercent: string | null;
       fieldPercent: string | null;
@@ -656,7 +690,9 @@ export class DashboardsService {
       pendingCount: string;
     }>();
 
-    return rows.map((row) => this.mapTeamsRankingRow(row));
+    return sortTeamsRankingByAverage(
+      rows.map((row) => this.mapTeamsRankingRow(row)),
+    );
   }
 
   async getTeamsRankingForExport(filters: {
@@ -679,7 +715,6 @@ export class DashboardsService {
       teamId: string;
       teamName: string;
       inspectionsCount: string;
-      averagePercent: string | null;
       postWorkPercent: string | null;
       remotePercent: string | null;
       fieldPercent: string | null;
@@ -690,12 +725,14 @@ export class DashboardsService {
       fieldCount: string | null;
     }>();
 
-    const ranking = rows.map((row) => ({
-      ...this.mapTeamsRankingRow(row),
-      remoteInspectionsCount: parseInt(row.remoteCount ?? '0', 10),
-      fieldInspectionsCount: parseInt(row.fieldCount ?? '0', 10),
-      postWorkInspectionsCount: parseInt(row.postWorkCount ?? '0', 10),
-    }));
+    const ranking = sortTeamsRankingByAverage(
+      rows.map((row) => ({
+        ...this.mapTeamsRankingRow(row),
+        remoteInspectionsCount: parseInt(row.remoteCount ?? '0', 10),
+        fieldInspectionsCount: parseInt(row.fieldCount ?? '0', 10),
+        postWorkInspectionsCount: parseInt(row.postWorkCount ?? '0', 10),
+      })),
+    );
 
     const teamIds = ranking.map((row) => row.teamId).filter(Boolean);
     const teams = teamIds.length
@@ -738,7 +775,6 @@ export class DashboardsService {
       .select('inspection.teamId', 'teamId')
       .addSelect('COALESCE(team.name, :noTeam)', 'teamName')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
-      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect(rankingModuleScoreExpr('postWorkModule'), 'postWorkPercent')
       .addSelect(
         `AVG(CASE WHEN inspection.module = :remoteModule THEN inspection.scorePercent ELSE NULL END)`,
@@ -765,7 +801,7 @@ export class DashboardsService {
       .setParameter('noTeam', 'Sem equipe')
       .groupBy('inspection.teamId')
       .addGroupBy('team.name')
-      .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST');
+      .orderBy('COALESCE(team.name, :noTeam)', 'ASC');
 
     this.applyQualityFilters(qb, {
       sector: filters.sector,
@@ -811,30 +847,32 @@ export class DashboardsService {
     teamId: string;
     teamName: string;
     inspectionsCount: string;
-    averagePercent: string | null;
     postWorkPercent: string | null;
     remotePercent: string | null;
     fieldPercent: string | null;
     investmentWorksPercent: string | null;
     pendingCount: string;
   }) {
-    const averagePercentRaw = row.averagePercent;
-    const averagePercent =
-      averagePercentRaw != null
-        ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
-        : 0;
+    const postWorkPercent = parseRankingPercent(row.postWorkPercent);
+    const remotePercent = parseRankingPercent(row.remotePercent);
+    const fieldPercent = parseRankingPercent(row.fieldPercent);
+    const investmentWorksPercent = parseRankingPercent(
+      row.investmentWorksPercent,
+    );
 
     return {
       teamId: row.teamId,
       teamName: row.teamName,
-      averagePercent,
-      inspectionsCount: parseInt(row.inspectionsCount, 10),
-      postWorkPercent: roundTo2(parseFloat(row.postWorkPercent ?? '0')),
-      remotePercent: roundTo2(parseFloat(row.remotePercent ?? '0')),
-      fieldPercent: roundTo2(parseFloat(row.fieldPercent ?? '0')),
-      investmentWorksPercent: roundTo2(
-        parseFloat(row.investmentWorksPercent ?? '0'),
+      averagePercent: qualityRankingFinalAverage(
+        fieldPercent,
+        remotePercent,
+        postWorkPercent,
       ),
+      inspectionsCount: parseInt(row.inspectionsCount, 10),
+      postWorkPercent: postWorkPercent ?? 0,
+      remotePercent: remotePercent ?? 0,
+      fieldPercent: fieldPercent ?? 0,
+      investmentWorksPercent: investmentWorksPercent ?? 0,
       pendingCount: parseInt(row.pendingCount, 10),
     };
   }

@@ -36,6 +36,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - `GET /checklists` deixa de hidratar `items`/`sections` (só `sectionCount`/`itemCount`); `POST /inspections` e mutações devolvem `findOneDetail`
 - `GET /teams` lista sem hidratar `collaborators`/`contracts` (hidrata `sectors`); grafo completo em `GET /teams/:id`
 - Ranking de Qualidade (`GET /dashboards/ranking/teams`): média, quantidade e pendências incluem `OBRAS_INVESTIMENTO`; `fieldPercent` junta Campo + OI classificado como Campo; `postWorkPercent` junta Pós-obra + OI classificado como Pós-obra
+- Ranking de Qualidade: `averagePercent` passa a ser a média das notas de Campo, Remoto e Pós-obra (igual peso), não a média de todas as O.S. juntas
 - `GET /inspections` e `GET /inspections/mine`: filtro `osNumber` só aplica com no mínimo 3 caracteres
 - `GET /inspections`: filtro `service` só aplica com no mínimo 3 caracteres
 
