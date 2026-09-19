@@ -151,6 +151,16 @@ export class DashboardsController {
     );
   }
 
+  @Get('overview')
+  getOverview(@CurrentUser() user: any, @Query() query: DashboardQueryDto) {
+    return this.dashboardsService.getOverview({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
   @Get('quality/summary')
   getQualitySummary(
     @CurrentUser() user: any,

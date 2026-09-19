@@ -41,7 +41,7 @@ Authorization: Bearer <token>
   - consulta de formulário para renderização no frontend (sem persistência)
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
+- Dashboards: `GET /dashboards/overview`, `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
 
 ### Regras críticas que impactam UI
 
@@ -2164,6 +2164,43 @@ Response 200:
   "averagePercent": 92.45,
   "inspectionsCount": 34,
   "pendingCount": 5
+}
+```
+
+### GET /dashboards/overview
+
+- Auth: JWT
+- Roles: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `contractId` (`uuid`) opcional
+- Mesmas regras de período, status (`!= RASCUNHO`), `teamId` obrigatório e escopo de contrato de `GET /dashboards/quality/summary` e `GET /dashboards/safety-work/summary`.
+- `quality`: módulos `CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`.
+- `safetyWork`: módulo `SEGURANCA_TRABALHO`.
+- `months`: um ponto por mês do intervalo (`from`–`to`). Mês sem vistoria entra com `0` / `0`.
+- `averagePercent` do módulo: média ponderada pelas vistorias do período.
+
+Response 200:
+
+```json
+{
+  "from": "2026-06-01",
+  "to": "2026-09-19",
+  "quality": {
+    "averagePercent": 82.8,
+    "inspectionsCount": 5756,
+    "months": [
+      { "month": "2026-06", "averagePercent": 78.0, "inspectionsCount": 1689 }
+    ]
+  },
+  "safetyWork": {
+    "averagePercent": 98.8,
+    "inspectionsCount": 1543,
+    "months": [
+      { "month": "2026-06", "averagePercent": 99.0, "inspectionsCount": 356 }
+    ]
+  }
 }
 ```
 

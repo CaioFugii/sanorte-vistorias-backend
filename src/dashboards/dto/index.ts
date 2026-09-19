@@ -8,6 +8,7 @@ export * from './non-conformities-by-checklist-query.dto';
 export * from './non-conformities-by-checklist-response.dto';
 export * from './non-conformities-by-team-query.dto';
 export * from './non-conformities-by-team-response.dto';
+export * from './overview-response.dto';
 export * from './quality-by-service-query.dto';
 export * from './quality-by-service-response.dto';
 export * from './team-ranking-inspections-query.dto';

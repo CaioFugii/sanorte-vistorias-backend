@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- `GET /dashboards/overview` — média e série mensal de Qualidade e Segurança do Trabalho para a Gestão
 - `checklists` em `GET /dashboards/safety-work/summary` — média e quantidade de vistorias por checklist no período
 - `teamsCount` em `GET /dashboards/current-month-by-service` — equipes distintas que geraram o resultado de cada serviço no mês
 - `GET /dashboards/safety-work/inspectors-production` — produção diária por fiscal (apenas `SEGURANCA_TRABALHO`)

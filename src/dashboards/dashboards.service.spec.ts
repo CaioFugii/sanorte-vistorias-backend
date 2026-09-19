@@ -775,6 +775,68 @@ describe('DashboardsService', () => {
     expect(result[1].averagePercent).toBe(74.5);
   });
 
+  it('deve montar overview com meses vazios e média ponderada', async () => {
+    const qualityQb = createMockQueryBuilder({
+      rawMany: [
+        { month: '2026-07', averagePercent: '80', inspectionsCount: '10' },
+        { month: '2026-08', averagePercent: '90', inspectionsCount: '30' },
+      ],
+    });
+    const safetyQb = createMockQueryBuilder({
+      rawMany: [
+        { month: '2026-06', averagePercent: '100', inspectionsCount: '5' },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder
+      .mockReturnValueOnce(qualityQb)
+      .mockReturnValueOnce(safetyQb);
+
+    const result = await service.getOverview({
+      from: '2026-06-01',
+      to: '2026-09-19',
+      contractId: 'contract-1',
+    });
+
+    expect(result.from).toBe('2026-06-01');
+    expect(result.to).toBe('2026-09-19');
+    expect(result.quality.inspectionsCount).toBe(40);
+    expect(result.quality.averagePercent).toBe(87.5);
+    expect(result.quality.months).toEqual([
+      { month: '2026-06', averagePercent: 0, inspectionsCount: 0 },
+      { month: '2026-07', averagePercent: 80, inspectionsCount: 10 },
+      { month: '2026-08', averagePercent: 90, inspectionsCount: 30 },
+      { month: '2026-09', averagePercent: 0, inspectionsCount: 0 },
+    ]);
+    expect(result.safetyWork.inspectionsCount).toBe(5);
+    expect(result.safetyWork.averagePercent).toBe(100);
+    expect(result.safetyWork.months[0]).toEqual({
+      month: '2026-06',
+      averagePercent: 100,
+      inspectionsCount: 5,
+    });
+    expect(qualityQb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [
+          ModuleType.CAMPO,
+          ModuleType.POS_OBRA,
+          ModuleType.REMOTO,
+          ModuleType.OBRAS_INVESTIMENTO,
+        ],
+      },
+    );
+    expect(safetyQb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO],
+      },
+    );
+    expect(qualityQb.andWhere).toHaveBeenCalledWith(
+      'inspection.contractId = :dashboardContractId',
+      { dashboardContractId: 'contract-1' },
+    );
+  });
+
   it('deve usar data e contrato da inspection no summary quando module for SEGURANCA_TRABALHO', async () => {
     const qb = createMockQueryBuilder({
       rawOne: {

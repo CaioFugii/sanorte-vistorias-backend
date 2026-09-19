@@ -24,6 +24,8 @@ import {
   LowScoreCollaboratorsResponseDto,
   NonConformitiesByChecklistResponseDto,
   NonConformitiesByTeamResponseDto,
+  DashboardOverviewModuleDto,
+  DashboardOverviewResponseDto,
   QualityByServiceResponseDto,
   TeamRankingInspectionsResponseDto,
   TeamRankingMetric,
@@ -577,6 +579,123 @@ export class DashboardsService {
     }
 
     return summary;
+  }
+
+  async getOverview(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<DashboardOverviewResponseDto> {
+    this.validateDateRange(filters.from, filters.to);
+    const months = periodMonths(filters.from, filters.to);
+    const [quality, safetyWork] = await Promise.all([
+      this.getOverviewSeries(filters, 'QUALITY', months),
+      this.getOverviewSeries(filters, 'SAFETY_WORK', months),
+    ]);
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      quality,
+      safetyWork,
+    };
+  }
+
+  private async getOverviewSeries(
+    filters: {
+      user?: any;
+      from: string;
+      to: string;
+      contractId?: string;
+    },
+    sector: DashboardSector,
+    months: string[],
+  ): Promise<DashboardOverviewModuleDto> {
+    const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
+    const monthExpr = `to_char(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr}), 'YYYY-MM')`;
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select(monthExpr, 'month')
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .andWhere('inspection.teamId IS NOT NULL')
+      .groupBy(monthExpr)
+      .orderBy(monthExpr, 'ASC');
+
+    this.applyQualityFilters(qb, { sector });
+
+    const periodModule = this.resolvePeriodModule(undefined, sector);
+    if (periodModule === ModuleType.SEGURANCA_TRABALHO) {
+      this.applyDashboardPeriodFilter(qb, {
+        from: filters.from,
+        to: toEndOfDay(filters.to),
+        module: periodModule,
+      });
+    } else {
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) >= :fromDate`,
+        { fromDate: filters.from },
+      );
+      qb.andWhere(
+        `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
+        { toDate: filters.to },
+      );
+    }
+
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
+
+    const rows = await qb.getRawMany<{
+      month: string;
+      averagePercent: string | null;
+      inspectionsCount: string;
+    }>();
+
+    const byMonth = new Map(
+      rows.map((row) => [
+        row.month,
+        {
+          averagePercent:
+            row.averagePercent != null
+              ? roundTo2(parseFloat(row.averagePercent))
+              : 0,
+          inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
+        },
+      ]),
+    );
+
+    const series = months.map((month) => {
+      const point = byMonth.get(month);
+      return {
+        month,
+        averagePercent: point?.averagePercent ?? 0,
+        inspectionsCount: point?.inspectionsCount ?? 0,
+      };
+    });
+
+    const inspectionsCount = series.reduce(
+      (sum, point) => sum + point.inspectionsCount,
+      0,
+    );
+    const weightedSum = series.reduce(
+      (sum, point) => sum + point.averagePercent * point.inspectionsCount,
+      0,
+    );
+
+    return {
+      averagePercent:
+        inspectionsCount > 0 ? roundTo2(weightedSum / inspectionsCount) : 0,
+      inspectionsCount,
+      months: series,
+    };
   }
 
   async getSafetyWorkSummary(filters: {

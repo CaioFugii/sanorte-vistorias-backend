@@ -105,6 +105,12 @@ describe('DashboardsController (integration)', () => {
       summary: {},
       teams: [],
     }),
+    getOverview: jest.fn().mockResolvedValue({
+      from: '2026-06-01',
+      to: '2026-09-19',
+      quality: { averagePercent: 80, inspectionsCount: 10, months: [] },
+      safetyWork: { averagePercent: 90, inspectionsCount: 5, months: [] },
+    }),
   };
 
   const qualityRankingExcelExporterMock = {
@@ -180,6 +186,14 @@ describe('DashboardsController (integration)', () => {
       .get('/dashboards/safety-work/summary')
       .query({ from: '2025-11-01', to: '2025-11-30' })
       .set('x-role', 'ADMIN')
+      .expect(200);
+  });
+
+  it('deve permitir GESTOR no overview da Gestão', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/overview')
+      .query({ from: '2026-06-01', to: '2026-09-19' })
+      .set('x-role', 'GESTOR')
       .expect(200);
   });
 
