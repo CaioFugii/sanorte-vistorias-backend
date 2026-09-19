@@ -16,6 +16,7 @@ import {
   MaxFileSizeValidator,
   FileTypeValidator,
   ParseUUIDPipe,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -26,7 +27,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { InspectionExcelLayout, UserRole } from '../common/enums';
-import { FilterInspectionsDto, ExportInspectionsDto } from './dto/filter-inspections.dto';
+import {
+  FilterInspectionsDto,
+  ExportInspectionsDto,
+} from './dto/filter-inspections.dto';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
 import { ResolveItemDto } from './dto/resolve-item.dto';
 import { ParalyzeInspectionDto } from './dto/paralyze-inspection.dto';
@@ -143,11 +147,7 @@ export class InspectionsController {
     @Body() dto: PresignEvidenceDto,
     @CurrentUser() user: any,
   ) {
-    return this.inspectionsService.presignEvidenceUpload(
-      id,
-      dto,
-      user?.role,
-    );
+    return this.inspectionsService.presignEvidenceUpload(id, dto, user?.role);
   }
 
   @Post(':id/evidences/from-storage')
@@ -201,6 +201,46 @@ export class InspectionsController {
       user?.id,
       user?.role,
     );
+  }
+
+  @Get(':id/evidences/:evidenceId/file')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
+  async getEvidenceFile(
+    @Param('id') id: string,
+    @Param('evidenceId', new ParseUUIDPipe({ version: '4' }))
+    evidenceId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    try {
+      const file = await this.inspectionsService.getEvidenceFileStream(
+        id,
+        evidenceId,
+      );
+      res.setHeader('Content-Type', file.contentType);
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      file.stream.on('error', () => {
+        if (!res.headersSent) {
+          res.status(502).end();
+        } else {
+          res.end();
+        }
+      });
+      file.stream.pipe(res);
+    } catch (error) {
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      if (error instanceof NotFoundException) {
+        res.status(404).json({
+          message: error.message || 'Arquivo da evidência não encontrado',
+        });
+        return;
+      }
+      res.status(500).json({ message: 'Erro ao obter arquivo da evidência' });
+    }
   }
 
   @Delete(':id/evidences/:evidenceId')
@@ -286,7 +326,9 @@ export class InspectionsController {
     return this.inspectionsService.resolve(id, resolveDto, user.id);
   }
 
-  private toListFilters(filterDto: FilterInspectionsDto): InspectionListFilters {
+  private toListFilters(
+    filterDto: FilterInspectionsDto,
+  ): InspectionListFilters {
     return {
       periodFrom: filterDto.periodFrom,
       periodTo: filterDto.periodTo,

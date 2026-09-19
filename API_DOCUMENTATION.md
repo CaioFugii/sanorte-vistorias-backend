@@ -34,7 +34,7 @@ Authorization: Bearer <token>
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/export`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
-  - anexos e assinatura: `POST /inspections/:id/evidences/presign`, `POST /inspections/:id/evidences/from-storage`, `POST /inspections/:id/evidences`, `DELETE /inspections/:id/evidences/:evidenceId`, `POST /inspections/:id/signature`
+  - anexos e assinatura: `POST /inspections/:id/evidences/presign`, `POST /inspections/:id/evidences/from-storage`, `POST /inspections/:id/evidences`, `GET /inspections/:id/evidences/:evidenceId/file`, `DELETE /inspections/:id/evidences/:evidenceId`, `POST /inspections/:id/signature`
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
 - Relatórios dinâmicos:
   - tipos e schema: `GET /reports/types`, `GET /reports/types/:code/fields`
@@ -88,7 +88,7 @@ Authorization: Bearer <token>
   - Sempre recalcula `scorePercent`.
   - Para GESTOR/SUPERVISOR/ADMIN, reavalia status automaticamente (`FINALIZADA` <-> `PENDENTE_AJUSTE`) quando aplicável.
   - Exceção: para módulo `SEGURANCA_TRABALHO`, o status não vai para `PENDENTE_AJUSTE` (permanece/retorna `FINALIZADA`).
-- `POST /inspections/:id/evidences/presign`, `POST /inspections/:id/evidences/from-storage`, `POST /inspections/:id/evidences` e `DELETE /inspections/:id/evidences/:evidenceId`:
+- `POST /inspections/:id/evidences/presign`, `POST /inspections/:id/evidences/from-storage`, `POST /inspections/:id/evidences`, `GET /inspections/:id/evidences/:evidenceId/file` e `DELETE /inspections/:id/evidences/:evidenceId`:
   - FISCAL só em `RASCUNHO`.
   - GESTOR/SUPERVISOR/ADMIN em qualquer status.
 - `POST /inspections/:id/paralyze`:
@@ -1752,6 +1752,20 @@ Response 201:
   "createdAt": "2026-02-19T12:00:00.000Z"
 }
 ```
+
+### GET /inspections/:id/evidences/:evidenceId/file
+
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
+- Request JSON: não se aplica
+- Path:
+  - `id`: UUID da vistoria (ou `externalId`, mesmo critério de `GET /inspections/:id`)
+  - `evidenceId`: UUID da evidência (retornado em `POST /inspections/:id/evidences` ou no detalhe da vistoria em `evidences[].id`)
+- Response: binário da imagem (`Content-Type` do arquivo; ex. `image/jpeg`)
+- Comportamento:
+  - A API busca o arquivo no storage (S3/URL pública) no servidor e devolve o stream.
+  - Use esta rota no PDF do navegador. **Não** faça `fetch` direto na URL do S3 — CORS e proxies corporativos costumam bloquear.
+- Erros:
+  - `404` se a evidência não existir, não pertencer à vistoria ou não tiver arquivo persistido.
 
 ### DELETE /inspections/:id/evidences/:evidenceId
 

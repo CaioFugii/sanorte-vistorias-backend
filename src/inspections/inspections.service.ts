@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import * as fs from 'fs/promises';
+import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import {
@@ -63,9 +64,7 @@ import {
   buildSyncedAssetFields,
   resolveStoredAssetId,
 } from '../storage/asset-storage.util';
-import {
-  getAllowedContractIds,
-} from '../common/auth/contract-scope.util';
+import { getAllowedContractIds } from '../common/auth/contract-scope.util';
 
 type PendingItemsSummary = {
   pendingItemsCount: number;
@@ -579,10 +578,7 @@ export class InspectionsService {
     };
   }
 
-  private createListQuery(
-    filters: InspectionListFilters,
-    userScope?: any,
-  ) {
+  private createListQuery(filters: InspectionListFilters, userScope?: any) {
     const allowedContractIds = getAllowedContractIds(userScope);
     const query = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -603,7 +599,11 @@ export class InspectionsService {
         'inspection.createdAt',
       ])
       .addSelect(['team.name'])
-      .addSelect(['serviceOrder.osNumber', 'serviceOrder.fimExecucao', 'serviceOrder.resultado'])
+      .addSelect([
+        'serviceOrder.osNumber',
+        'serviceOrder.fimExecucao',
+        'serviceOrder.resultado',
+      ])
       .addSelect(['investmentWork.id', 'investmentWork.workName'])
       .andWhere('inspection.status != :draftStatus', {
         draftStatus: InspectionStatus.RASCUNHO,
@@ -1206,7 +1206,9 @@ export class InspectionsService {
       relations: ['collaborators'],
     });
 
-    return (inspection?.collaborators ?? []).map((collaborator) => collaborator.id);
+    return (inspection?.collaborators ?? []).map(
+      (collaborator) => collaborator.id,
+    );
   }
 
   private async deleteInspectionStoredAssets(
@@ -1215,19 +1217,11 @@ export class InspectionsService {
     const [evidenceRows, signatureRows] = await Promise.all([
       this.evidencesRepository.find({
         where: { inspectionId },
-        select: [
-          'cloudinaryPublicId',
-          'storageProvider',
-          'storageKey',
-        ],
+        select: ['cloudinaryPublicId', 'storageProvider', 'storageKey'],
       }),
       this.signaturesRepository.find({
         where: { inspectionId },
-        select: [
-          'cloudinaryPublicId',
-          'storageProvider',
-          'storageKey',
-        ],
+        select: ['cloudinaryPublicId', 'storageProvider', 'storageKey'],
       }),
     ]);
 
@@ -1604,7 +1598,9 @@ export class InspectionsService {
         'Upload direto não está disponível para o storage atual',
       );
     }
-    if (this.normalizePublicUrl(dto.url) !== this.normalizePublicUrl(expectedUrl)) {
+    if (
+      this.normalizePublicUrl(dto.url) !== this.normalizePublicUrl(expectedUrl)
+    ) {
       throw new BadRequestException('URL inválida para a chave informada');
     }
 
@@ -1685,7 +1681,9 @@ export class InspectionsService {
   }
 
   private assertEvidenceStorageKey(storageKey: string): void {
-    if (!InspectionsService.EVIDENCE_STORAGE_KEY_PATTERN.test(storageKey.trim())) {
+    if (
+      !InspectionsService.EVIDENCE_STORAGE_KEY_PATTERN.test(storageKey.trim())
+    ) {
       throw new BadRequestException('storageKey inválida');
     }
   }
@@ -1729,6 +1727,41 @@ export class InspectionsService {
     }
 
     await this.evidencesRepository.delete(evidence.id);
+  }
+
+  async getEvidenceFileStream(
+    inspectionId: string,
+    evidenceId: string,
+  ): Promise<{ stream: NodeJS.ReadableStream; contentType: string }> {
+    const inspection =
+      await this.findInspectionCoreByIdOrExternalId(inspectionId);
+    const evidence = await this.evidencesRepository.findOne({
+      where: { id: evidenceId, inspectionId: inspection.id },
+    });
+
+    if (!evidence) {
+      throw new NotFoundException('Evidência não encontrada nesta vistoria');
+    }
+
+    const url = evidence.url?.trim();
+    if (!url || url.startsWith('data:')) {
+      throw new NotFoundException('Arquivo da evidência não encontrado');
+    }
+
+    const upstream = await fetch(url);
+    if (!upstream.ok || !upstream.body) {
+      throw new NotFoundException('Arquivo da evidência não encontrado');
+    }
+
+    return {
+      stream: Readable.fromWeb(
+        upstream.body as import('stream/web').ReadableStream,
+      ),
+      contentType:
+        upstream.headers.get('content-type') ||
+        evidence.mimeType ||
+        'application/octet-stream',
+    };
   }
 
   async addSignature(
@@ -2023,7 +2056,10 @@ export class InspectionsService {
           'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
         );
       }
-      if (Object.prototype.hasOwnProperty.call(payload, 'teamId') && nextTeamId) {
+      if (
+        Object.prototype.hasOwnProperty.call(payload, 'teamId') &&
+        nextTeamId
+      ) {
         await this.assertTeamExists(nextTeamId);
       }
 
@@ -2653,7 +2689,10 @@ export class InspectionsService {
     }
 
     const nonConformItems = await this.inspectionItemsRepository.find({
-      where: { inspectionId: inspection.id, answer: ChecklistAnswer.NAO_CONFORME },
+      where: {
+        inspectionId: inspection.id,
+        answer: ChecklistAnswer.NAO_CONFORME,
+      },
     });
 
     const pendingItems = nonConformItems.filter((i) => i.resolvedAt == null);

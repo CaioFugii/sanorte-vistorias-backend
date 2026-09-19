@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InspectionsService } from './inspections.service';
 import { Inspection } from '../entities';
 import {
@@ -255,7 +255,9 @@ describe('InspectionsService', () => {
       hasParalysisPenalty: false,
     } as unknown as Inspection;
 
-    jest.spyOn(service as any, 'persistNewInspection').mockResolvedValue(createdInspection);
+    jest
+      .spyOn(service as any, 'persistNewInspection')
+      .mockResolvedValue(createdInspection);
     const paralyzeSpy = jest
       .spyOn(service, 'paralyze')
       .mockResolvedValue(createdInspection as any);
@@ -304,7 +306,9 @@ describe('InspectionsService', () => {
       inspectionScope: InspectionScope.TEAM,
     } as unknown as Inspection;
 
-    jest.spyOn(service as any, 'persistNewInspection').mockResolvedValue(createdInspection);
+    jest
+      .spyOn(service as any, 'persistNewInspection')
+      .mockResolvedValue(createdInspection);
     inspectionsRepository.findOne.mockResolvedValueOnce(null);
 
     const result = await service.syncInspections(
@@ -366,7 +370,9 @@ describe('InspectionsService', () => {
       inspectionScope: InspectionScope.TEAM,
     } as unknown as Inspection;
 
-    jest.spyOn(service as any, 'persistNewInspection').mockResolvedValue(createdInspection);
+    jest
+      .spyOn(service as any, 'persistNewInspection')
+      .mockResolvedValue(createdInspection);
     inspectionsRepository.findOne.mockResolvedValueOnce(null);
 
     const result = await service.syncInspections(
@@ -430,6 +436,70 @@ describe('InspectionsService', () => {
 
     expect(assetStorageRegistry.deleteStoredAsset).not.toHaveBeenCalled();
     expect(evidencesRepository.delete).toHaveBeenCalledWith('e1');
+  });
+
+  it('getEvidenceFileStream deve buscar o arquivo na URL da evidência', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'i1',
+      status: InspectionStatus.FINALIZADA,
+      createdByUserId: 'u1',
+    });
+    evidencesRepository.findOne.mockResolvedValue({
+      id: 'e1',
+      inspectionId: 'i1',
+      url: 'https://bucket.s3.amazonaws.com/foto.jpg',
+      mimeType: 'image/jpeg',
+    });
+
+    const originalFetch = global.fetch;
+    const webBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(Buffer.from('jpeg-bytes')));
+        controller.close();
+      },
+    });
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      body: webBody,
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'image/jpeg' : null,
+      },
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    try {
+      const result = await service.getEvidenceFileStream('i1', 'e1');
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://bucket.s3.amazonaws.com/foto.jpg',
+      );
+      expect(result.contentType).toBe('image/jpeg');
+      const chunks: Buffer[] = [];
+      for await (const chunk of result.stream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      expect(Buffer.concat(chunks).toString()).toBe('jpeg-bytes');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('getEvidenceFileStream deve retornar 404 quando a evidência não tem URL', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'i1',
+      status: InspectionStatus.FINALIZADA,
+      createdByUserId: 'u1',
+    });
+    evidencesRepository.findOne.mockResolvedValue({
+      id: 'e1',
+      inspectionId: 'i1',
+      url: null,
+      dataUrl: 'data:image/jpeg;base64,xxx',
+    });
+
+    await expect(service.getEvidenceFileStream('i1', 'e1')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('removeEvidence deve proibir FISCAL quando vistoria não está em RASCUNHO', async () => {
@@ -765,7 +835,9 @@ describe('InspectionsService', () => {
       andWhere: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
-      getMany: jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }, { id: '3' }]),
+      getMany: jest
+        .fn()
+        .mockResolvedValue([{ id: '1' }, { id: '2' }, { id: '3' }]),
     };
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
 
@@ -851,14 +923,9 @@ describe('InspectionsService', () => {
     };
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
 
-    await service.findMine(
-      'user-id',
-      3,
-      50,
-      '12',
-      undefined,
-      { role: UserRole.ADMIN },
-    );
+    await service.findMine('user-id', 3, 50, '12', undefined, {
+      role: UserRole.ADMIN,
+    });
 
     expect(qb.skip).toHaveBeenCalledWith(100);
     expect(qb.take).toHaveBeenCalledWith(50);
@@ -882,14 +949,9 @@ describe('InspectionsService', () => {
     };
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
 
-    await service.findMine(
-      'user-id',
-      1,
-      10,
-      'OS-9',
-      undefined,
-      { role: UserRole.ADMIN },
-    );
+    await service.findMine('user-id', 1, 10, 'OS-9', undefined, {
+      role: UserRole.ADMIN,
+    });
 
     expect(qb.andWhere).toHaveBeenCalledWith(
       'serviceOrder.osNumber ILIKE :osNumber',
@@ -1061,14 +1123,17 @@ describe('InspectionsService', () => {
       status: InspectionStatus.RASCUNHO,
       createdByUserId: 'user-1',
     });
-    const storageKey = 'quality/evidences/11111111-1111-1111-1111-111111111111.jpg';
+    const storageKey =
+      'quality/evidences/11111111-1111-1111-1111-111111111111.jpg';
     const publicUrl = `https://bucket.s3.sa-east-1.amazonaws.com/${storageKey}`;
     assetStorage.getPublicUrl.mockReturnValue(publicUrl);
     assetStorage.statObject.mockResolvedValue({
       contentLength: 1200,
       contentType: 'image/jpeg',
     });
-    evidencesRepository.create.mockImplementation((payload: unknown) => payload);
+    evidencesRepository.create.mockImplementation(
+      (payload: unknown) => payload,
+    );
     evidencesRepository.save.mockImplementation(async (payload: unknown) => ({
       id: 'ev-1',
       ...(payload as object),

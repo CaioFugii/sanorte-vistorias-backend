@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- `GET /inspections/:id/evidences/:evidenceId/file` — stream autenticado da evidência (PDF no browser não precisa ir ao S3)
 - `GET /dashboards/overview` — média e série mensal de Qualidade e Segurança do Trabalho para a Gestão
 - `checklists` em `GET /dashboards/safety-work/summary` — média e quantidade de vistorias por checklist no período
 - `teamsCount` em `GET /dashboards/current-month-by-service` — equipes distintas que geraram o resultado de cada serviço no mês
