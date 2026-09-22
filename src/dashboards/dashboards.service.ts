@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { In, Repository } from 'typeorm';
-import { Inspection, Team } from '../entities';
+import { Checklist, Inspection, Team } from '../entities';
 import {
   ModuleType,
   InspectionScope,
@@ -27,6 +27,7 @@ import {
   DashboardOverviewModuleDto,
   DashboardOverviewResponseDto,
   QualityByServiceResponseDto,
+  SafetyWorkChecklistInspectionsResponseDto,
   TeamRankingInspectionsResponseDto,
   TeamRankingMetric,
   TeamPerformanceByTeamsResponseDto,
@@ -223,6 +224,8 @@ export class DashboardsService {
     private inspectionsRepository: Repository<Inspection>,
     @InjectRepository(Team)
     private teamRepository: Repository<Team>,
+    @InjectRepository(Checklist)
+    private checklistRepository: Repository<Checklist>,
   ) {}
 
   private validateDateRange(from: string, to: string): void {
@@ -787,6 +790,125 @@ export class DashboardsService {
       averagePercent: roundTo2(parseFloat(row.averagePercent ?? '0')),
       inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
     }));
+  }
+
+  async getSafetyWorkChecklistInspections(
+    checklistId: string,
+    filters: {
+      user?: any;
+      from: string;
+      to: string;
+      page?: number;
+      limit?: number;
+      contractId?: string;
+    },
+  ): Promise<SafetyWorkChecklistInspectionsResponseDto> {
+    const checklist = await this.checklistRepository.findOne({
+      where: { id: checklistId },
+      select: ['id', 'name'],
+    });
+    if (!checklist) {
+      throw new NotFoundException('Checklist não encontrado');
+    }
+
+    this.validateDateRange(filters.from, filters.to);
+    const page = Math.max(filters.page ?? 1, 1);
+    const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
+    const skip = (page - 1) * limit;
+    const finishedAtExpr = `COALESCE(inspection.finalizedAt, inspection.createdAt)`;
+
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.checklist', 'checklist')
+      .leftJoin('inspection.team', 'team')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select('inspection.id', 'inspectionId')
+      .addSelect('inspection.externalId', 'externalId')
+      .addSelect('inspection.teamId', 'teamId')
+      .addSelect('team.name', 'teamName')
+      .addSelect('inspection.serviceOrderId', 'serviceOrderId')
+      .addSelect('serviceOrder.osNumber', 'serviceOrderNumber')
+      .addSelect('serviceOrder.address', 'serviceOrderAddress')
+      .addSelect('inspection.locationDescription', 'locationDescription')
+      .addSelect('inspection.module', 'module')
+      .addSelect('inspection.evaluationModule', 'evaluationModule')
+      .addSelect('inspection.status', 'status')
+      .addSelect('inspection.scorePercent', 'scorePercent')
+      .addSelect(finishedAtExpr, 'finishedAt')
+      .addSelect('inspection.createdAt', 'createdAt')
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .andWhere('inspection.teamId IS NOT NULL')
+      .andWhere('checklist.id = :checklistId', { checklistId });
+
+    this.applyQualityFilters(qb, { sector: 'SAFETY_WORK' });
+    this.applyDashboardPeriodFilter(qb, {
+      from: filters.from,
+      to: toEndOfDay(filters.to),
+      module: ModuleType.SEGURANCA_TRABALHO,
+    });
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: ModuleType.SEGURANCA_TRABALHO,
+    });
+
+    const [rows, total] = await Promise.all([
+      qb
+        .clone()
+        .orderBy(finishedAtExpr, 'DESC', 'NULLS LAST')
+        .addOrderBy('inspection.createdAt', 'DESC')
+        .offset(skip)
+        .limit(limit)
+        .getRawMany<{
+          inspectionId: string;
+          externalId: string | null;
+          teamId: string | null;
+          teamName: string | null;
+          serviceOrderId: string | null;
+          serviceOrderNumber: string | null;
+          serviceOrderAddress: string | null;
+          locationDescription: string | null;
+          module: ModuleType;
+          evaluationModule: InvestmentWorkEvaluationModule | null;
+          status: InspectionStatus;
+          scorePercent: string | null;
+          finishedAt: Date | null;
+          createdAt: Date;
+        }>(),
+      qb.clone().getCount(),
+    ]);
+
+    const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      checklistId: checklist.id,
+      checklistName: checklist.name,
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+      inspections: rows.map((row) => ({
+        inspectionId: row.inspectionId,
+        externalId: row.externalId,
+        teamId: row.teamId,
+        teamName: row.teamName,
+        serviceOrderId: row.serviceOrderId,
+        serviceOrderNumber: row.serviceOrderNumber,
+        serviceOrderAddress: row.serviceOrderAddress ?? row.locationDescription,
+        module: row.module,
+        evaluationModule: row.evaluationModule ?? null,
+        status: row.status,
+        scorePercent: roundTo2(parseFloat(row.scorePercent ?? '0')),
+        finishedAt: row.finishedAt,
+        createdAt: row.createdAt,
+      })),
+    };
   }
 
   async getTeamsRanking(filters: {

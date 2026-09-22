@@ -2277,6 +2277,58 @@ Response 200:
 - Comportamento: mesmo contrato de retorno de `GET /dashboards/summary`, com agregação no setor `SAFETY_WORK`.
 - `checklists`: média (`AVG(scorePercent)`) e quantidade de vistorias por checklist no período. Inclui apenas checklists com pelo menos uma vistoria (mesmas regras do resumo: exclui `RASCUNHO` e exige `teamId`).
 
+### GET /dashboards/safety-work/checklists/:checklistId/inspections
+
+- Auth: JWT
+- Roles: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Path:
+  - `checklistId` (`uuid`) **obrigatório**
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `page` (opcional, default `1`)
+  - `limit` (opcional, default `20`, máximo `100`)
+  - `contractId` (`uuid`) opcional
+- Retorna as vistorias que compõem a média do checklist no card de avaliações de Segurança do Trabalho.
+- Mesmas regras de `GET /dashboards/safety-work/summary`: exclui `RASCUNHO`, exige `teamId`, módulo `SEGURANCA_TRABALHO`, período por `COALESCE(inspection.finalizedAt, inspection.createdAt)`.
+- `404` se o checklist não existir.
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+
+Response 200:
+
+```json
+{
+  "from": "2026-09-01",
+  "to": "2026-09-21",
+  "checklistId": "b8b006bf-a9f7-42ec-882f-263bc672e430",
+  "checklistName": "Vistoria de Canteiro",
+  "page": 1,
+  "limit": 20,
+  "total": 2,
+  "totalPages": 1,
+  "hasNext": false,
+  "hasPrev": false,
+  "inspections": [
+    {
+      "inspectionId": "7e3bc6ad-2b2f-44bf-bec0-dad64989b38c",
+      "externalId": "31a9e29b-1ca9-4d69-a6cf-e6367471743f",
+      "teamId": "a6e6b603-f136-4937-9115-7a2ae8880ba3",
+      "teamName": "Equipe Norte",
+      "serviceOrderId": null,
+      "serviceOrderNumber": null,
+      "serviceOrderAddress": "Canteiro Norte",
+      "module": "SEGURANCA_TRABALHO",
+      "evaluationModule": null,
+      "status": "FINALIZADA",
+      "scorePercent": 99.6,
+      "finishedAt": "2026-09-10T12:00:00.000Z",
+      "createdAt": "2026-09-10T11:00:00.000Z"
+    }
+  ]
+}
+```
+
 Response 200:
 
 ```json

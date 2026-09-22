@@ -1,4 +1,12 @@
-import { Controller, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { DashboardsService } from './dashboards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -15,6 +23,7 @@ import {
   NonConformitiesByChecklistQueryDto,
   NonConformitiesByTeamQueryDto,
   QualityByServiceQueryDto,
+  SafetyWorkChecklistInspectionsQueryDto,
   TeamRankingInspectionsQueryDto,
   TeamPerformanceByTeamsQueryDto,
 } from './dto';
@@ -168,6 +177,25 @@ export class DashboardsController {
   ) {
     return this.dashboardsService.getSummary(
       this.summaryFilters(user, query, 'QUALITY', true),
+    );
+  }
+
+  @Get('safety-work/checklists/:checklistId/inspections')
+  getSafetyWorkChecklistInspections(
+    @CurrentUser() user: any,
+    @Param('checklistId', ParseUUIDPipe) checklistId: string,
+    @Query() query: SafetyWorkChecklistInspectionsQueryDto,
+  ) {
+    return this.dashboardsService.getSafetyWorkChecklistInspections(
+      checklistId,
+      {
+        user,
+        from: query.from,
+        to: query.to,
+        page: query.page,
+        limit: query.limit,
+        contractId: query.contractId,
+      },
     );
   }
 

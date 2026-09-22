@@ -1,5 +1,6 @@
 import { DashboardsService } from './dashboards.service';
 import { InspectionScope, InspectionStatus, ModuleType } from '../common/enums';
+import { NotFoundException } from '@nestjs/common';
 import { TeamRankingMetric } from './dto';
 
 function createMockQueryBuilder({
@@ -39,6 +40,7 @@ describe('DashboardsService', () => {
   let service: DashboardsService;
   let inspectionsRepository: any;
   let teamRepository: any;
+  let checklistRepository: any;
 
   beforeEach(() => {
     inspectionsRepository = {
@@ -50,9 +52,14 @@ describe('DashboardsService', () => {
       find: jest.fn().mockResolvedValue([]),
     };
 
+    checklistRepository = {
+      findOne: jest.fn(),
+    };
+
     service = new DashboardsService(
       inspectionsRepository as any,
       teamRepository as any,
+      checklistRepository as any,
     );
   });
 
@@ -1364,6 +1371,110 @@ describe('DashboardsService', () => {
       'DESC',
       'NULLS LAST',
     );
+  });
+
+  it('deve listar as vistorias do checklist de segurança com os filtros do resumo', async () => {
+    checklistRepository.findOne.mockResolvedValue({
+      id: 'cl-1',
+      name: 'Vistoria de Canteiro',
+    });
+
+    const finishedAt = new Date('2026-09-10T12:00:00.000Z');
+    const createdAt = new Date('2026-09-10T11:00:00.000Z');
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          inspectionId: 'insp-1',
+          externalId: 'ext-1',
+          teamId: 'team-1',
+          teamName: 'Equipe Norte',
+          serviceOrderId: null,
+          serviceOrderNumber: null,
+          serviceOrderAddress: null,
+          locationDescription: 'Canteiro Norte',
+          module: ModuleType.SEGURANCA_TRABALHO,
+          evaluationModule: null,
+          status: InspectionStatus.FINALIZADA,
+          scorePercent: '99.6',
+          finishedAt,
+          createdAt,
+        },
+      ],
+      count: 1,
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getSafetyWorkChecklistInspections('cl-1', {
+      from: '2026-09-01',
+      to: '2026-09-21',
+      page: 1,
+      limit: 20,
+      contractId: 'contract-1',
+      user: {
+        role: 'GESTOR',
+        contracts: [{ id: 'contract-1' }],
+      },
+    });
+
+    expect(result).toMatchObject({
+      from: '2026-09-01',
+      to: '2026-09-21',
+      checklistId: 'cl-1',
+      checklistName: 'Vistoria de Canteiro',
+      page: 1,
+      limit: 20,
+      total: 1,
+      totalPages: 1,
+      hasNext: false,
+      hasPrev: false,
+    });
+    expect(result.inspections[0]).toEqual({
+      inspectionId: 'insp-1',
+      externalId: 'ext-1',
+      teamId: 'team-1',
+      teamName: 'Equipe Norte',
+      serviceOrderId: null,
+      serviceOrderNumber: null,
+      serviceOrderAddress: 'Canteiro Norte',
+      module: ModuleType.SEGURANCA_TRABALHO,
+      evaluationModule: null,
+      status: InspectionStatus.FINALIZADA,
+      scorePercent: 99.6,
+      finishedAt,
+      createdAt,
+    });
+    expect(qb.where).toHaveBeenCalledWith('inspection.status != :draft', {
+      draft: InspectionStatus.RASCUNHO,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId IS NOT NULL');
+    expect(qb.andWhere).toHaveBeenCalledWith('checklist.id = :checklistId', {
+      checklistId: 'cl-1',
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO],
+      },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from',
+      { from: '2026-09-01' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.contractId = :dashboardContractId',
+      { dashboardContractId: 'contract-1' },
+    );
+  });
+
+  it('deve retornar 404 quando o checklist de segurança não existe', async () => {
+    checklistRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.getSafetyWorkChecklistInspections('missing', {
+        from: '2026-09-01',
+        to: '2026-09-21',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('deve retornar payload reduzido para ranking de safety work', async () => {

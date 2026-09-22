@@ -29,6 +29,19 @@ describe('DashboardsController (integration)', () => {
       inspectionsCount: 10,
       pendingCount: 1,
     }),
+    getSafetyWorkChecklistInspections: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      checklistId: '11111111-1111-4111-8111-111111111111',
+      checklistName: 'Vistoria de Canteiro',
+      page: 1,
+      limit: 20,
+      total: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrev: false,
+      inspections: [],
+    }),
     getSafetyWorkSummary: jest.fn().mockResolvedValue({
       averagePercent: 70,
       inspectionsCount: 10,
@@ -179,6 +192,32 @@ describe('DashboardsController (integration)', () => {
       .query({ from: '2025-11-01', to: '2025-11-30' })
       .set('x-role', 'ADMIN')
       .expect(200);
+  });
+
+  it('deve permitir ADMIN no detalhamento de vistorias por checklist de segurança', async () => {
+    await request(app.getHttpServer())
+      .get(
+        '/dashboards/safety-work/checklists/11111111-1111-4111-8111-111111111111/inspections',
+      )
+      .query({
+        from: '2025-11-01',
+        to: '2025-11-30',
+        page: 1,
+        limit: 20,
+      })
+      .set('x-role', 'ADMIN')
+      .expect(200);
+
+    expect(
+      dashboardsServiceMock.getSafetyWorkChecklistInspections,
+    ).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expect.objectContaining({
+        user: { role: 'ADMIN' },
+        from: '2025-11-01',
+        to: '2025-11-30',
+      }),
+    );
   });
 
   it('deve permitir ADMIN no endpoint de segurança do trabalho separado', async () => {
