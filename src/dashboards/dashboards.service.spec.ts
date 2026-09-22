@@ -455,22 +455,35 @@ describe('DashboardsService', () => {
     );
   });
 
-  it('deve retornar top não conformidades por equipe', async () => {
+  it('deve retornar top não conformidades por equipe separado por checklist', async () => {
     const qb = createMockQueryBuilder({
       rawMany: [
         {
+          checklistId: 'cl-1',
+          checklistName: 'Checklist Campo',
+          sectorName: 'ESGOTO',
           checklistItemId: 'item-1',
           checklistItemTitle: 'Uso correto de EPI',
           nonConformitiesCount: '10',
           answersCount: '40',
-          checklistsCount: '2',
         },
         {
+          checklistId: 'cl-1',
+          checklistName: 'Checklist Campo',
+          sectorName: 'ESGOTO',
           checklistItemId: 'item-2',
           checklistItemTitle: 'Sinalização da área',
           nonConformitiesCount: '6',
           answersCount: '30',
-          checklistsCount: '1',
+        },
+        {
+          checklistId: 'cl-2',
+          checklistName: 'Checklist Pós-obra',
+          sectorName: 'AGUA',
+          checklistItemId: 'item-1',
+          checklistItemTitle: 'Uso correto de EPI',
+          nonConformitiesCount: '3',
+          answersCount: '10',
         },
       ],
     });
@@ -482,7 +495,7 @@ describe('DashboardsService', () => {
       sector: 'QUALITY' as any,
       module: ModuleType.CAMPO,
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
-      limit: 2,
+      limit: 1,
     });
 
     expect(result).toEqual({
@@ -490,23 +503,37 @@ describe('DashboardsService', () => {
       to: '2026-01-31',
       module: ModuleType.CAMPO,
       teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
-      limit: 2,
-      nonConformities: [
+      limit: 1,
+      checklists: [
         {
-          checklistItemId: 'item-1',
-          checklistItemTitle: 'Uso correto de EPI',
-          nonConformitiesCount: 10,
-          answersCount: 40,
-          nonConformityRatePercent: 25,
-          checklistsCount: 2,
+          checklistId: 'cl-1',
+          checklistName: 'Checklist Campo',
+          sectorName: 'ESGOTO',
+          totalNonConformities: 16,
+          questions: [
+            {
+              checklistItemId: 'item-1',
+              checklistItemTitle: 'Uso correto de EPI',
+              nonConformitiesCount: 10,
+              answersCount: 40,
+              nonConformityRatePercent: 25,
+            },
+          ],
         },
         {
-          checklistItemId: 'item-2',
-          checklistItemTitle: 'Sinalização da área',
-          nonConformitiesCount: 6,
-          answersCount: 30,
-          nonConformityRatePercent: 20,
-          checklistsCount: 1,
+          checklistId: 'cl-2',
+          checklistName: 'Checklist Pós-obra',
+          sectorName: 'AGUA',
+          totalNonConformities: 3,
+          questions: [
+            {
+              checklistItemId: 'item-1',
+              checklistItemTitle: 'Uso correto de EPI',
+              nonConformitiesCount: 3,
+              answersCount: 10,
+              nonConformityRatePercent: 30,
+            },
+          ],
         },
       ],
     });
@@ -517,14 +544,11 @@ describe('DashboardsService', () => {
     expect(qb.andWhere).toHaveBeenCalledWith('inspection.module = :module', {
       module: ModuleType.CAMPO,
     });
+    expect(qb.groupBy).toHaveBeenCalledWith('checklist.id');
+    expect(qb.limit).not.toHaveBeenCalled();
     expect(qb.setParameter).toHaveBeenCalledWith(
       'nonConformAnswer',
       'NAO_CONFORME',
-    );
-    expect(qb.limit).toHaveBeenCalledWith(2);
-    expect(qb.addSelect).toHaveBeenCalledWith(
-      'COUNT(DISTINCT inspection.checklistId)',
-      'checklistsCount',
     );
   });
 

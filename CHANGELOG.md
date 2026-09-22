@@ -36,6 +36,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Changed
 
+- `GET /dashboards/non-conformities/by-team` separa as não conformidades da equipe por checklist, com top de perguntas em cada um
 - `GET /checklists` deixa de hidratar `items`/`sections` (só `sectionCount`/`itemCount`); `POST /inspections` e mutações devolvem `findOneDetail`
 - `GET /teams` lista sem hidratar `collaborators`/`contracts` (hidrata `sectors`); grafo completo em `GET /teams/:id`
 - Ranking de Qualidade (`GET /dashboards/ranking/teams`): média, quantidade e pendências incluem `OBRAS_INVESTIMENTO`; `fieldPercent` junta Campo + OI classificado como Campo; `postWorkPercent` junta Pós-obra + OI classificado como Pós-obra

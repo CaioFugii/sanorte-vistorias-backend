@@ -109,7 +109,7 @@ describe('DashboardsController (integration)', () => {
       to: '2025-11-30',
       teamId: 'team-id',
       limit: 10,
-      nonConformities: [],
+      checklists: [],
     }),
     getTeamPerformanceByTeams: jest.fn().mockResolvedValue({
       from: '2025-11-01',

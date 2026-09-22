@@ -1,13 +1,5 @@
 import { ModuleType } from '../../common/enums';
-
-export class TeamTopNonConformityDto {
-  checklistItemId: string;
-  checklistItemTitle: string;
-  nonConformitiesCount: number;
-  answersCount: number;
-  nonConformityRatePercent: number;
-  checklistsCount: number;
-}
+import { NonConformityChecklistDto } from './non-conformities-by-checklist-response.dto';
 
 export class NonConformitiesByTeamResponseDto {
   from: string;
@@ -15,5 +7,5 @@ export class NonConformitiesByTeamResponseDto {
   module?: ModuleType;
   teamId: string;
   limit: number;
-  nonConformities: TeamTopNonConformityDto[];
+  checklists: NonConformityChecklistDto[];
 }

@@ -2854,7 +2854,7 @@ Response 200:
   - `PENDENTE_AJUSTE`
   - `RESOLVIDA`
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
-- Retorna as maiores não conformidades da equipe no período, agregadas por pergunta (`checklistItem`) independentemente do checklist.
+- Retorna as não conformidades da equipe no período **separadas por checklist**. `limit` é o máximo de perguntas por checklist (não um ranking único entre checklists). A mesma pergunta citada em checklists diferentes aparece em cada um, com a contagem daquele checklist.
 
 Response 200:
 
@@ -2864,23 +2864,22 @@ Response 200:
   "to": "2026-01-31",
   "module": "CAMPO",
   "teamId": "7f214d1f-5e2a-46f8-8f90-e64129876f84",
-  "limit": 3,
-  "nonConformities": [
+  "limit": 5,
+  "checklists": [
     {
-      "checklistItemId": "0f4f9da6-0f43-4f22-a4d0-b0c4b6a7e31f",
-      "checklistItemTitle": "Uso correto de EPI",
-      "nonConformitiesCount": 10,
-      "answersCount": 40,
-      "nonConformityRatePercent": 25,
-      "checklistsCount": 2
-    },
-    {
-      "checklistItemId": "64a2783f-66a4-4fc7-b112-478b95f80f4d",
-      "checklistItemTitle": "Sinalização da área",
-      "nonConformitiesCount": 6,
-      "answersCount": 30,
-      "nonConformityRatePercent": 20,
-      "checklistsCount": 1
+      "checklistId": "b8b006bf-a9f7-42ec-882f-263bc672e430",
+      "checklistName": "Vistoria de Campo",
+      "sectorName": "ESGOTO",
+      "totalNonConformities": 16,
+      "questions": [
+        {
+          "checklistItemId": "0f4f9da6-0f43-4f22-a4d0-b0c4b6a7e31f",
+          "checklistItemTitle": "Uso correto de EPI",
+          "nonConformitiesCount": 10,
+          "answersCount": 40,
+          "nonConformityRatePercent": 25
+        }
+      ]
     }
   ]
 }

@@ -2145,13 +2145,17 @@ export class DashboardsService {
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .innerJoin('inspection.items', 'inspectionItem')
+      .innerJoin('inspection.checklist', 'checklist')
+      .leftJoin('checklist.sector', 'sector')
       .innerJoin('inspectionItem.checklistItem', 'checklistItem')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
-      .select('checklistItem.id', 'checklistItemId')
+      .select('checklist.id', 'checklistId')
+      .addSelect('checklist.name', 'checklistName')
+      .addSelect('sector.name', 'sectorName')
+      .addSelect('checklistItem.id', 'checklistItemId')
       .addSelect('checklistItem.title', 'checklistItemTitle')
       .addSelect(nonConformCountExpr, 'nonConformitiesCount')
       .addSelect(answersCountExpr, 'answersCount')
-      .addSelect('COUNT(DISTINCT inspection.checklistId)', 'checklistsCount')
       .where('inspection.status IN (:...qualityStatuses)', {
         qualityStatuses: QUALITY_RELEVANT_STATUSES,
       })
@@ -2159,12 +2163,15 @@ export class DashboardsService {
       .andWhere('inspection.createdAt >= :from', { from: filters.from })
       .andWhere('inspection.createdAt <= :to', { to: toLimit })
       .setParameter('nonConformAnswer', ChecklistAnswer.NAO_CONFORME)
-      .groupBy('checklistItem.id')
+      .groupBy('checklist.id')
+      .addGroupBy('checklist.name')
+      .addGroupBy('sector.name')
+      .addGroupBy('checklistItem.id')
       .addGroupBy('checklistItem.title')
       .having(`${nonConformCountExpr} > 0`)
       .orderBy(nonConformCountExpr, 'DESC')
-      .addOrderBy('checklistItem.title', 'ASC')
-      .limit(limit);
+      .addOrderBy('checklist.name', 'ASC')
+      .addOrderBy('checklistItem.title', 'ASC');
 
     this.applyQualityFilters(qb, {
       sector: filters.sector,
@@ -2173,12 +2180,82 @@ export class DashboardsService {
     this.applyContractScope(qb, filters.user, filters.contractId);
 
     const rows = await qb.getRawMany<{
+      checklistId: string;
+      checklistName: string;
+      sectorName: string | null;
       checklistItemId: string;
       checklistItemTitle: string;
       nonConformitiesCount: string;
       answersCount: string;
-      checklistsCount: string;
     }>();
+
+    const checklistsMap = new Map<
+      string,
+      {
+        checklistId: string;
+        checklistName: string;
+        sectorName?: string;
+        totalNonConformities: number;
+        questions: Array<{
+          checklistItemId: string;
+          checklistItemTitle: string;
+          nonConformitiesCount: number;
+          answersCount: number;
+          nonConformityRatePercent: number;
+        }>;
+      }
+    >();
+
+    for (const row of rows) {
+      const nonConformitiesCount = parseInt(
+        row.nonConformitiesCount ?? '0',
+        10,
+      );
+      const answersCount = parseInt(row.answersCount ?? '0', 10);
+      const nonConformityRatePercent =
+        answersCount > 0
+          ? roundTo2((nonConformitiesCount / answersCount) * 100)
+          : 0;
+
+      if (!checklistsMap.has(row.checklistId)) {
+        checklistsMap.set(row.checklistId, {
+          checklistId: row.checklistId,
+          checklistName: row.checklistName,
+          sectorName: row.sectorName ?? undefined,
+          totalNonConformities: 0,
+          questions: [],
+        });
+      }
+
+      const checklistEntry = checklistsMap.get(row.checklistId)!;
+      checklistEntry.totalNonConformities += nonConformitiesCount;
+      checklistEntry.questions.push({
+        checklistItemId: row.checklistItemId,
+        checklistItemTitle: row.checklistItemTitle,
+        nonConformitiesCount,
+        answersCount,
+        nonConformityRatePercent,
+      });
+    }
+
+    const checklists = Array.from(checklistsMap.values())
+      .map((checklistEntry) => ({
+        ...checklistEntry,
+        questions: checklistEntry.questions
+          .sort((a, b) => {
+            if (b.nonConformitiesCount !== a.nonConformitiesCount) {
+              return b.nonConformitiesCount - a.nonConformitiesCount;
+            }
+            return a.checklistItemTitle.localeCompare(b.checklistItemTitle);
+          })
+          .slice(0, limit),
+      }))
+      .sort((a, b) => {
+        if (b.totalNonConformities !== a.totalNonConformities) {
+          return b.totalNonConformities - a.totalNonConformities;
+        }
+        return a.checklistName.localeCompare(b.checklistName);
+      });
 
     return {
       from: filters.from,
@@ -2186,27 +2263,7 @@ export class DashboardsService {
       module: filters.module,
       teamId: filters.teamId,
       limit,
-      nonConformities: rows.map((row) => {
-        const nonConformitiesCount = parseInt(
-          row.nonConformitiesCount ?? '0',
-          10,
-        );
-        const answersCount = parseInt(row.answersCount ?? '0', 10);
-        const checklistsCount = parseInt(row.checklistsCount ?? '0', 10);
-        const nonConformityRatePercent =
-          answersCount > 0
-            ? roundTo2((nonConformitiesCount / answersCount) * 100)
-            : 0;
-
-        return {
-          checklistItemId: row.checklistItemId,
-          checklistItemTitle: row.checklistItemTitle,
-          nonConformitiesCount,
-          answersCount,
-          nonConformityRatePercent,
-          checklistsCount,
-        };
-      }),
+      checklists,
     };
   }
 
