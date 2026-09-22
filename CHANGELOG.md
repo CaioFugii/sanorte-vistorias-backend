@@ -36,6 +36,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Changed
 
+- `GET /investment-works` inclui `averageScorePercent` com a média das vistorias de cada obra
 - `GET /dashboards/non-conformities/by-team` separa as não conformidades da equipe por checklist, com top de perguntas em cada um
 - `GET /checklists` deixa de hidratar `items`/`sections` (só `sectionCount`/`itemCount`); `POST /inspections` e mutações devolvem `findOneDetail`
 - `GET /teams` lista sem hidratar `collaborators`/`contracts` (hidrata `sectors`); grafo completo em `GET /teams/:id`

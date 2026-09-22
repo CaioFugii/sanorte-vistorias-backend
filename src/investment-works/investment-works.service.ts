@@ -94,10 +94,18 @@ export class InvestmentWorksService {
       .orderBy('investmentWork.createdAt', 'DESC')
       .getManyAndCount();
 
+    const averagesByWorkId = await this.findAverageScoreByWorkIds(
+      data.map((work) => work.id),
+    );
+    const dataWithAverages = data.map((work) => ({
+      ...work,
+      averageScorePercent: averagesByWorkId.get(work.id) ?? null,
+    }));
+
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data,
+      data: dataWithAverages,
       meta: {
         page,
         limit,
@@ -268,11 +276,14 @@ export class InvestmentWorksService {
       where: { investmentWorkId: investmentWork.id },
     });
     if (inspectionsCount > 0) {
-      this.logger.warn('Investment work removal blocked due linked inspections', {
-        investmentWorkId: investmentWork.id,
-        inspectionsCount,
-        userId: user.id,
-      });
+      this.logger.warn(
+        'Investment work removal blocked due linked inspections',
+        {
+          investmentWorkId: investmentWork.id,
+          inspectionsCount,
+          userId: user.id,
+        },
+      );
       throw new BadRequestException(
         'Não é possível remover obra com inspeções vinculadas',
       );
@@ -356,6 +367,35 @@ export class InvestmentWorksService {
         'Equipe deve possuir vínculo com o contrato informado',
       );
     }
+  }
+
+  private async findAverageScoreByWorkIds(
+    investmentWorkIds: string[],
+  ): Promise<Map<string, number>> {
+    const averages = new Map<string, number>();
+    if (investmentWorkIds.length === 0) {
+      return averages;
+    }
+
+    const rows = await this.inspectionRepository
+      .createQueryBuilder('inspection')
+      .select('inspection.investmentWorkId', 'investmentWorkId')
+      .addSelect('AVG(inspection.scorePercent)', 'avgScore')
+      .where('inspection.investmentWorkId IN (:...investmentWorkIds)', {
+        investmentWorkIds,
+      })
+      .andWhere('inspection.scorePercent IS NOT NULL')
+      .groupBy('inspection.investmentWorkId')
+      .getRawMany<{ investmentWorkId: string; avgScore: string | null }>();
+
+    for (const row of rows) {
+      if (!row.investmentWorkId || row.avgScore == null) {
+        continue;
+      }
+      averages.set(row.investmentWorkId, Number(row.avgScore));
+    }
+
+    return averages;
   }
 
   private validateDateRange(startDate: string, expectedEndDate: string): void {

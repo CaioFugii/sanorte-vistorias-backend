@@ -1300,7 +1300,7 @@ Response 200:
   - `contractId` (UUID)
   - `search` (busca parcial em obra, endereço, bairro e serviço)
   - `active` (`true` | `false`)
-- Response 200: paginação de `InvestmentWork` com `team` e `contract`
+- Response 200: paginação de `InvestmentWork` com `team`, `contract` e `averageScorePercent` (média de `scorePercent` das vistorias da obra; `null` quando não houver nota)
 - Escopo: `ADMIN` vê todos; `GESTOR`/`SUPERVISOR`/`FISCAL` ficam limitados aos contratos vinculados
 
 ### GET /investment-works/:id
