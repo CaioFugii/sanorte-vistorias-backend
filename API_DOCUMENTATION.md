@@ -1055,13 +1055,15 @@ Request JSON:
   "name": "Checklist de Qualidade",
   "description": "Checklist padrão",
   "sectorId": "uuid",
-  "active": true
+  "active": true,
+  "serviceDescriptionSuggestions": ["passeio cimentado", "capa asfáltica"]
 }
 ```
 
 Response 201: `Checklist` criado (com seção padrão)
 
 Regra: o checklist começa vazio; cada pergunta é criada em `POST /checklists/:id/items`, com teto de **50** `ChecklistItem`.
+`serviceDescriptionSuggestions` é opcional (máx. 20 textos de até 80 caracteres). O fiscal pode clicar nessas sugestões no campo livre da Nova Vistoria.
 
 ### PUT /checklists/:id
 
@@ -1073,7 +1075,8 @@ Request JSON (parcial):
 {
   "name": "Checklist Atualizado",
   "sectorId": "uuid",
-  "active": false
+  "active": false,
+  "serviceDescriptionSuggestions": ["passeio especial"]
 }
 ```
 

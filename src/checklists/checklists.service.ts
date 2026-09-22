@@ -30,6 +30,45 @@ import { buildStoredAssetFields } from '../storage/asset-storage.util';
 @Injectable()
 export class ChecklistsService {
   static readonly MAX_ITEMS = 50;
+  static readonly MAX_SERVICE_DESCRIPTION_SUGGESTIONS = 20;
+  static readonly MAX_SUGGESTION_LENGTH = 80;
+
+  static normalizeServiceDescriptionSuggestions(value: unknown): string[] {
+    if (value == null) {
+      return [];
+    }
+    if (!Array.isArray(value)) {
+      throw new BadRequestException(
+        'serviceDescriptionSuggestions deve ser uma lista de textos',
+      );
+    }
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const raw of value) {
+      if (typeof raw !== 'string') {
+        throw new BadRequestException(
+          'serviceDescriptionSuggestions deve ser uma lista de textos',
+        );
+      }
+      const name = raw.trim();
+      if (!name) continue;
+      if (name.length > ChecklistsService.MAX_SUGGESTION_LENGTH) {
+        throw new BadRequestException(
+          `Cada sugestão deve ter no máximo ${ChecklistsService.MAX_SUGGESTION_LENGTH} caracteres`,
+        );
+      }
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(name);
+    }
+    if (result.length > ChecklistsService.MAX_SERVICE_DESCRIPTION_SUGGESTIONS) {
+      throw new BadRequestException(
+        `O checklist pode ter no máximo ${ChecklistsService.MAX_SERVICE_DESCRIPTION_SUGGESTIONS} sugestões de descrição`,
+      );
+    }
+    return result;
+  }
 
   constructor(
     @InjectRepository(Checklist)
@@ -75,10 +114,7 @@ export class ChecklistsService {
     const query = this.checklistsRepository
       .createQueryBuilder('checklist')
       .leftJoinAndSelect('checklist.sector', 'sector')
-      .loadRelationCountAndMap(
-        'checklist.sectionCount',
-        'checklist.sections',
-      )
+      .loadRelationCountAndMap('checklist.sectionCount', 'checklist.sections')
       .loadRelationCountAndMap('checklist.itemCount', 'checklist.items')
       .orderBy('checklist.createdAt', 'DESC')
       .skip(skip)
@@ -132,9 +168,15 @@ export class ChecklistsService {
     description?: string;
     active?: boolean;
     sectorId?: string;
+    serviceDescriptionSuggestions?: string[];
   }): Promise<Checklist> {
     await this.validateSector(checklistData.sectorId);
-    const checklist = this.checklistsRepository.create(checklistData);
+    const checklist = this.checklistsRepository.create({
+      ...checklistData,
+      serviceDescriptionSuggestions: ChecklistsService.normalizeServiceDescriptionSuggestions(
+        checklistData.serviceDescriptionSuggestions,
+      ),
+    });
     const savedChecklist = await this.checklistsRepository.save(checklist);
     await this.ensureDefaultSection(savedChecklist.id);
     return this.findOne(savedChecklist.id);
@@ -146,6 +188,17 @@ export class ChecklistsService {
   ): Promise<Checklist> {
     if (Object.prototype.hasOwnProperty.call(checklistData, 'sectorId')) {
       await this.validateSector(checklistData.sectorId);
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(
+        checklistData,
+        'serviceDescriptionSuggestions',
+      )
+    ) {
+      checklistData.serviceDescriptionSuggestions =
+        ChecklistsService.normalizeServiceDescriptionSuggestions(
+          checklistData.serviceDescriptionSuggestions,
+        );
     }
 
     await this.checklistsRepository.update(id, checklistData);
@@ -302,7 +355,10 @@ export class ChecklistsService {
       await this.checklistItemsRepository.delete({ sectionId, checklistId });
     }
 
-    await this.checklistSectionsRepository.delete({ id: sectionId, checklistId });
+    await this.checklistSectionsRepository.delete({
+      id: sectionId,
+      checklistId,
+    });
   }
 
   async removeChecklist(id: string): Promise<void> {

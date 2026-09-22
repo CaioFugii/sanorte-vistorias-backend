@@ -45,6 +45,14 @@ export class Checklist {
   @Column({ name: 'sector_id', nullable: true })
   sectorId: string;
 
+  @Column({
+    name: 'service_description_suggestions',
+    type: 'text',
+    array: true,
+    default: '{}',
+  })
+  serviceDescriptionSuggestions: string[];
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

@@ -10,10 +10,12 @@ function createQueryBuilderMock() {
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
-    getManyAndCount: jest.fn().mockResolvedValue([
-      [{ id: 'cl-1', name: 'Checklist A', sectionCount: 2, itemCount: 8 }],
-      1,
-    ]),
+    getManyAndCount: jest
+      .fn()
+      .mockResolvedValue([
+        [{ id: 'cl-1', name: 'Checklist A', sectionCount: 2, itemCount: 8 }],
+        1,
+      ]),
   };
 }
 
@@ -137,5 +139,23 @@ describe('ChecklistsService', () => {
       }),
     ).resolves.toMatchObject({ id: 'item-last' });
     expect(checklistItemsRepository.save).toHaveBeenCalled();
+  });
+
+  it('normaliza sugestões de descrição: trim, vazias e duplicatas', () => {
+    expect(
+      ChecklistsService.normalizeServiceDescriptionSuggestions([
+        '  passeio cimentado  ',
+        '',
+        'passeio cimentado',
+        'capa asfáltica',
+      ]),
+    ).toEqual(['passeio cimentado', 'capa asfáltica']);
+  });
+
+  it('rejeita mais de 20 sugestões de descrição', () => {
+    const suggestions = Array.from({ length: 21 }, (_, index) => `sugestão ${index + 1}`);
+    expect(() =>
+      ChecklistsService.normalizeServiceDescriptionSuggestions(suggestions),
+    ).toThrow(BadRequestException);
   });
 });

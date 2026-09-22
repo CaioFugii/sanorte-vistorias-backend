@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- `serviceDescriptionSuggestions` em `POST/PUT /checklists` — sugestões de descrição de serviço atreladas ao checklist
 - `GET /dashboards/safety-work/checklists/:checklistId/inspections` — vistorias que compõem a média de cada checklist em Segurança do Trabalho
 - `GET /inspections/:id/evidences/:evidenceId/file` — stream autenticado da evidência (PDF no browser não precisa ir ao S3)
 - `GET /dashboards/overview` — média e série mensal de Qualidade e Segurança do Trabalho para a Gestão
