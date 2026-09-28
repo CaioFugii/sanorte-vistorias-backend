@@ -81,6 +81,7 @@ Authorization: Bearer <token>
 - `PUT /inspections/:id`:
   - FISCAL só edita em `RASCUNHO`.
   - GESTOR/SUPERVISOR/ADMIN editam em qualquer status.
+  - `evaluationModule` (`CAMPO` ou `POS_OBRA`) só pode ser alterado por ADMIN ou GESTOR, e apenas quando a vistoria já é `OBRAS_INVESTIMENTO`.
   - Quando `teamId` for enviado, a equipe informada deve existir; caso contrário, retorna `400` com `Equipe não encontrada`.
 - `PUT /inspections/:id/items`:
   - FISCAL só em `RASCUNHO`.
@@ -1601,6 +1602,7 @@ Exemplo (truncado):
   - FISCAL só atualiza se `status = RASCUNHO`
   - GESTOR/SUPERVISOR/ADMIN podem atualizar sempre
   - Quando `teamId` for enviado, a equipe informada deve existir; caso contrário, retorna `400` com `Equipe não encontrada`
+  - `evaluationModule` (`CAMPO` ou `POS_OBRA`) só pode ser enviado por ADMIN ou GESTOR, e somente se a vistoria for `module = OBRAS_INVESTIMENTO`. SUPERVISOR e FISCAL recebem `403`. Outro módulo ou valor inválido retorna `400`. Omitir o campo não altera o valor gravado.
 
 Request JSON (parcial):
 
@@ -1608,7 +1610,8 @@ Request JSON (parcial):
 {
   "teamId": "uuid-da-equipe",
   "serviceDescription": "Descrição atualizada",
-  "locationDescription": "Nova localização"
+  "locationDescription": "Nova localização",
+  "evaluationModule": "POS_OBRA"
 }
 ```
 

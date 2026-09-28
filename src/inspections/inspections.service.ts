@@ -1382,6 +1382,16 @@ export class InspectionsService {
       inspectionData.serviceDescription = nextServiceDescription;
     }
 
+    if (
+      Object.prototype.hasOwnProperty.call(inspectionData, 'evaluationModule')
+    ) {
+      this.assertCanUpdateEvaluationModule(userRole);
+      inspectionData.evaluationModule = this.resolveEvaluationModuleForUpdate(
+        inspection.module,
+        inspectionData.evaluationModule,
+      );
+    }
+
     // GESTOR, SUPERVISOR e ADMIN podem editar sempre
     await this.inspectionsRepository.update(inspection.id, inspectionData);
     this.logger.log('Inspection updated', {
@@ -2335,6 +2345,36 @@ export class InspectionsService {
     }
 
     return evaluationModule ?? InvestmentWorkEvaluationModule.CAMPO;
+  }
+
+  private assertCanUpdateEvaluationModule(userRole: string): void {
+    const allowed =
+      userRole === UserRole.ADMIN || userRole === UserRole.GESTOR;
+    if (!allowed) {
+      throw new ForbiddenException(
+        'Apenas administrador e gestor podem alterar o tipo da vistoria.',
+      );
+    }
+  }
+
+  private resolveEvaluationModuleForUpdate(
+    module: ModuleType,
+    evaluationModule?: InvestmentWorkEvaluationModule | null,
+  ): InvestmentWorkEvaluationModule {
+    if (module !== ModuleType.OBRAS_INVESTIMENTO) {
+      throw new BadRequestException(
+        'evaluationModule só pode ser informado para o módulo OBRAS_INVESTIMENTO.',
+      );
+    }
+    if (
+      evaluationModule !== InvestmentWorkEvaluationModule.CAMPO &&
+      evaluationModule !== InvestmentWorkEvaluationModule.POS_OBRA
+    ) {
+      throw new BadRequestException(
+        'evaluationModule deve ser CAMPO ou POS_OBRA',
+      );
+    }
+    return evaluationModule;
   }
 
   private isServiceOrderRequired(module: ModuleType): boolean {

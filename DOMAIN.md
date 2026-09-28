@@ -99,7 +99,7 @@ ReportRecord ── ReportFile
 | Campo | Descrição |
 |-------|-----------|
 | `module` | `ModuleType` — define regras de status e campos obrigatórios |
-| `evaluationModule` | `CAMPO` ou `POS_OBRA` quando `module = OBRAS_INVESTIMENTO`; `null` nos demais. Vistorias antigas de OI foram migradas para `CAMPO`. |
+| `evaluationModule` | `CAMPO` ou `POS_OBRA` quando `module = OBRAS_INVESTIMENTO`; `null` nos demais. Vistorias antigas de OI foram migradas para `CAMPO`. ADMIN e GESTOR podem alterar o valor em qualquer status via `PUT /inspections/:id`. |
 | `inspectionScope` | `TEAM` ou `COLLABORATOR` |
 | `status` | Ciclo de vida da vistoria |
 | `externalId` | UUID idempotente para sync offline |

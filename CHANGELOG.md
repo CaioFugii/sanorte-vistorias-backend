@@ -37,6 +37,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Changed
 
+- `PUT /inspections/:id` aceita `evaluationModule` para ADMIN e GESTOR em vistorias `OBRAS_INVESTIMENTO`
 - `GET /investment-works` inclui `averageScorePercent` com a média das vistorias de cada obra
 - `GET /dashboards/non-conformities/by-team` separa as não conformidades da equipe por checklist, com top de perguntas em cada um
 - `GET /checklists` deixa de hidratar `items`/`sections` (só `sectionCount`/`itemCount`); `POST /inspections` e mutações devolvem `findOneDetail`

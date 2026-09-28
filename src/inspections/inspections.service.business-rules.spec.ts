@@ -79,9 +79,10 @@ describe('InspectionsService - Regras de Negócio', () => {
     };
 
     serviceOrderRepository = {
-      findOne: jest
-        .fn()
-        .mockResolvedValue({ id: 'service-order-id', contractId: 'contract-id' }),
+      findOne: jest.fn().mockResolvedValue({
+        id: 'service-order-id',
+        contractId: 'contract-id',
+      }),
       update: jest.fn(),
     };
     investmentWorkRepository = {
@@ -162,11 +163,128 @@ describe('InspectionsService - Regras de Negócio', () => {
       .spyOn(inspectionsRepository, 'findOne')
       .mockResolvedValue(finalizedInspection as Inspection);
     jest.spyOn(inspectionsRepository, 'update').mockResolvedValue(undefined);
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
 
     await expect(
       service.update('test-id', {}, 'user-id', UserRole.GESTOR),
     ).resolves.not.toThrow();
+  });
+
+  it('ADMIN e GESTOR podem alterar evaluationModule em vistoria de Obras de Investimento', async () => {
+    const inspection = {
+      ...mockInspection,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      status: InspectionStatus.FINALIZADA,
+      evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
+      serviceOrderId: null,
+    };
+
+    jest
+      .spyOn(inspectionsRepository, 'findOne')
+      .mockResolvedValue(inspection as Inspection);
+    jest.spyOn(inspectionsRepository, 'update').mockResolvedValue(undefined);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
+
+    for (const role of [UserRole.ADMIN, UserRole.GESTOR]) {
+      await service.update(
+        'test-id',
+        { evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA } as any,
+        'user-id',
+        role,
+      );
+    }
+
+    expect(inspectionsRepository.update).toHaveBeenCalledTimes(2);
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA,
+      }),
+    );
+  });
+
+  it('SUPERVISOR não pode alterar evaluationModule', async () => {
+    jest.spyOn(inspectionsRepository, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      status: InspectionStatus.FINALIZADA,
+      evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
+      serviceOrderId: null,
+    } as Inspection);
+
+    await expect(
+      service.update(
+        'test-id',
+        { evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA } as any,
+        'user-id',
+        UserRole.SUPERVISOR,
+      ),
+    ).rejects.toThrow(ForbiddenException);
+    expect(inspectionsRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('FISCAL não pode alterar evaluationModule', async () => {
+    jest.spyOn(inspectionsRepository, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      status: InspectionStatus.RASCUNHO,
+      evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
+      serviceOrderId: null,
+    } as Inspection);
+
+    await expect(
+      service.update(
+        'test-id',
+        { evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA } as any,
+        'user-id',
+        UserRole.FISCAL,
+      ),
+    ).rejects.toThrow(ForbiddenException);
+    expect(inspectionsRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('deve rejeitar evaluationModule fora do módulo Obras de Investimento na edição', async () => {
+    jest.spyOn(inspectionsRepository, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.CAMPO,
+      status: InspectionStatus.FINALIZADA,
+    } as Inspection);
+
+    await expect(
+      service.update(
+        'test-id',
+        { evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA } as any,
+        'user-id',
+        UserRole.ADMIN,
+      ),
+    ).rejects.toThrow(
+      'evaluationModule só pode ser informado para o módulo OBRAS_INVESTIMENTO.',
+    );
+    expect(inspectionsRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('deve rejeitar evaluationModule inválido na edição', async () => {
+    jest.spyOn(inspectionsRepository, 'findOne').mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      status: InspectionStatus.FINALIZADA,
+      evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
+      serviceOrderId: null,
+    } as Inspection);
+
+    await expect(
+      service.update(
+        'test-id',
+        { evaluationModule: 'REMOTO' } as any,
+        'user-id',
+        UserRole.ADMIN,
+      ),
+    ).rejects.toThrow('evaluationModule deve ser CAMPO ou POS_OBRA');
+    expect(inspectionsRepository.update).not.toHaveBeenCalled();
   });
 
   it('deve permitir editar teamId para equipe existente', async () => {
@@ -181,7 +299,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       isContractor: false,
     });
     jest.spyOn(inspectionsRepository, 'update').mockResolvedValue(undefined);
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
 
     await service.update(
       'test-id',
@@ -473,7 +593,9 @@ describe('InspectionsService - Regras de Negócio', () => {
     } as Inspection;
 
     inspectionsRepository.findOne.mockResolvedValue(activeInspection);
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
     inspectionItemsRepository.find.mockResolvedValue([
       { answer: ChecklistAnswer.CONFORME },
       { answer: ChecklistAnswer.NAO_CONFORME },
@@ -499,7 +621,9 @@ describe('InspectionsService - Regras de Negócio', () => {
     } as Inspection;
 
     inspectionsRepository.findOne.mockResolvedValue(alreadyParalyzed);
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
 
     await service.paralyze('test-id', 'Motivo', 'gestor-id');
 
@@ -513,7 +637,9 @@ describe('InspectionsService - Regras de Negócio', () => {
     } as Inspection;
 
     inspectionsRepository.findOne.mockResolvedValue(paralyzedInspection);
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
     inspectionItemsRepository.find.mockResolvedValue([
       { answer: ChecklistAnswer.CONFORME },
       { answer: ChecklistAnswer.CONFORME },
@@ -540,7 +666,9 @@ describe('InspectionsService - Regras de Negócio', () => {
     } as Inspection;
 
     inspectionsRepository.findOne.mockResolvedValue(activeInspection);
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'test-id' } as any);
 
     await service.unparalyze('test-id');
 
