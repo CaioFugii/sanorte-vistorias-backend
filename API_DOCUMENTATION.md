@@ -2239,7 +2239,11 @@ Response 200:
   - `SAFETY_WORK` (`SEGURANCA_TRABALHO`): filtro por `COALESCE(inspection.finalizedAt, inspection.createdAt)` entre `from` e `to` (inclusive).
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
-- Comportamento: mantém o resumo base e adiciona contadores de inspeções por módulo de qualidade (`CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`).
+- Comportamento: mantém o resumo base e adiciona contadores de Campo, Pós-obra e Remoto.
+  - `field`: `CAMPO` e `OBRAS_INVESTIMENTO` com `evaluationModule = CAMPO`.
+  - `postWork`: `POS_OBRA` e `OBRAS_INVESTIMENTO` com `evaluationModule = POS_OBRA`.
+  - `remote`: somente `REMOTO`.
+  - `OBRAS_INVESTIMENTO` não tem bloco próprio. A Média Geral continua incluindo essas vistorias.
 
 Response 200:
 
@@ -2259,10 +2263,6 @@ Response 200:
   "remote": {
     "inspectionsCount": 9,
     "averagePercent": 89.77
-  },
-  "investmentWorks": {
-    "inspectionsCount": 7,
-    "averagePercent": 93.2
   }
 }
 ```

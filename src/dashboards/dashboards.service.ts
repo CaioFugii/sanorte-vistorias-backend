@@ -430,19 +430,16 @@ export class DashboardsService {
         'pendingCount',
       )
       .addSelect(
-        `SUM(CASE WHEN inspection.module = :fieldModule THEN 1 ELSE 0 END)`,
+        rankingModuleCountExpr('fieldModule'),
         'fieldInspectionsCount',
       )
+      .addSelect(rankingModuleScoreExpr('fieldModule'), 'fieldAveragePercent')
       .addSelect(
-        `AVG(CASE WHEN inspection.module = :fieldModule THEN inspection.scorePercent ELSE NULL END)`,
-        'fieldAveragePercent',
-      )
-      .addSelect(
-        `SUM(CASE WHEN inspection.module = :postWorkModule THEN 1 ELSE 0 END)`,
+        rankingModuleCountExpr('postWorkModule'),
         'postWorkInspectionsCount',
       )
       .addSelect(
-        `AVG(CASE WHEN inspection.module = :postWorkModule THEN inspection.scorePercent ELSE NULL END)`,
+        rankingModuleScoreExpr('postWorkModule'),
         'postWorkAveragePercent',
       )
       .addSelect(
@@ -452,14 +449,6 @@ export class DashboardsService {
       .addSelect(
         `AVG(CASE WHEN inspection.module = :remoteModule THEN inspection.scorePercent ELSE NULL END)`,
         'remoteAveragePercent',
-      )
-      .addSelect(
-        `SUM(CASE WHEN inspection.module = :investmentWorksModule THEN 1 ELSE 0 END)`,
-        'investmentWorksInspectionsCount',
-      )
-      .addSelect(
-        `AVG(CASE WHEN inspection.module = :investmentWorksModule THEN inspection.scorePercent ELSE NULL END)`,
-        'investmentWorksAveragePercent',
       )
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .where('inspection.status != :draft', {
@@ -517,8 +506,6 @@ export class DashboardsService {
       postWorkAveragePercent: string | null;
       remoteInspectionsCount: string;
       remoteAveragePercent: string | null;
-      investmentWorksInspectionsCount: string;
-      investmentWorksAveragePercent: string | null;
     }>();
 
     const inspectionsCount = parseInt(row?.inspectionsCount ?? '0', 10);
@@ -549,10 +536,6 @@ export class DashboardsService {
         inspectionsCount: number;
         averagePercent: number;
       };
-      investmentWorks?: {
-        inspectionsCount: number;
-        averagePercent: number;
-      };
     };
 
     if (filters.includeQualityModuleCounts) {
@@ -569,15 +552,6 @@ export class DashboardsService {
       summary.remote = {
         inspectionsCount: parseInt(row?.remoteInspectionsCount ?? '0', 10),
         averagePercent: roundTo2(parseFloat(row?.remoteAveragePercent ?? '0')),
-      };
-      summary.investmentWorks = {
-        inspectionsCount: parseInt(
-          row?.investmentWorksInspectionsCount ?? '0',
-          10,
-        ),
-        averagePercent: roundTo2(
-          parseFloat(row?.investmentWorksAveragePercent ?? '0'),
-        ),
       };
     }
 

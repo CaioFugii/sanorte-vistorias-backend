@@ -1016,8 +1016,6 @@ describe('DashboardsService', () => {
         postWorkAveragePercent: '87.3',
         remoteInspectionsCount: '3',
         remoteAveragePercent: '85.5',
-        investmentWorksInspectionsCount: '2',
-        investmentWorksAveragePercent: '82.1',
       },
     });
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
@@ -1028,6 +1026,29 @@ describe('DashboardsService', () => {
       sector: 'QUALITY' as any,
       includeQualityModuleCounts: true,
     });
+
+    const selects = qb.addSelect.mock.calls.map(([sql]: [string]) => sql);
+    expect(
+      selects.some(
+        (sql) =>
+          sql.includes('inspection.module = :fieldModule') &&
+          sql.includes('evaluationModule') &&
+          sql.startsWith('SUM'),
+      ),
+    ).toBe(true);
+    expect(
+      selects.some(
+        (sql) =>
+          sql.includes('inspection.module = :postWorkModule') &&
+          sql.includes('evaluationModule') &&
+          sql.startsWith('AVG'),
+      ),
+    ).toBe(true);
+    expect(
+      selects.some((sql) =>
+        sql.includes('inspection.module = :investmentWorksModule THEN'),
+      ),
+    ).toBe(false);
 
     expect(result).toEqual({
       averagePercent: 88.5,
@@ -1044,10 +1065,6 @@ describe('DashboardsService', () => {
       remote: {
         inspectionsCount: 3,
         averagePercent: 85.5,
-      },
-      investmentWorks: {
-        inspectionsCount: 2,
-        averagePercent: 82.1,
       },
     });
   });
