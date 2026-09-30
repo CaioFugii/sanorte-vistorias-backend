@@ -2243,7 +2243,8 @@ Response 200:
   - `field`: `CAMPO` e `OBRAS_INVESTIMENTO` com `evaluationModule = CAMPO`.
   - `postWork`: `POS_OBRA` e `OBRAS_INVESTIMENTO` com `evaluationModule = POS_OBRA`.
   - `remote`: somente `REMOTO`.
-  - `OBRAS_INVESTIMENTO` não tem bloco próprio. A Média Geral continua incluindo essas vistorias.
+  - `OBRAS_INVESTIMENTO` não tem bloco próprio. Essas vistorias entram na média de Campo ou Pós-obra conforme `evaluationModule`.
+  - `averagePercent` (Média Geral): média aritmética de `field.averagePercent`, `remote.averagePercent` e `postWork.averagePercent` **que tiverem vistoria no período**. Não pondera pela quantidade de vistorias. Módulo sem vistoria não entra como 0%. Com os três módulos no período, equivale a `(Campo + Remoto + Pós-obra) / 3`.
 
 Response 200:
 

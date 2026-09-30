@@ -1051,7 +1051,7 @@ describe('DashboardsService', () => {
     ).toBe(false);
 
     expect(result).toEqual({
-      averagePercent: 88.5,
+      averagePercent: 88,
       inspectionsCount: 14,
       pendingCount: 2,
       field: {
@@ -1066,6 +1066,36 @@ describe('DashboardsService', () => {
         inspectionsCount: 3,
         averagePercent: 85.5,
       },
+    });
+  });
+
+  it('deve calcular a média geral de qualidade como média simples dos módulos com vistoria', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '943',
+        pendingCount: '97',
+        averagePercent: '78.18',
+        fieldInspectionsCount: '0',
+        fieldAveragePercent: null,
+        postWorkInspectionsCount: '163',
+        postWorkAveragePercent: '68.5',
+        remoteInspectionsCount: '780',
+        remoteAveragePercent: '80.2',
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getSummary({
+      from: '2026-09-01',
+      to: '2026-09-30',
+      sector: 'QUALITY' as any,
+      includeQualityModuleCounts: true,
+    });
+
+    expect(result.averagePercent).toBe(74.35);
+    expect(result.field).toEqual({
+      inspectionsCount: 0,
+      averagePercent: 0,
     });
   });
 

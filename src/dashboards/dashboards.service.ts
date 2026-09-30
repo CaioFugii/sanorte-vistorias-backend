@@ -510,11 +510,28 @@ export class DashboardsService {
 
     const inspectionsCount = parseInt(row?.inspectionsCount ?? '0', 10);
     const pendingCount = parseInt(row?.pendingCount ?? '0', 10);
-    const averagePercentRaw = row?.averagePercent;
-    const averagePercent =
-      averagePercentRaw != null
-        ? Math.round(parseFloat(averagePercentRaw) * 100) / 100
+    const fieldAveragePercent = parseRankingPercent(
+      row?.fieldAveragePercent ?? null,
+    );
+    const postWorkAveragePercent = parseRankingPercent(
+      row?.postWorkAveragePercent ?? null,
+    );
+    const remoteAveragePercent = parseRankingPercent(
+      row?.remoteAveragePercent ?? null,
+    );
+    const weightedAveragePercent =
+      row?.averagePercent != null
+        ? roundTo2(parseFloat(row.averagePercent))
         : 0;
+    // O card de Qualidade pede a média simples dos módulos com vistoria.
+    // Módulo sem nota (AVG nula) não entra como 0%.
+    const averagePercent = filters.includeQualityModuleCounts
+      ? qualityRankingFinalAverage(
+          fieldAveragePercent,
+          remoteAveragePercent,
+          postWorkAveragePercent,
+        )
+      : weightedAveragePercent;
 
     const summary = {
       averagePercent,
@@ -541,17 +558,15 @@ export class DashboardsService {
     if (filters.includeQualityModuleCounts) {
       summary.field = {
         inspectionsCount: parseInt(row?.fieldInspectionsCount ?? '0', 10),
-        averagePercent: roundTo2(parseFloat(row?.fieldAveragePercent ?? '0')),
+        averagePercent: fieldAveragePercent ?? 0,
       };
       summary.postWork = {
         inspectionsCount: parseInt(row?.postWorkInspectionsCount ?? '0', 10),
-        averagePercent: roundTo2(
-          parseFloat(row?.postWorkAveragePercent ?? '0'),
-        ),
+        averagePercent: postWorkAveragePercent ?? 0,
       };
       summary.remote = {
         inspectionsCount: parseInt(row?.remoteInspectionsCount ?? '0', 10),
-        averagePercent: roundTo2(parseFloat(row?.remoteAveragePercent ?? '0')),
+        averagePercent: remoteAveragePercent ?? 0,
       };
     }
 
