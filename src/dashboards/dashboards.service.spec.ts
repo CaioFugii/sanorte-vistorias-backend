@@ -806,7 +806,7 @@ describe('DashboardsService', () => {
     expect(result[1].averagePercent).toBe(74.5);
   });
 
-  it('deve montar overview com meses vazios e média ponderada', async () => {
+  it('deve montar overview com meses vazios e média simples', async () => {
     const qualityQb = createMockQueryBuilder({
       rawMany: [
         { month: '2026-07', averagePercent: '80', inspectionsCount: '10' },
@@ -831,7 +831,8 @@ describe('DashboardsService', () => {
     expect(result.from).toBe('2026-06-01');
     expect(result.to).toBe('2026-09-19');
     expect(result.quality.inspectionsCount).toBe(40);
-    expect(result.quality.averagePercent).toBe(87.5);
+    // (80 + 90) / 2. Julho e agosto têm vistoria; junho e setembro não entram.
+    expect(result.quality.averagePercent).toBe(85);
     expect(result.quality.months).toEqual([
       { month: '2026-06', averagePercent: 0, inspectionsCount: 0 },
       { month: '2026-07', averagePercent: 80, inspectionsCount: 10 },

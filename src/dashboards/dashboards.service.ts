@@ -677,14 +677,22 @@ export class DashboardsService {
       (sum, point) => sum + point.inspectionsCount,
       0,
     );
-    const weightedSum = series.reduce(
-      (sum, point) => sum + point.averagePercent * point.inspectionsCount,
-      0,
+    // Média simples das notas mensais. Mês sem vistoria não entra como 0%.
+    const monthsWithScore = series.filter(
+      (point) => point.inspectionsCount > 0,
     );
+    const averagePercent =
+      monthsWithScore.length > 0
+        ? roundTo2(
+            monthsWithScore.reduce(
+              (sum, point) => sum + point.averagePercent,
+              0,
+            ) / monthsWithScore.length,
+          )
+        : 0;
 
     return {
-      averagePercent:
-        inspectionsCount > 0 ? roundTo2(weightedSum / inspectionsCount) : 0,
+      averagePercent,
       inspectionsCount,
       months: series,
     };

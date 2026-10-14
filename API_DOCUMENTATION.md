@@ -2199,7 +2199,7 @@ Response 200:
 - `quality`: módulos `CAMPO`, `POS_OBRA`, `REMOTO`, `OBRAS_INVESTIMENTO`.
 - `safetyWork`: módulo `SEGURANCA_TRABALHO`.
 - `months`: um ponto por mês do intervalo (`from`–`to`). Mês sem vistoria entra com `0` / `0`.
-- `averagePercent` do módulo: média ponderada pelas vistorias do período.
+- `averagePercent` do módulo: média simples das notas mensais com vistoria no período. Mês sem vistoria não entra como 0%. Não pondera pela quantidade de vistorias.
 
 Response 200:
 
