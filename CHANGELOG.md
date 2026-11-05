@@ -8,6 +8,9 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- Cadastro de encarregados (`/foremen`) e `foremanId` em `POST/PUT /teams`; exclusão bloqueada enquanto houver equipe vinculada
+- `GET /dashboards/quality/foremen-ranking` — resultado de Qualidade pelo encarregado atual da equipe
+- `GET /dashboards/quality/inspectors-production` — produção diária dos fiscais nos módulos de Qualidade
 - `serviceDescriptionSuggestions` em `POST/PUT /checklists` — sugestões de descrição de serviço atreladas ao checklist
 - `GET /dashboards/safety-work/checklists/:checklistId/inspections` — vistorias que compõem a média de cada checklist em Segurança do Trabalho
 - `GET /inspections/:id/evidences/:evidenceId/file` — stream autenticado da evidência (PDF no browser não precisa ir ao S3)

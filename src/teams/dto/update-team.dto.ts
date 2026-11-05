@@ -36,4 +36,8 @@ export class UpdateTeamDto {
   @ArrayUnique()
   @IsUUID('4', { each: true })
   sectorIds?: string[];
+
+  @IsOptional()
+  @IsUUID('4')
+  foremanId?: string | null;
 }

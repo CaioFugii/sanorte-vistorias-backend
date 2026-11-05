@@ -5,6 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToMany,
+  ManyToOne,
+  JoinColumn,
   JoinTable,
   OneToMany,
 } from 'typeorm';
@@ -13,6 +15,7 @@ import { Inspection } from './inspection.entity';
 import { Contract } from './contract.entity';
 import { InvestmentWork } from './investment-work.entity';
 import { Sector } from './sector.entity';
+import { Foreman } from './foreman.entity';
 
 @Entity('teams')
 export class Team {
@@ -33,6 +36,13 @@ export class Team {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @Column({ name: 'foreman_id', type: 'uuid', nullable: true })
+  foremanId: string | null;
+
+  @ManyToOne(() => Foreman, (foreman) => foreman.teams, { nullable: true })
+  @JoinColumn({ name: 'foreman_id' })
+  foreman: Foreman | null;
 
   @ManyToMany(() => Collaborator, (collaborator) => collaborator.teams)
   @JoinTable({

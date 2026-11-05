@@ -1,7 +1,11 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, QueryFailedError } from 'typeorm';
-import { Team, Collaborator, Contract, Sector } from '../entities';
+import { Team, Collaborator, Contract, Sector, Foreman } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import {
   applyContractScopeFilter,
@@ -19,6 +23,8 @@ export class TeamsService {
     private contractsRepository: Repository<Contract>,
     @InjectRepository(Sector)
     private sectorsRepository: Repository<Sector>,
+    @InjectRepository(Foreman)
+    private foremenRepository: Repository<Foreman>,
   ) {}
 
   async findAll(
@@ -37,10 +43,8 @@ export class TeamsService {
       .createQueryBuilder('team')
       .leftJoin('team.contracts', 'contracts')
       .leftJoinAndSelect('team.sectors', 'sectors')
-      .loadRelationCountAndMap(
-        'team.collaboratorCount',
-        'team.collaborators',
-      )
+      .leftJoinAndSelect('team.foreman', 'foreman')
+      .loadRelationCountAndMap('team.collaboratorCount', 'team.collaborators')
       .distinct(true)
       .where('team.active = :active', { active: true });
 
@@ -76,7 +80,7 @@ export class TeamsService {
   async findOne(id: string): Promise<Team> {
     const team = await this.teamsRepository.findOne({
       where: { id },
-      relations: ['collaborators', 'contracts', 'sectors'],
+      relations: ['collaborators', 'contracts', 'sectors', 'foreman'],
     });
     if (!team) {
       throw new NotFoundException('Equipe não encontrada');
@@ -91,22 +95,28 @@ export class TeamsService {
     collaboratorIds?: string[];
     contractIds: string[];
     sectorIds?: string[];
+    foremanId?: string | null;
   }): Promise<Team> {
     if (!Array.isArray(teamData.contractIds)) {
       throw new BadRequestException('contractIds é obrigatório');
     }
 
-    const { collaboratorIds, contractIds, sectorIds, ...baseData } = teamData;
+    const { collaboratorIds, contractIds, sectorIds, foremanId, ...baseData } =
+      teamData;
     const normalizedName = this.normalizeTeamName(baseData.name);
     await this.ensureTeamNameIsAvailable(normalizedName);
     this.validateCollaboratorsForContractorTeam(
       baseData.isContractor,
       collaboratorIds,
     );
+    if (foremanId) {
+      await this.ensureForemanExists(foremanId);
+    }
 
     const team = this.teamsRepository.create({
       ...baseData,
       name: normalizedName,
+      foremanId: foremanId ?? null,
     });
 
     if (collaboratorIds !== undefined) {
@@ -139,14 +149,22 @@ export class TeamsService {
       collaboratorIds?: string[];
       contractIds: string[];
       sectorIds?: string[];
+      foremanId?: string | null;
     },
   ): Promise<Team> {
     if (!Array.isArray(teamData.contractIds)) {
       throw new BadRequestException('contractIds é obrigatório');
     }
 
-    const { collaboratorIds, contractIds, sectorIds, ...baseData } = teamData;
-    const dataToUpdate = { ...baseData };
+    const { collaboratorIds, contractIds, sectorIds, foremanId, ...baseData } =
+      teamData;
+    const dataToUpdate: Partial<Team> = { ...baseData };
+    if (foremanId !== undefined) {
+      if (foremanId) {
+        await this.ensureForemanExists(foremanId);
+      }
+      dataToUpdate.foremanId = foremanId;
+    }
     let nextIsContractor = teamData.isContractor;
 
     if (dataToUpdate.name !== undefined) {
@@ -244,6 +262,15 @@ export class TeamsService {
       )`,
       { filterSectorId: selectedSectorId },
     );
+  }
+
+  private async ensureForemanExists(foremanId: string): Promise<void> {
+    const exists = await this.foremenRepository.exist({
+      where: { id: foremanId },
+    });
+    if (!exists) {
+      throw new BadRequestException('foremanId informado não existe');
+    }
   }
 
   private async resolveCollaborators(

@@ -1,6 +1,7 @@
 export * from './current-month-by-service-query.dto';
 export * from './current-month-by-service-response.dto';
 export * from './dashboard-query.dto';
+export * from './foremen-ranking-response.dto';
 export * from './inspectors-production-response.dto';
 export * from './low-score-collaborators-query.dto';
 export * from './low-score-collaborators-response.dto';

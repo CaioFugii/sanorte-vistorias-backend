@@ -399,6 +399,32 @@ export class DashboardsController {
     });
   }
 
+  @Get('quality/inspectors-production')
+  getQualityInspectorsProduction(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
+    return this.dashboardsService.getQualityInspectorsProduction({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
+  @Get('quality/foremen-ranking')
+  getQualityForemenRanking(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
+    return this.dashboardsService.getQualityForemenRanking({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
   @Get('safety-work/inspectors-production')
   getSafetyWorkInspectorsProduction(
     @CurrentUser() user: any,

@@ -92,6 +92,17 @@ describe('DashboardsController (integration)', () => {
       lowScoreThreshold: 70,
       collaborators: [],
     }),
+    getQualityInspectorsProduction: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      days: [],
+      inspectors: [],
+    }),
+    getQualityForemenRanking: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      foremen: [],
+    }),
     getSafetyWorkInspectorsProduction: jest.fn().mockResolvedValue({
       from: '2025-11-01',
       to: '2025-11-30',
@@ -287,6 +298,30 @@ describe('DashboardsController (integration)', () => {
       .get('/dashboards/safety-work/low-score-collaborators')
       .query({ from: '2025-11-01', to: '2025-11-30' })
       .set('x-role', 'ADMIN')
+      .expect(200);
+  });
+
+  it('deve permitir ADMIN no endpoint de produção diária de fiscais de Qualidade', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/quality/inspectors-production')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'ADMIN')
+      .expect(200);
+  });
+
+  it('deve bloquear FISCAL no endpoint de produção diária de fiscais de Qualidade', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/quality/inspectors-production')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'FISCAL')
+      .expect(403);
+  });
+
+  it('deve permitir GESTOR no ranking de encarregados', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/quality/foremen-ranking')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'GESTOR')
       .expect(200);
   });
 

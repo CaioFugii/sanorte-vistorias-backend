@@ -41,7 +41,7 @@ Authorization: Bearer <token>
   - consulta de formulário para renderização no frontend (sem persistência)
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/overview`, `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
+- Dashboards: `GET /dashboards/overview`, `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/quality/inspectors-production`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/quality/foremen-ranking`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
 
 ### Regras críticas que impactam UI
 
@@ -72,6 +72,10 @@ Authorization: Bearer <token>
   - `POST /teams` exige `contractIds`.
   - `PUT /teams/:id` exige `contractIds`.
   - `POST /teams` e `PUT /teams/:id` aceitam `sectorIds` (UUIDs dos setores em que a equipe atua).
+  - `POST /teams` e `PUT /teams/:id` aceitam `foremanId` (UUID do encarregado atual, ou `null` para desvincular).
+- Encarregados:
+  - Cadastro em `/foremen` (sem login). Um encarregado pode ter várias equipes; cada equipe tem no máximo um.
+  - `DELETE /foremen/:id` falha com 400 enquanto houver equipe vinculada.
 - Colaboradores:
   - `POST /collaborators` e `PUT /collaborators/:id` aceitam `contractId` (UUID) para vínculo direto com contrato.
   - quando `contractId` é informado, o contrato deve existir.
@@ -833,13 +837,13 @@ Response 201: contrato criado
 
 - Auth: JWT
 - Query: `page`, `limit`, `name` (busca parcial), `contractId` (UUID opcional; apenas equipes ativas vinculadas a esse contrato), `sectorId` (UUID opcional; apenas equipes ativas que atuam nesse setor)
-- Response: paginação de `Team` com `collaboratorCount` e `sectors` (sem hidratar `collaborators` nem `contracts`). Para o grafo completo, use `GET /teams/:id`.
+- Response: paginação de `Team` com `collaboratorCount`, `sectors` e `foreman` (`{ id, name, active } | null`, sem hidratar `collaborators` nem `contracts`). Para o grafo completo, use `GET /teams/:id`.
 - Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` enxergam apenas equipes vinculadas aos contratos permitidos. Se `contractId` estiver fora do escopo, a lista vem vazia.
 
 ### GET /teams/:id
 
 - Auth: JWT
-- Response 200: `Team` com `collaborators`, `contracts` e `sectors`
+- Response 200: `Team` com `collaborators`, `contracts`, `sectors` e `foreman` (`{ id, name, active } | null`)
 - Response 404: equipe não encontrada
 
 ### POST /teams
@@ -854,7 +858,8 @@ Request JSON:
   "active": true,
   "collaboratorIds": ["uuid-1", "uuid-2"],
   "contractIds": ["uuid-contrato-1"],
-  "sectorIds": ["uuid-setor-1", "uuid-setor-2"]
+  "sectorIds": ["uuid-setor-1", "uuid-setor-2"],
+  "foremanId": "uuid-encarregado"
 }
 ```
 
@@ -887,7 +892,8 @@ Request JSON (parcial, `contractIds` obrigatório; `sectorIds` opcional):
   "name": "Equipe Norte Atualizada",
   "collaboratorIds": ["uuid-3"],
   "contractIds": ["uuid-contrato-2"],
-  "sectorIds": ["uuid-setor-1"]
+  "sectorIds": ["uuid-setor-1"],
+  "foremanId": null
 }
 ```
 
@@ -897,6 +903,52 @@ Response 200: `Team` atualizado
 
 - Auth: JWT + ADMIN
 - Response 200: vazio
+
+## Foremen
+
+Cadastro de encarregados. Não cria usuário nem login. O vínculo com equipes é feito em `POST/PUT /teams` (`foremanId`). O painel de resultado usa o encarregado **atual** da equipe.
+
+### GET /foremen
+
+- Auth: JWT
+- Query: `page`, `limit`, `name` (busca parcial; termos com menos de 3 caracteres são ignorados), `active` (`true` | `false`, opcional)
+- Response: paginação de encarregados, cada item com `teams: [{ id, name }]` (equipes atualmente vinculadas)
+
+### GET /foremen/:id
+
+- Auth: JWT
+- Response 200: encarregado com `teams`
+- Response 404: encarregado não encontrado
+
+### POST /foremen
+
+- Auth: JWT + ADMIN
+
+Request JSON:
+
+```json
+{
+  "name": "João da Silva",
+  "active": true
+}
+```
+
+- Nome único ignorando maiúsculas e espaços nas pontas.
+- Response 201: encarregado criado, com `teams` (vazio)
+
+### PUT /foremen/:id
+
+- Auth: JWT + ADMIN
+- Body parcial: `name`, `active`
+- Response 200: encarregado atualizado
+- Response 404: encarregado não encontrado
+
+### DELETE /foremen/:id
+
+- Auth: JWT + ADMIN
+- Response 200: vazio
+- Response 400: ainda existem equipes com esse encarregado
+- Response 404: encarregado não encontrado
 
 ## Sectors
 
@@ -2663,6 +2715,58 @@ Response 200:
   ]
 }
 ```
+
+### GET /dashboards/quality/inspectors-production
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `contractId` (`uuid`) opcional
+- O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
+- Considera vistorias de Qualidade (`CAMPO`, `REMOTO`, `POS_OBRA`, `OBRAS_INVESTIMENTO`), excluindo `RASCUNHO`.
+- Agrupa pelo usuário criador da vistoria (`createdBy`), no fuso `America/Sao_Paulo`, pela data de `COALESCE(inspection.finalizedAt, inspection.createdAt)` — o mesmo recorte dos outros painéis de Qualidade.
+- Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
+- Response 200: mesmo formato de `GET /dashboards/safety-work/inspectors-production`.
+
+### GET /dashboards/quality/foremen-ranking
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `contractId` (`uuid`) opcional
+- Considera vistorias de Qualidade (`CAMPO`, `REMOTO`, `POS_OBRA`, `OBRAS_INVESTIMENTO`), excluindo `RASCUNHO`, no mesmo recorte de data dos outros painéis de Qualidade.
+- Agrupa pelo encarregado **atual** da equipe (`teams.foreman_id`). Equipe sem encarregado não entra. Trocar o vínculo passa a contar o histórico para o novo encarregado.
+- Ordenação: nota média decrescente, depois nome.
+
+Response 200:
+
+```json
+{
+  "from": "2026-09-01",
+  "to": "2026-09-30",
+  "foremen": [
+    {
+      "foremanId": "uuid",
+      "foremanName": "João da Silva",
+      "teams": [{ "id": "uuid", "name": "Equipe Norte" }],
+      "averagePercent": 91.5,
+      "inspectionsCount": 12,
+      "nonConformitiesCount": 4,
+      "pendingAdjustmentsCount": 1,
+      "resolvedCount": 8
+    }
+  ]
+}
+```
+
+- `nonConformitiesCount`: quantidade de itens respondidos como `NAO_CONFORME`.
+- `pendingAdjustmentsCount`: vistorias em `PENDENTE_AJUSTE`.
+- `resolvedCount`: vistorias em `RESOLVIDA`.
+- `teams`: equipes atualmente vinculadas ao encarregado, não só as que tiveram vistoria no período.
 
 ### GET /dashboards/safety-work/inspectors-production
 

@@ -1679,6 +1679,139 @@ describe('DashboardsService', () => {
     ).toBe(true);
   });
 
+  it('deve agregar produção diária por fiscal nos módulos de Qualidade', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        {
+          userId: 'user-1',
+          userName: 'Daiana Freire',
+          day: '2026-09-01',
+          inspectionsCount: '4',
+        },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getQualityInspectorsProduction({
+      from: '2026-09-01',
+      to: '2026-09-02',
+      contractId: 'contract-1',
+      user: { role: 'ADMIN' },
+    });
+
+    expect(result.days).toEqual(['2026-09-01', '2026-09-02']);
+    expect(result.inspectors[0]).toMatchObject({
+      userId: 'user-1',
+      inspectionsCount: 4,
+      daysWithInspections: 1,
+      dailyAverage: 4,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [
+          ModuleType.CAMPO,
+          ModuleType.POS_OBRA,
+          ModuleType.REMOTO,
+          ModuleType.OBRAS_INVESTIMENTO,
+        ],
+      },
+    );
+    expect(
+      qb.andWhere.mock.calls.some(([sql]: [string]) =>
+        sql.includes("DATE(timezone('America/Sao_Paulo'"),
+      ),
+    ).toBe(true);
+    expect(
+      qb.andWhere.mock.calls.some(([sql]: [string]) =>
+        sql.includes(
+          'COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from',
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('deve agregar resultado de Qualidade pelo encarregado atual da equipe', async () => {
+    const summaryQb = createMockQueryBuilder({
+      rawMany: [
+        {
+          foremanId: 'foreman-2',
+          foremanName: 'Bruno',
+          averagePercent: '70',
+          inspectionsCount: '2',
+          pendingAdjustmentsCount: '1',
+          resolvedCount: '0',
+        },
+        {
+          foremanId: 'foreman-1',
+          foremanName: 'Ana',
+          averagePercent: '90.5',
+          inspectionsCount: '4',
+          pendingAdjustmentsCount: '0',
+          resolvedCount: '3',
+        },
+      ],
+    });
+    const nonConformitiesQb = createMockQueryBuilder({
+      rawMany: [
+        { foremanId: 'foreman-1', nonConformitiesCount: '5' },
+        { foremanId: 'foreman-2', nonConformitiesCount: '1' },
+      ],
+    });
+    inspectionsRepository.createQueryBuilder
+      .mockReturnValueOnce(summaryQb)
+      .mockReturnValueOnce(nonConformitiesQb);
+    teamRepository.find.mockResolvedValue([
+      { id: 'team-b', name: 'Equipe B', foremanId: 'foreman-1' },
+      { id: 'team-a', name: 'Equipe A', foremanId: 'foreman-1' },
+      { id: 'team-c', name: 'Equipe C', foremanId: 'foreman-2' },
+    ]);
+
+    const result = await service.getQualityForemenRanking({
+      from: '2026-09-01',
+      to: '2026-09-30',
+      user: { role: 'ADMIN' },
+    });
+
+    expect(result.foremen).toEqual([
+      {
+        foremanId: 'foreman-1',
+        foremanName: 'Ana',
+        teams: [
+          { id: 'team-b', name: 'Equipe B' },
+          { id: 'team-a', name: 'Equipe A' },
+        ],
+        averagePercent: 90.5,
+        inspectionsCount: 4,
+        nonConformitiesCount: 5,
+        pendingAdjustmentsCount: 0,
+        resolvedCount: 3,
+      },
+      {
+        foremanId: 'foreman-2',
+        foremanName: 'Bruno',
+        teams: [{ id: 'team-c', name: 'Equipe C' }],
+        averagePercent: 70,
+        inspectionsCount: 2,
+        nonConformitiesCount: 1,
+        pendingAdjustmentsCount: 1,
+        resolvedCount: 0,
+      },
+    ]);
+    expect(summaryQb.innerJoin).toHaveBeenCalledWith('team.foreman', 'foreman');
+    expect(summaryQb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [
+          ModuleType.CAMPO,
+          ModuleType.POS_OBRA,
+          ModuleType.REMOTO,
+          ModuleType.OBRAS_INVESTIMENTO,
+        ],
+      },
+    );
+  });
+
   it('deve rejeitar intervalo invertido na produção de fiscais', async () => {
     await expect(
       service.getSafetyWorkInspectorsProduction({

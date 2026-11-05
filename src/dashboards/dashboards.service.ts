@@ -31,6 +31,7 @@ import {
   TeamRankingInspectionsResponseDto,
   TeamRankingMetric,
   TeamPerformanceByTeamsResponseDto,
+  ForemenRankingResponseDto,
 } from './dto';
 
 const MAX_DATE_RANGE_YEARS = 2;
@@ -390,6 +391,22 @@ export class DashboardsService {
 
   private qualityPeriodTimestampExpr(): string {
     return `COALESCE(inspection.finalizedAt, inspection.createdAt)`;
+  }
+
+  /** Mesmo recorte de calendário dos rankings de Qualidade (fuso America/Sao_Paulo). */
+  private applyQualityCalendarPeriod(
+    qb: any,
+    filters: { from: string; to: string },
+  ): void {
+    const qualityPeriodExpr = this.qualityPeriodTimestampExpr();
+    qb.andWhere(
+      `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) >= :fromDate`,
+      { fromDate: filters.from },
+    );
+    qb.andWhere(
+      `DATE(timezone('${DASHBOARD_TIMEZONE}', ${qualityPeriodExpr})) <= :toDate`,
+      { toDate: filters.to },
+    );
   }
 
   private applyDashboardContractScope(
@@ -2264,16 +2281,165 @@ export class DashboardsService {
     };
   }
 
+  async getQualityInspectorsProduction(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<InspectorsProductionResponseDto> {
+    return this.getInspectorsProduction(filters, 'QUALITY');
+  }
+
   async getSafetyWorkInspectorsProduction(filters: {
     user?: any;
     from: string;
     to: string;
     contractId?: string;
   }): Promise<InspectorsProductionResponseDto> {
+    return this.getInspectorsProduction(filters, 'SAFETY_WORK');
+  }
+
+  async getQualityForemenRanking(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<ForemenRankingResponseDto> {
     this.validateDateRange(filters.from, filters.to);
-    const toLimit = toEndOfDay(filters.to);
+
+    const summaryQb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.team', 'team')
+      .innerJoin('team.foreman', 'foreman')
+      .select('foreman.id', 'foremanId')
+      .addSelect('foreman.name', 'foremanName')
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect(
+        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        'pendingAdjustmentsCount',
+      )
+      .addSelect(
+        `SUM(CASE WHEN inspection.status = :resolvedStatus THEN 1 ELSE 0 END)`,
+        'resolvedCount',
+      )
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .setParameter('resolvedStatus', InspectionStatus.RESOLVIDA)
+      .groupBy('foreman.id')
+      .addGroupBy('foreman.name');
+
+    const nonConformitiesQb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.team', 'team')
+      .innerJoin('team.foreman', 'foreman')
+      .innerJoin('inspection.items', 'inspectionItem')
+      .select('foreman.id', 'foremanId')
+      .addSelect('COUNT(inspectionItem.id)', 'nonConformitiesCount')
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .andWhere('inspectionItem.answer = :nonConformAnswer', {
+        nonConformAnswer: ChecklistAnswer.NAO_CONFORME,
+      })
+      .groupBy('foreman.id');
+
+    this.applyQualityFilters(summaryQb, { sector: 'QUALITY' });
+    this.applyQualityFilters(nonConformitiesQb, { sector: 'QUALITY' });
+    this.applyQualityCalendarPeriod(summaryQb, filters);
+    this.applyQualityCalendarPeriod(nonConformitiesQb, filters);
+    const periodModule = this.resolvePeriodModule(undefined, 'QUALITY');
+    this.applyDashboardContractScope(summaryQb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
+    this.applyDashboardContractScope(nonConformitiesQb, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
+
+    const [summaryRows, nonConformityRows] = await Promise.all([
+      summaryQb.getRawMany<{
+        foremanId: string;
+        foremanName: string;
+        averagePercent: string | null;
+        inspectionsCount: string;
+        pendingAdjustmentsCount: string;
+        resolvedCount: string;
+      }>(),
+      nonConformitiesQb.getRawMany<{
+        foremanId: string;
+        nonConformitiesCount: string;
+      }>(),
+    ]);
+
+    const nonConformitiesByForeman = new Map(
+      nonConformityRows.map((row) => [
+        row.foremanId,
+        parseInt(row.nonConformitiesCount ?? '0', 10),
+      ]),
+    );
+    const foremanIds = summaryRows.map((row) => row.foremanId);
+    const teams =
+      foremanIds.length > 0
+        ? await this.teamRepository.find({
+            where: { foremanId: In(foremanIds) },
+            select: ['id', 'name', 'foremanId'],
+            order: { name: 'ASC' },
+          })
+        : [];
+    const teamsByForeman = new Map<string, Array<{ id: string; name: string }>>();
+    for (const team of teams) {
+      if (!team.foremanId) continue;
+      const current = teamsByForeman.get(team.foremanId) ?? [];
+      current.push({ id: team.id, name: team.name });
+      teamsByForeman.set(team.foremanId, current);
+    }
+
+    const foremen = summaryRows
+      .map((row) => ({
+        foremanId: row.foremanId,
+        foremanName: row.foremanName,
+        teams: teamsByForeman.get(row.foremanId) ?? [],
+        averagePercent: roundTo2(parseFloat(row.averagePercent ?? '0')),
+        inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
+        nonConformitiesCount: nonConformitiesByForeman.get(row.foremanId) ?? 0,
+        pendingAdjustmentsCount: parseInt(
+          row.pendingAdjustmentsCount ?? '0',
+          10,
+        ),
+        resolvedCount: parseInt(row.resolvedCount ?? '0', 10),
+      }))
+      .sort((a, b) => {
+        if (b.averagePercent !== a.averagePercent) {
+          return b.averagePercent - a.averagePercent;
+        }
+        return a.foremanName.localeCompare(b.foremanName, 'pt-BR');
+      });
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      foremen,
+    };
+  }
+
+  private async getInspectorsProduction(
+    filters: {
+      user?: any;
+      from: string;
+      to: string;
+      contractId?: string;
+    },
+    sector: DashboardSector,
+  ): Promise<InspectorsProductionResponseDto> {
+    this.validateDateRange(filters.from, filters.to);
     const days = periodDays(filters.from, filters.to);
-    const dayExpr = `TO_CHAR(timezone('${DASHBOARD_TIMEZONE}', COALESCE(inspection.finalizedAt, inspection.createdAt)), 'YYYY-MM-DD')`;
+    const dayExpr = `TO_CHAR(timezone('${DASHBOARD_TIMEZONE}', ${this.qualityPeriodTimestampExpr()}), 'YYYY-MM-DD')`;
 
     const qb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -2292,13 +2458,17 @@ export class DashboardsService {
       .orderBy('createdBy.name', 'ASC')
       .addOrderBy(dayExpr, 'ASC');
 
-    this.applyQualityFilters(qb, { sector: 'SAFETY_WORK' });
-    const periodModule = this.resolvePeriodModule(undefined, 'SAFETY_WORK');
-    this.applyDashboardPeriodFilter(qb, {
-      from: filters.from,
-      to: toLimit,
-      module: periodModule,
-    });
+    this.applyQualityFilters(qb, { sector });
+    const periodModule = this.resolvePeriodModule(undefined, sector);
+    if (sector === 'SAFETY_WORK') {
+      this.applyDashboardPeriodFilter(qb, {
+        from: filters.from,
+        to: toEndOfDay(filters.to),
+        module: periodModule,
+      });
+    } else {
+      this.applyQualityCalendarPeriod(qb, filters);
+    }
     this.applyDashboardContractScope(qb, {
       user: filters.user,
       contractId: filters.contractId,

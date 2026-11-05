@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { TeamsModule } from './teams/teams.module';
 import { SectorsModule } from './sectors/sectors.module';
 import { CollaboratorsModule } from './collaborators/collaborators.module';
+import { ForemenModule } from './foremen/foremen.module';
 import { ChecklistsModule } from './checklists/checklists.module';
 import { InspectionsModule } from './inspections/inspections.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
@@ -49,6 +50,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
     TeamsModule,
     SectorsModule,
     CollaboratorsModule,
+    ForemenModule,
     ChecklistsModule,
     InspectionsModule,
     DashboardsModule,

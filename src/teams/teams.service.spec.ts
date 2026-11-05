@@ -31,11 +31,18 @@ describe('TeamsService', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
   });
 
   it('filtra equipes ativas do contrato informado', async () => {
-    await service.findAll({ role: UserRole.ADMIN }, 1, 10, undefined, 'contract-1');
+    await service.findAll(
+      { role: UserRole.ADMIN },
+      1,
+      10,
+      undefined,
+      'contract-1',
+    );
 
     expect(qb.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('FROM team_contracts tc'),
@@ -46,7 +53,42 @@ describe('TeamsService', () => {
       'team.collaboratorCount',
       'team.collaborators',
     );
-    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('team.sectors', 'sectors');
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith(
+      'team.sectors',
+      'sectors',
+    );
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith(
+      'team.foreman',
+      'foreman',
+    );
+  });
+
+  it('rejeita vínculo com encarregado inexistente', async () => {
+    const nameQuery = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue(null),
+    };
+    teamsRepository.createQueryBuilder.mockReturnValue(nameQuery);
+    const foremenRepository = { exist: jest.fn().mockResolvedValue(false) };
+    const localService = new TeamsService(
+      teamsRepository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      foremenRepository as any,
+    );
+
+    await expect(
+      localService.create({
+        name: 'Equipe Norte',
+        contractIds: [],
+        foremanId: '11111111-1111-4111-8111-111111111111',
+      }),
+    ).rejects.toThrow('foremanId informado não existe');
+    expect(foremenRepository.exist).toHaveBeenCalledWith({
+      where: { id: '11111111-1111-4111-8111-111111111111' },
+    });
   });
 
   it('filtra equipes ativas do setor informado', async () => {
@@ -63,7 +105,10 @@ describe('TeamsService', () => {
       expect.stringContaining('FROM team_sectors ts'),
       { filterSectorId: 'sector-1' },
     );
-    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('team.sectors', 'sectors');
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith(
+      'team.sectors',
+      'sectors',
+    );
   });
 
   it('retorna vazio quando o contrato está fora do escopo do gestor', async () => {
