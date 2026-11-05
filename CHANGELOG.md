@@ -40,6 +40,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Changed
 
+- `GET /dashboards/quality/inspectors-production` aceita `module` (`CAMPO`, `REMOTO` ou `POS_OBRA`). Campo e Pós-obra incluem obras de investimento do mesmo tipo de avaliação
 - `GET /dashboards/overview`: `averagePercent` passa a ser a média simples das notas mensais com vistoria; mês sem vistoria não entra como 0%
 - `GET /dashboards/quality/summary`: `averagePercent` (Média Geral) passa a ser a média simples de Campo, Remoto e Pós-obra com vistoria no período; módulo sem vistoria não entra como 0%
 - `GET /dashboards/quality/summary`: Campo e Pós-obra incluem vistorias de `OBRAS_INVESTIMENTO` conforme `evaluationModule`; o bloco `investmentWorks` saiu da resposta

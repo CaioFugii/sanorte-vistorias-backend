@@ -1,6 +1,6 @@
 import { DashboardsService } from './dashboards.service';
 import { InspectionScope, InspectionStatus, ModuleType } from '../common/enums';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { TeamRankingMetric } from './dto';
 
 function createMockQueryBuilder({
@@ -1729,6 +1729,40 @@ describe('DashboardsService', () => {
         ),
       ),
     ).toBe(false);
+  });
+
+  it('deve filtrar a produção de Qualidade pelo tipo Campo, incluindo obras avaliadas como Campo', async () => {
+    const qb = createMockQueryBuilder({ rawMany: [] });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getQualityInspectorsProduction({
+      from: '2026-09-01',
+      to: '2026-09-02',
+      module: ModuleType.CAMPO,
+      user: { role: 'ADMIN' },
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('investmentWorksModule'),
+      {
+        module: ModuleType.CAMPO,
+        investmentWorksModule: ModuleType.OBRAS_INVESTIMENTO,
+      },
+    );
+  });
+
+  it('deve rejeitar tipo fora de Campo, Remoto e Pós-obra na produção dos fiscais', async () => {
+    const qb = createMockQueryBuilder({ rawMany: [] });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await expect(
+      service.getQualityInspectorsProduction({
+        from: '2026-09-01',
+        to: '2026-09-02',
+        module: ModuleType.SEGURANCA_TRABALHO,
+        user: { role: 'ADMIN' },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('deve agregar resultado de Qualidade pelo encarregado atual da equipe', async () => {

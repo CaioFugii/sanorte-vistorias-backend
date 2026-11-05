@@ -409,6 +409,7 @@ export class DashboardsController {
       from: query.from,
       to: query.to,
       contractId: query.contractId,
+      module: query.module,
     });
   }
 

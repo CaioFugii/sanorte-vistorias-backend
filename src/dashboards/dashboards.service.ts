@@ -62,6 +62,11 @@ const QUALITY_DASHBOARD_MODULES = [
   ModuleType.REMOTO,
   ModuleType.OBRAS_INVESTIMENTO,
 ];
+const QUALITY_INSPECTOR_MODULES = [
+  ModuleType.CAMPO,
+  ModuleType.REMOTO,
+  ModuleType.POS_OBRA,
+];
 const QUALITY_RANKING_MODULES = [
   ModuleType.CAMPO,
   ModuleType.POS_OBRA,
@@ -2286,6 +2291,7 @@ export class DashboardsService {
     from: string;
     to: string;
     contractId?: string;
+    module?: ModuleType;
   }): Promise<InspectorsProductionResponseDto> {
     return this.getInspectorsProduction(filters, 'QUALITY');
   }
@@ -2428,12 +2434,44 @@ export class DashboardsService {
     };
   }
 
+  private applyQualityInspectorModuleFilter(
+    qb: any,
+    module?: ModuleType,
+  ): void {
+    if (!module) {
+      qb.andWhere('inspection.module IN (:...dashboardSectorModules)', {
+        dashboardSectorModules: QUALITY_DASHBOARD_MODULES,
+      });
+      return;
+    }
+
+    if (!QUALITY_INSPECTOR_MODULES.includes(module)) {
+      throw new BadRequestException(
+        'module deve ser CAMPO, REMOTO ou POS_OBRA',
+      );
+    }
+
+    if (module === ModuleType.REMOTO) {
+      qb.andWhere('inspection.module = :module', { module });
+      return;
+    }
+
+    qb.andWhere(
+      `(inspection.module = :module OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:module AS text)))`,
+      {
+        module,
+        investmentWorksModule: ModuleType.OBRAS_INVESTIMENTO,
+      },
+    );
+  }
+
   private async getInspectorsProduction(
     filters: {
       user?: any;
       from: string;
       to: string;
       contractId?: string;
+      module?: ModuleType;
     },
     sector: DashboardSector,
   ): Promise<InspectorsProductionResponseDto> {
@@ -2458,7 +2496,11 @@ export class DashboardsService {
       .orderBy('createdBy.name', 'ASC')
       .addOrderBy(dayExpr, 'ASC');
 
-    this.applyQualityFilters(qb, { sector });
+    if (sector === 'QUALITY') {
+      this.applyQualityInspectorModuleFilter(qb, filters.module);
+    } else {
+      this.applyQualityFilters(qb, { sector });
+    }
     const periodModule = this.resolvePeriodModule(undefined, sector);
     if (sector === 'SAFETY_WORK') {
       this.applyDashboardPeriodFilter(qb, {

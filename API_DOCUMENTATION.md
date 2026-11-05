@@ -2724,8 +2724,10 @@ Response 200:
   - `from` (`YYYY-MM-DD`) **obrigatório**
   - `to` (`YYYY-MM-DD`) **obrigatório**
   - `contractId` (`uuid`) opcional
+  - `module` opcional: `CAMPO`, `REMOTO` ou `POS_OBRA`. Outro valor retorna 400. Sem `module`, considera os quatro módulos de Qualidade.
 - O intervalo entre `from` e `to` não pode ser maior que 2 anos (400 se exceder).
-- Considera vistorias de Qualidade (`CAMPO`, `REMOTO`, `POS_OBRA`, `OBRAS_INVESTIMENTO`), excluindo `RASCUNHO`.
+- Considera vistorias de Qualidade, excluindo `RASCUNHO`.
+- `CAMPO` inclui `OBRAS_INVESTIMENTO` avaliada como Campo. `POS_OBRA` inclui `OBRAS_INVESTIMENTO` avaliada como Pós-obra. `REMOTO` conta só o módulo Remoto.
 - Agrupa pelo usuário criador da vistoria (`createdBy`), no fuso `America/Sao_Paulo`, pela data de `COALESCE(inspection.finalizedAt, inspection.createdAt)` — o mesmo recorte dos outros painéis de Qualidade.
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Response 200: mesmo formato de `GET /dashboards/safety-work/inspectors-production`.
