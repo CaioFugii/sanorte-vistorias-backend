@@ -426,6 +426,19 @@ export class DashboardsController {
     });
   }
 
+  @Get('safety-work/foremen-ranking')
+  getSafetyWorkForemenRanking(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
+    return this.dashboardsService.getSafetyWorkForemenRanking({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
   @Get('safety-work/inspectors-production')
   getSafetyWorkInspectorsProduction(
     @CurrentUser() user: any,

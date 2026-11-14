@@ -2036,6 +2036,57 @@ describe('DashboardsService', () => {
     );
   });
 
+  it('deve agrupar encarregados só com vistorias de Segurança do Trabalho', async () => {
+    const summaryQb = createMockQueryBuilder({
+      rawMany: [
+        {
+          foremanId: 'foreman-1',
+          foremanName: 'Ana',
+          averagePercent: '88',
+          inspectionsCount: '3',
+          pendingAdjustmentsCount: '1',
+          resolvedCount: '1',
+        },
+      ],
+    });
+    const nonConformitiesQb = createMockQueryBuilder({
+      rawMany: [{ foremanId: 'foreman-1', nonConformitiesCount: '2' }],
+    });
+    inspectionsRepository.createQueryBuilder
+      .mockReturnValueOnce(summaryQb)
+      .mockReturnValueOnce(nonConformitiesQb);
+    teamRepository.find.mockResolvedValue([
+      { id: 'team-a', name: 'Equipe A', foremanId: 'foreman-1' },
+    ]);
+
+    const result = await service.getSafetyWorkForemenRanking({
+      from: '2026-09-01',
+      to: '2026-09-30',
+      user: { role: 'ADMIN' },
+    });
+
+    expect(result.foremen).toEqual([
+      {
+        foremanId: 'foreman-1',
+        foremanName: 'Ana',
+        teams: [{ id: 'team-a', name: 'Equipe A' }],
+        averagePercent: 88,
+        inspectionsCount: 3,
+        nonConformitiesCount: 2,
+        pendingAdjustmentsCount: 1,
+        resolvedCount: 1,
+      },
+    ]);
+    expect(summaryQb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      { dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO] },
+    );
+    expect(summaryQb.andWhere).toHaveBeenCalledWith(
+      'COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from',
+      { from: '2026-09-01' },
+    );
+  });
+
   it('deve rejeitar intervalo invertido na produção de fiscais', async () => {
     await expect(
       service.getSafetyWorkInspectorsProduction({

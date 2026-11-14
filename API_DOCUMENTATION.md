@@ -41,7 +41,7 @@ Authorization: Bearer <token>
   - consulta de formulário para renderização no frontend (sem persistência)
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/overview`, `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/quality/inspectors-production`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/quality/foremen-ranking`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
+- Dashboards: `GET /dashboards/overview`, `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/quality/inspectors-production`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/quality/foremen-ranking`, `GET /dashboards/safety-work/foremen-ranking`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
 
 ### Regras críticas que impactam UI
 
@@ -2820,6 +2820,21 @@ Response 200:
 - `pendingAdjustmentsCount`: vistorias em `PENDENTE_AJUSTE`.
 - `resolvedCount`: vistorias em `RESOLVIDA`.
 - `teams`: equipes atualmente vinculadas ao encarregado, não só as que tiveram vistoria no período.
+
+### GET /dashboards/safety-work/foremen-ranking
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `contractId` (`uuid`) opcional
+- Mesmas colunas de `GET /dashboards/quality/foremen-ranking`.
+- Considera apenas vistorias de `SEGURANCA_TRABALHO`, excluindo `RASCUNHO`. Vistoria sem equipe não entra.
+- O período usa `COALESCE(inspection.finalizedAt, inspection.createdAt)`, o mesmo recorte dos outros painéis de Segurança do Trabalho.
+- Agrupa pelo encarregado **atual** da equipe. Equipe sem encarregado não entra.
+- Ordenação: nota média decrescente, depois nome.
+- Response 200: mesmo formato de `GET /dashboards/quality/foremen-ranking`.
 
 ### GET /dashboards/safety-work/inspectors-production
 

@@ -2597,6 +2597,27 @@ export class DashboardsService {
     to: string;
     contractId?: string;
   }): Promise<ForemenRankingResponseDto> {
+    return this.getForemenRanking(filters, 'QUALITY');
+  }
+
+  async getSafetyWorkForemenRanking(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<ForemenRankingResponseDto> {
+    return this.getForemenRanking(filters, 'SAFETY_WORK');
+  }
+
+  private async getForemenRanking(
+    filters: {
+      user?: any;
+      from: string;
+      to: string;
+      contractId?: string;
+    },
+    sector: DashboardSector,
+  ): Promise<ForemenRankingResponseDto> {
     this.validateDateRange(filters.from, filters.to);
 
     const summaryQb = this.inspectionsRepository
@@ -2638,21 +2659,46 @@ export class DashboardsService {
       })
       .groupBy('foreman.id');
 
-    this.applyQualityFilters(summaryQb, { sector: 'QUALITY' });
-    this.applyQualityFilters(nonConformitiesQb, { sector: 'QUALITY' });
-    this.applyQualityCalendarPeriod(summaryQb, filters);
-    this.applyQualityCalendarPeriod(nonConformitiesQb, filters);
-    const periodModule = this.resolvePeriodModule(undefined, 'QUALITY');
-    this.applyDashboardContractScope(summaryQb, {
-      user: filters.user,
-      contractId: filters.contractId,
-      module: periodModule,
-    });
-    this.applyDashboardContractScope(nonConformitiesQb, {
-      user: filters.user,
-      contractId: filters.contractId,
-      module: periodModule,
-    });
+    this.applyQualityFilters(summaryQb, { sector });
+    this.applyQualityFilters(nonConformitiesQb, { sector });
+    if (sector === 'SAFETY_WORK') {
+      const toLimit = toEndOfDay(filters.to);
+      const periodModule = this.resolvePeriodModule(undefined, 'SAFETY_WORK');
+      this.applyDashboardPeriodFilter(summaryQb, {
+        from: filters.from,
+        to: toLimit,
+        module: periodModule,
+      });
+      this.applyDashboardPeriodFilter(nonConformitiesQb, {
+        from: filters.from,
+        to: toLimit,
+        module: periodModule,
+      });
+      this.applyDashboardContractScope(summaryQb, {
+        user: filters.user,
+        contractId: filters.contractId,
+        module: periodModule,
+      });
+      this.applyDashboardContractScope(nonConformitiesQb, {
+        user: filters.user,
+        contractId: filters.contractId,
+        module: periodModule,
+      });
+    } else {
+      this.applyQualityCalendarPeriod(summaryQb, filters);
+      this.applyQualityCalendarPeriod(nonConformitiesQb, filters);
+      const periodModule = this.resolvePeriodModule(undefined, 'QUALITY');
+      this.applyDashboardContractScope(summaryQb, {
+        user: filters.user,
+        contractId: filters.contractId,
+        module: periodModule,
+      });
+      this.applyDashboardContractScope(nonConformitiesQb, {
+        user: filters.user,
+        contractId: filters.contractId,
+        module: periodModule,
+      });
+    }
 
     const [summaryRows, nonConformityRows] = await Promise.all([
       summaryQb.getRawMany<{
