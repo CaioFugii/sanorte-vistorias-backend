@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} from '@aws-sdk/client-s3';
 import { InternalServerErrorException } from '@nestjs/common';
 import { S3AssetStorageAdapter } from './s3-asset-storage.adapter';
 
@@ -12,7 +17,9 @@ jest.mock('@aws-sdk/client-s3', () => ({
 }));
 
 jest.mock('@aws-sdk/s3-request-presigner', () => ({
-  getSignedUrl: jest.fn().mockResolvedValue('https://s3.amazonaws.com/presigned-put'),
+  getSignedUrl: jest
+    .fn()
+    .mockResolvedValue('https://s3.amazonaws.com/presigned-put'),
 }));
 
 jest.mock('fs/promises', () => ({
@@ -119,7 +126,10 @@ describe('S3AssetStorageAdapter', () => {
   });
 
   it('statObject should return content length from HeadObject', async () => {
-    sendMock.mockResolvedValueOnce({ ContentLength: 2048, ContentType: 'image/jpeg' });
+    sendMock.mockResolvedValueOnce({
+      ContentLength: 2048,
+      ContentType: 'image/jpeg',
+    });
     const adapter = new S3AssetStorageAdapter();
     const result = await adapter.statObject('quality/evidences/test-uuid.jpg');
 

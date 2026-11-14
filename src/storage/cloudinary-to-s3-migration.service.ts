@@ -25,9 +25,10 @@ export class CloudinaryToS3MigrationService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly s3Storage: S3AssetStorageAdapter,
-    private readonly downloadAsset: (
-      url: string,
-    ) => Promise<{ buffer: Buffer; contentType?: string | null }> = defaultDownloadAsset,
+    private readonly downloadAsset: (url: string) => Promise<{
+      buffer: Buffer;
+      contentType?: string | null;
+    }> = defaultDownloadAsset,
   ) {}
 
   async run(
@@ -41,7 +42,8 @@ export class CloudinaryToS3MigrationService {
 
     const tables = options.tables?.length ? options.tables : DEFAULT_TABLES;
     const batchSize = Math.max(1, options.batchSize ?? 25);
-    const limit = options.limit && options.limit > 0 ? options.limit : undefined;
+    const limit =
+      options.limit && options.limit > 0 ? options.limit : undefined;
     const dryRun = options.dryRun === true;
 
     const result: CloudinaryToS3MigrationResult = {
@@ -61,7 +63,8 @@ export class CloudinaryToS3MigrationService {
 
         const remaining =
           limit !== undefined ? Math.max(limit - result.scanned, 0) : batchSize;
-        const take = limit !== undefined ? Math.min(batchSize, remaining) : batchSize;
+        const take =
+          limit !== undefined ? Math.min(batchSize, remaining) : batchSize;
         if (take <= 0) {
           break;
         }
@@ -90,7 +93,9 @@ export class CloudinaryToS3MigrationService {
               table: candidate.table,
               id: candidate.id,
               reason:
-                error instanceof Error ? error.message : 'Unknown migration error',
+                error instanceof Error
+                  ? error.message
+                  : 'Unknown migration error',
             });
           }
         }
@@ -254,8 +259,8 @@ export class CloudinaryToS3MigrationService {
     }
 
     return (
-      row.storageProvider?.trim().toLowerCase() === StorageProvider.CLOUDINARY ||
-      isCloudinaryHttpUrl(sourceUrl)
+      row.storageProvider?.trim().toLowerCase() ===
+        StorageProvider.CLOUDINARY || isCloudinaryHttpUrl(sourceUrl)
     );
   }
 
@@ -263,7 +268,9 @@ export class CloudinaryToS3MigrationService {
     candidate: LegacyStorageCandidate,
     dryRun: boolean,
   ): Promise<boolean> {
-    const { buffer, contentType } = await this.downloadAsset(candidate.sourceUrl);
+    const { buffer, contentType } = await this.downloadAsset(
+      candidate.sourceUrl,
+    );
     const resolvedContentType = resolveMigrationContentType(
       candidate.storageKey,
       contentType,
@@ -373,9 +380,7 @@ async function defaultDownloadAsset(
   };
 }
 
-export async function collectLegacyStorageRows(
-  dataSource: DataSource,
-): Promise<
+export async function collectLegacyStorageRows(dataSource: DataSource): Promise<
   Array<{
     table: LegacyStorageTable;
     storageProvider?: string | null;
@@ -423,7 +428,7 @@ export function summarizeMigrationFailures(
   failures: CloudinaryToS3MigrationFailure[],
   maxItems = 10,
 ): string[] {
-  return failures.slice(0, maxItems).map(
-    (failure) => `${failure.table}/${failure.id}: ${failure.reason}`,
-  );
+  return failures
+    .slice(0, maxItems)
+    .map((failure) => `${failure.table}/${failure.id}: ${failure.reason}`);
 }

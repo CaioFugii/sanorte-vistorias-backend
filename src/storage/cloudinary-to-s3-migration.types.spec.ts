@@ -8,7 +8,9 @@ import {
 describe('cloudinary-to-s3-migration.types', () => {
   it('detects cloudinary and s3 urls', () => {
     expect(
-      isCloudinaryHttpUrl('https://res.cloudinary.com/demo/image/upload/v1/x.jpg'),
+      isCloudinaryHttpUrl(
+        'https://res.cloudinary.com/demo/image/upload/v1/x.jpg',
+      ),
     ).toBe(true);
     expect(
       isS3HttpUrl(

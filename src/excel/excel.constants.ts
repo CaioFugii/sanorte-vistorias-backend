@@ -7,7 +7,8 @@ const INVALID_SHEET_NAME_CHARS = /[[\]:*?/\\]/g;
 const INVALID_FILENAME_CHARS = /[/\\?%*:|"<>]/g;
 
 export function sanitizeExcelSheetName(name: string): string {
-  const cleaned = name.replace(INVALID_SHEET_NAME_CHARS, ' ').trim() || 'Planilha';
+  const cleaned =
+    name.replace(INVALID_SHEET_NAME_CHARS, ' ').trim() || 'Planilha';
   return cleaned.slice(0, EXCEL_SHEET_NAME_MAX_LENGTH);
 }
 

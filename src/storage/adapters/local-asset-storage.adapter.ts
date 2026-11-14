@@ -105,7 +105,10 @@ export class LocalAssetStorageAdapter implements AssetStorage {
     ext: string,
     options: AssetUploadOptions,
   ): Promise<AssetUploadResult> {
-    const folder = (options.folder || 'quality/evidences').replace(/^\/+|\/+$/g, '');
+    const folder = (options.folder || 'quality/evidences').replace(
+      /^\/+|\/+$/g,
+      '',
+    );
     const key = `${folder}/${randomUUID()}.${ext}`;
     const fullPath = resolveSafeLocalPath(this.storageRoot, key);
 

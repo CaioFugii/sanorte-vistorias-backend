@@ -1,7 +1,13 @@
 import { Module } from '@nestjs/common';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
-import { ASSET_STORAGE, resolveStorageProvider } from './asset-storage.interface';
-import { ASSET_STORAGE_REGISTRY, AssetStorageRegistry } from './asset-storage.registry';
+import {
+  ASSET_STORAGE,
+  resolveStorageProvider,
+} from './asset-storage.interface';
+import {
+  ASSET_STORAGE_REGISTRY,
+  AssetStorageRegistry,
+} from './asset-storage.registry';
 import { CloudinaryAssetStorageAdapter } from './adapters/cloudinary-asset-storage.adapter';
 import { LocalAssetStorageAdapter } from './adapters/local-asset-storage.adapter';
 import { S3AssetStorageAdapter } from './adapters/s3-asset-storage.adapter';

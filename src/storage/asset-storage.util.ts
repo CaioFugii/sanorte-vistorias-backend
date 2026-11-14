@@ -1,5 +1,8 @@
 import { StorageProvider } from '../common/enums/storage-provider.enum';
-import { AssetUploadResult, resolveStorageProvider } from './asset-storage.interface';
+import {
+  AssetUploadResult,
+  resolveStorageProvider,
+} from './asset-storage.interface';
 
 export type StoredAssetRecord = {
   storageProvider?: string | null;

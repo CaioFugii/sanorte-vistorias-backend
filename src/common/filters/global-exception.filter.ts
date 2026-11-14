@@ -82,7 +82,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         const sentryException =
           exception instanceof Error
             ? exception
-            : new Error(typeof message === 'string' ? message : 'Request failed');
+            : new Error(
+                typeof message === 'string' ? message : 'Request failed',
+              );
 
         Sentry.captureException(sentryException);
       });

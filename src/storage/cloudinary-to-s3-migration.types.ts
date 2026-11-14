@@ -1,9 +1,6 @@
 import { StorageProvider } from '../common/enums/storage-provider.enum';
 
-export type LegacyStorageTable =
-  | 'evidences'
-  | 'signatures'
-  | 'checklist_items';
+export type LegacyStorageTable = 'evidences' | 'signatures' | 'checklist_items';
 
 export type CloudinaryToS3MigrationOptions = {
   dryRun?: boolean;
@@ -50,7 +47,8 @@ export function isCloudinaryHttpUrl(url?: string | null): boolean {
 export function isS3HttpUrl(url?: string | null): boolean {
   const normalized = url?.trim().toLowerCase() || '';
   return (
-    normalized.includes('amazonaws.com') || normalized.includes('cloudfront.net')
+    normalized.includes('amazonaws.com') ||
+    normalized.includes('cloudfront.net')
   );
 }
 

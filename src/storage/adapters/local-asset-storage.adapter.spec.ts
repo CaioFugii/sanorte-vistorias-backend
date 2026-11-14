@@ -19,7 +19,9 @@ describe('LocalAssetStorageAdapter', () => {
   });
 
   it('resolveSafeLocalPath should reject path traversal', () => {
-    expect(() => resolveSafeLocalPath('/tmp/storage', '../secret.txt')).toThrow();
+    expect(() =>
+      resolveSafeLocalPath('/tmp/storage', '../secret.txt'),
+    ).toThrow();
   });
 
   it('uploadImage should write a file and return a local /files URL', async () => {
@@ -66,7 +68,9 @@ describe('LocalAssetStorageAdapter', () => {
 
   it('createDirectUpload should fall back to proxy mode', async () => {
     const adapter = new LocalAssetStorageAdapter();
-    await expect(adapter.createDirectUpload({ contentType: 'image/jpeg' })).resolves.toEqual({
+    await expect(
+      adapter.createDirectUpload({ contentType: 'image/jpeg' }),
+    ).resolves.toEqual({
       mode: 'proxy',
     });
   });
