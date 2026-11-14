@@ -469,6 +469,16 @@ export class DashboardsController {
     );
   }
 
+  @Get('quality/non-conformities/list')
+  getQualityNonConformitiesList(
+    @CurrentUser() user: any,
+    @Query() query: NonConformitiesByChecklistQueryDto,
+  ) {
+    return this.dashboardsService.getQualityNonConformitiesList(
+      this.nonConformitiesByChecklistFilters(user, query, 'QUALITY'),
+    );
+  }
+
   @Get('non-conformities/by-checklist')
   getTopNonConformitiesByChecklist(
     @CurrentUser() user: any,

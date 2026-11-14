@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<InspectionStatus, string> = {
   [InspectionStatus.RASCUNHO]: 'Rascunho',
   [InspectionStatus.FINALIZADA]: 'Finalizada',
   [InspectionStatus.PENDENTE_AJUSTE]: 'Pendente Ajuste',
+  [InspectionStatus.AGUARDANDO_APROVACAO]: 'Aguardando aprovação',
   [InspectionStatus.RESOLVIDA]: 'Resolvida',
 };
 
@@ -174,10 +175,7 @@ export class InspectionsExcelExporter {
 
   private moduleLabel(row: InspectionListItemDto): string {
     const base = MODULE_LABELS[row.module] ?? row.module;
-    if (
-      row.module !== ModuleType.OBRAS_INVESTIMENTO ||
-      !row.evaluationModule
-    ) {
+    if (row.module !== ModuleType.OBRAS_INVESTIMENTO || !row.evaluationModule) {
       return base;
     }
     const typeLabel =

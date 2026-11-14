@@ -21,6 +21,7 @@ import { InspectionsExcelExporter } from './inspections-excel.exporter';
 import { SyncController } from './sync.controller';
 import { StorageModule } from '../storage/storage.module';
 import { ExcelModule } from '../excel/excel.module';
+import { InspectionNoticesModule } from '../inspection-notices/inspection-notices.module';
 
 @Module({
   imports: [
@@ -40,9 +41,14 @@ import { ExcelModule } from '../excel/excel.module';
     ]),
     StorageModule,
     ExcelModule,
+    InspectionNoticesModule,
   ],
   controllers: [InspectionsController, SyncController],
-  providers: [InspectionsService, InspectionDomainService, InspectionsExcelExporter],
+  providers: [
+    InspectionsService,
+    InspectionDomainService,
+    InspectionsExcelExporter,
+  ],
   exports: [InspectionsService],
 })
 export class InspectionsModule {}

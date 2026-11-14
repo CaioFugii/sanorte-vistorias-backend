@@ -112,6 +112,14 @@ export class Inspection {
   })
   status: InspectionStatus;
 
+  /** Escolha da finalização de Campo. Nulo quando a opção não se aplica. */
+  @Column({ name: 'generate_pending', type: 'boolean', nullable: true })
+  generatePending: boolean | null;
+
+  /** Segurança do Trabalho finalizada depois da regra nova pode gerar pendência. */
+  @Column({ name: 'safety_pending_rule', type: 'boolean', default: false })
+  safetyPendingRule: boolean;
+
   @Column({
     name: 'score_percent',
     type: 'numeric',
@@ -123,6 +131,10 @@ export class Inspection {
 
   @Column({ name: 'has_paralysis_penalty', default: false })
   hasParalysisPenalty: boolean;
+
+  /** 25 nas paralisações antigas; 35 nas novas. Nulo quando não há penalidade. */
+  @Column({ name: 'paralysis_penalty_percent', type: 'int', nullable: true })
+  paralysisPenaltyPercent: number | null;
 
   @Column({ name: 'paralyzed_reason', type: 'text', nullable: true })
   paralyzedReason: string | null;
@@ -146,6 +158,29 @@ export class Inspection {
 
   @Column({ name: 'finalized_at', nullable: true })
   finalizedAt: Date;
+
+  @Column({ name: 'resolution_submitted_by_user_id', nullable: true })
+  resolutionSubmittedByUserId: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'resolution_submitted_by_user_id' })
+  resolutionSubmittedBy: User | null;
+
+  @Column({ name: 'resolution_submitted_at', type: 'timestamp', nullable: true })
+  resolutionSubmittedAt: Date | null;
+
+  @Column({ name: 'resolution_rejection_reason', type: 'text', nullable: true })
+  resolutionRejectionReason: string | null;
+
+  @Column({ name: 'resolution_rejected_at', type: 'timestamp', nullable: true })
+  resolutionRejectedAt: Date | null;
+
+  @Column({ name: 'resolution_rejected_by_user_id', nullable: true })
+  resolutionRejectedByUserId: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'resolution_rejected_by_user_id' })
+  resolutionRejectedBy: User | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

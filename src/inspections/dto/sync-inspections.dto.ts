@@ -64,6 +64,7 @@ export type SyncInspectionDto = {
   createdOffline?: boolean;
   syncedAt?: string;
   finalize?: boolean;
+  generatePending?: boolean;
   paralyze?: SyncParalyzeDto;
   items?: SyncInspectionItemDto[];
   evidences?: SyncEvidenceDto[];

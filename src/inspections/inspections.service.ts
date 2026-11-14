@@ -44,7 +44,10 @@ import {
   InspectionDetailResponseDto,
   InspectionDetailSignatureDto,
 } from './dto/inspection-detail-response.dto';
-import { InspectionDomainService } from './inspection-domain.service';
+import {
+  InspectionDomainService,
+  NEW_PARALYSIS_PENALTY_PERCENT,
+} from './inspection-domain.service';
 import { PresignEvidenceDto } from './dto/presign-evidence.dto';
 import { ConfirmEvidenceDto } from './dto/confirm-evidence.dto';
 import {
@@ -65,6 +68,7 @@ import {
   resolveStoredAssetId,
 } from '../storage/asset-storage.util';
 import { getAllowedContractIds } from '../common/auth/contract-scope.util';
+import { InspectionNoticesService } from '../inspection-notices/inspection-notices.service';
 
 type PendingItemsSummary = {
   pendingItemsCount: number;
@@ -112,6 +116,7 @@ export class InspectionsService {
     private assetStorageRegistry: AssetStorageRegistry,
     private dataSource: DataSource,
     private inspectionDomainService: InspectionDomainService,
+    private inspectionNoticesService: InspectionNoticesService,
   ) {}
 
   private toSearchTerm(value?: string): string | undefined {
@@ -522,9 +527,12 @@ export class InspectionsService {
         'inspection.locationDescription',
         'inspection.status',
         'inspection.hasParalysisPenalty',
+        'inspection.paralysisPenaltyPercent',
         'inspection.scorePercent',
         'inspection.finalizedAt',
         'inspection.createdAt',
+        'inspection.resolutionRejectionReason',
+        'inspection.resolutionSubmittedByUserId',
       ])
       .addSelect(['team.name'])
       .addSelect(['serviceOrder.id', 'serviceOrder.osNumber'])
@@ -594,9 +602,12 @@ export class InspectionsService {
         'inspection.locationDescription',
         'inspection.status',
         'inspection.hasParalysisPenalty',
+        'inspection.paralysisPenaltyPercent',
         'inspection.scorePercent',
         'inspection.finalizedAt',
         'inspection.createdAt',
+        'inspection.resolutionRejectionReason',
+        'inspection.resolutionSubmittedByUserId',
       ])
       .addSelect(['team.name'])
       .addSelect([
@@ -714,6 +725,7 @@ export class InspectionsService {
       locationDescription: inspection.locationDescription ?? null,
       status: inspection.status,
       hasParalysisPenalty: inspection.hasParalysisPenalty === true,
+      paralysisPenaltyPercent: inspection.paralysisPenaltyPercent ?? null,
       scorePercent: this.normalizeScorePercent(inspection.scorePercent),
       finalizedAt: inspection.finalizedAt ?? null,
       createdAt: inspection.createdAt,
@@ -734,6 +746,8 @@ export class InspectionsService {
         : null,
       pendingItemsCount: pendingSummary?.pendingItemsCount ?? 0,
       pendingItemsPreview: pendingSummary?.pendingItemsPreview ?? [],
+      resolutionRejectionReason: inspection.resolutionRejectionReason ?? null,
+      resolutionSubmittedByUserId: inspection.resolutionSubmittedByUserId ?? null,
       ...(inspection.createdBy?.name
         ? { createdBy: { name: inspection.createdBy.name } }
         : {}),
@@ -858,7 +872,14 @@ export class InspectionsService {
         status: true,
         module: true,
         evaluationModule: true,
+        generatePending: true,
+        resolutionSubmittedByUserId: true,
+        resolutionSubmittedAt: true,
+        resolutionRejectionReason: true,
+        resolutionRejectedAt: true,
+        resolutionRejectedByUserId: true,
         hasParalysisPenalty: true,
+        paralysisPenaltyPercent: true,
         serviceDescription: true,
         locationDescription: true,
         createdAt: true,
@@ -884,6 +905,8 @@ export class InspectionsService {
       investmentWork,
       createdBy,
       checklistItemRows,
+      resolutionSubmittedBy,
+      resolutionRejectedBy,
     ] = await Promise.all([
       this.inspectionItemsRepository.find({
         where: { inspectionId },
@@ -967,6 +990,18 @@ export class InspectionsService {
         where: { checklistId: base.checklistId },
         select: { id: true, title: true, description: true },
       }),
+      base.resolutionSubmittedByUserId
+        ? this.dataSource.getRepository(User).findOne({
+            where: { id: base.resolutionSubmittedByUserId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
+      base.resolutionRejectedByUserId
+        ? this.dataSource.getRepository(User).findOne({
+            where: { id: base.resolutionRejectedByUserId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
     ]);
 
     const checklistMetaById = new Map(
@@ -1032,6 +1067,7 @@ export class InspectionsService {
       module: base.module,
       evaluationModule: base.evaluationModule ?? null,
       hasParalysisPenalty: base.hasParalysisPenalty === true,
+      paralysisPenaltyPercent: base.paralysisPenaltyPercent ?? null,
       serviceOrderId: base.serviceOrderId ?? null,
       serviceDescription: base.serviceDescription ?? null,
       locationDescription: base.locationDescription ?? null,
@@ -1054,6 +1090,20 @@ export class InspectionsService {
           }
         : null,
       createdBy: createdBy?.name != null ? { name: createdBy.name } : null,
+      generatePending: base.generatePending ?? null,
+      resolutionSubmittedByUserId: base.resolutionSubmittedByUserId ?? null,
+      resolutionSubmittedAt: base.resolutionSubmittedAt ?? null,
+      resolutionSubmittedBy:
+        resolutionSubmittedBy?.name != null
+          ? { name: resolutionSubmittedBy.name }
+          : null,
+      resolutionRejectionReason: base.resolutionRejectionReason ?? null,
+      resolutionRejectedAt: base.resolutionRejectedAt ?? null,
+      resolutionRejectedByUserId: base.resolutionRejectedByUserId ?? null,
+      resolutionRejectedBy:
+        resolutionRejectedBy?.name != null
+          ? { name: resolutionRejectedBy.name }
+          : null,
       items,
       evidences,
       signatures,
@@ -1130,11 +1180,30 @@ export class InspectionsService {
   private async findInspectionCoreForUpdateItems(
     id: string,
   ): Promise<
-    Pick<Inspection, 'id' | 'status' | 'module' | 'hasParalysisPenalty'>
+    Pick<
+      Inspection,
+      | 'id'
+      | 'status'
+      | 'module'
+      | 'evaluationModule'
+      | 'generatePending'
+      | 'safetyPendingRule'
+      | 'hasParalysisPenalty'
+      | 'paralysisPenaltyPercent'
+    >
   > {
     const inspection = await this.inspectionsRepository.findOne({
       where: [{ id }, { externalId: id }],
-      select: ['id', 'status', 'module', 'hasParalysisPenalty'],
+      select: [
+        'id',
+        'status',
+        'module',
+        'evaluationModule',
+        'generatePending',
+        'safetyPendingRule',
+        'hasParalysisPenalty',
+        'paralysisPenaltyPercent',
+      ],
     });
     if (!inspection) {
       throw new NotFoundException('Vistoria não encontrada');
@@ -1172,11 +1241,14 @@ export class InspectionsService {
       | 'id'
       | 'status'
       | 'module'
+      | 'contractId'
       | 'hasParalysisPenalty'
+      | 'paralysisPenaltyPercent'
       | 'serviceOrderId'
       | 'teamId'
       | 'serviceDescription'
       | 'inspectionScope'
+      | 'resolutionSubmittedByUserId'
     >
   > {
     const inspection = await this.inspectionsRepository.findOne({
@@ -1185,11 +1257,14 @@ export class InspectionsService {
         'id',
         'status',
         'module',
+        'contractId',
         'hasParalysisPenalty',
+        'paralysisPenaltyPercent',
         'serviceOrderId',
         'teamId',
         'serviceDescription',
         'inspectionScope',
+        'resolutionSubmittedByUserId',
       ],
     });
     if (!inspection) {
@@ -1448,7 +1523,7 @@ export class InspectionsService {
     );
     const scorePercent = this.inspectionDomainService.applyParalysisPenalty(
       baseScorePercent,
-      inspection.hasParalysisPenalty === true,
+      inspection.paralysisPenaltyPercent ?? null,
     );
 
     const inspectionUpdates: Partial<Inspection> = { scorePercent };
@@ -1463,14 +1538,24 @@ export class InspectionsService {
       const nextStatus = this.inspectionDomainService.resolveFinalStatus(
         refreshedItems,
         inspection.module,
+        {
+          evaluationModule: inspection.evaluationModule ?? null,
+          generatePending: inspection.generatePending ?? null,
+          safetyPendingRule: inspection.safetyPendingRule === true,
+        },
       );
       inspectionUpdates.status = nextStatus;
-      await this.syncPendingAdjustmentByStatus(
-        inspection.id,
-        inspection.module,
-        nextStatus,
-        userId,
-      );
+      const keepClosedCampo =
+        inspection.generatePending === false &&
+        nextStatus === InspectionStatus.FINALIZADA;
+      if (!keepClosedCampo) {
+        await this.syncPendingAdjustmentByStatus(
+          inspection.id,
+          inspection.module,
+          nextStatus,
+          userId,
+        );
+      }
     }
 
     await this.inspectionsRepository.update(inspection.id, inspectionUpdates);
@@ -1491,7 +1576,7 @@ export class InspectionsService {
 
     const scorePercent = await this.calculateFinalScorePercent(
       inspection.id,
-      true,
+      NEW_PARALYSIS_PENALTY_PERCENT,
     );
 
     await this.inspectionsRepository.update(inspection.id, {
@@ -1499,6 +1584,7 @@ export class InspectionsService {
       paralyzedAt: new Date(),
       paralyzedByUserId: userId,
       hasParalysisPenalty: true,
+      paralysisPenaltyPercent: NEW_PARALYSIS_PENALTY_PERCENT,
       scorePercent,
     });
 
@@ -1514,11 +1600,12 @@ export class InspectionsService {
 
     const scorePercent = await this.calculateFinalScorePercent(
       inspection.id,
-      false,
+      null,
     );
 
     await this.inspectionsRepository.update(inspection.id, {
       hasParalysisPenalty: false,
+      paralysisPenaltyPercent: null,
       paralyzedReason: null,
       paralyzedAt: null,
       paralyzedByUserId: null,
@@ -1863,7 +1950,10 @@ export class InspectionsService {
     }
   }
 
-  async finalize(id: string): Promise<InspectionDetailResponseDto> {
+  async finalize(
+    id: string,
+    body?: { generatePending?: boolean },
+  ): Promise<InspectionDetailResponseDto> {
     const inspection = await this.findInspectionCoreForUpdateItems(id);
 
     if (inspection.status !== InspectionStatus.RASCUNHO) {
@@ -1875,12 +1965,25 @@ export class InspectionsService {
     }
 
     const inspectionId = inspection.id;
+    const requiresPendingChoice =
+      this.inspectionDomainService.requiresGeneratePendingChoice(
+        inspection.module,
+        inspection.evaluationModule ?? null,
+      );
+    if (requiresPendingChoice && typeof body?.generatePending !== 'boolean') {
+      throw new BadRequestException(
+        'Informe generatePending para finalizar vistoria de Campo',
+      );
+    }
+    const generatePending = requiresPendingChoice
+      ? (body?.generatePending ?? null)
+      : null;
 
     await this.assertNonConformItemsHaveRequiredEvidence(inspectionId);
 
     const scorePercent = await this.calculateFinalScorePercent(
       inspectionId,
-      inspection.hasParalysisPenalty === true,
+      inspection.paralysisPenaltyPercent ?? null,
     );
 
     const itemsForStatus = await this.inspectionItemsRepository.find({
@@ -1890,6 +1993,12 @@ export class InspectionsService {
     const status = this.inspectionDomainService.resolveFinalStatus(
       itemsForStatus as InspectionItem[],
       inspection.module,
+      {
+        evaluationModule: inspection.evaluationModule ?? null,
+        generatePending,
+        safetyPendingRule:
+          inspection.module === ModuleType.SEGURANCA_TRABALHO,
+      },
     );
 
     if (status === InspectionStatus.PENDENTE_AJUSTE) {
@@ -1912,6 +2021,10 @@ export class InspectionsService {
       status,
       scorePercent,
       finalizedAt: new Date(),
+      generatePending,
+      ...(inspection.module === ModuleType.SEGURANCA_TRABALHO
+        ? { safetyPendingRule: true }
+        : {}),
     });
     this.logger.log('Inspection finalized', {
       inspectionId,
@@ -2278,7 +2391,9 @@ export class InspectionsService {
     }
 
     if (payload.finalize) {
-      await this.finalize(inspection.id);
+      await this.finalize(inspection.id, {
+        generatePending: payload.generatePending,
+      });
     } else {
       await this.inspectionsRepository.update(inspection.id, {
         syncedAt: payload.syncedAt ? new Date(payload.syncedAt) : new Date(),
@@ -2558,8 +2673,8 @@ export class InspectionsService {
   }
 
   /**
-   * Resolve um item não conforme da vistoria. Quando todos os itens NAO_CONFORME
-   * estiverem resolvidos, a vistoria passa automaticamente para RESOLVIDA.
+   * Resolve um item não conforme. A vistoria só sai de PENDENTE_AJUSTE
+   * quando quem pode lançar chama POST /inspections/:id/resolve.
    */
   async resolveItem(
     inspectionId: string,
@@ -2569,8 +2684,10 @@ export class InspectionsService {
       resolutionEvidence?: string;
     },
     userId: string,
+    userRole: UserRole,
   ): Promise<InspectionItem> {
     const inspection = await this.findInspectionCoreForManagement(inspectionId);
+    this.assertCanLaunchResolution(inspection, userRole);
 
     if (inspection.status !== InspectionStatus.PENDENTE_AJUSTE) {
       throw new BadRequestException('Vistoria não está pendente de ajuste');
@@ -2606,11 +2723,6 @@ export class InspectionsService {
     item.resolutionEvidencePath = resolutionEvidencePath;
     await this.inspectionItemsRepository.save(item);
 
-    await this.tryMarkInspectionResolvedIfAllItemsResolved(
-      inspection.id,
-      userId,
-    );
-
     const updated = await this.inspectionItemsRepository.findOne({
       where: { id: itemId },
       relations: ['checklistItem', 'resolvedBy'],
@@ -2621,39 +2733,22 @@ export class InspectionsService {
     return updated;
   }
 
-  /**
-   * Se todos os itens NAO_CONFORME da vistoria tiverem resolvedAt preenchido,
-   * marca PendingAdjustment e Inspection como RESOLVIDA.
-   */
-  private async tryMarkInspectionResolvedIfAllItemsResolved(
-    inspectionId: string,
-    lastResolvedByUserId: string,
-  ): Promise<void> {
-    const nonConformItems = await this.inspectionItemsRepository.find({
-      where: { inspectionId, answer: ChecklistAnswer.NAO_CONFORME },
-    });
-
-    const allResolved = nonConformItems.every((i) => i.resolvedAt != null);
-    if (!allResolved || nonConformItems.length === 0) {
+  private assertCanLaunchResolution(
+    inspection: Pick<Inspection, 'module'>,
+    userRole: UserRole,
+  ): void {
+    if (userRole === UserRole.SUPERVISOR) {
       return;
     }
-
-    let pending = await this.pendingAdjustmentsRepository.findOne({
-      where: { inspectionId },
-    });
-    if (!pending) {
-      pending = this.pendingAdjustmentsRepository.create({
-        inspectionId,
-      });
+    if (
+      userRole === UserRole.FISCAL &&
+      inspection.module === ModuleType.OBRAS_INVESTIMENTO
+    ) {
+      return;
     }
-    pending.status = PendingStatus.RESOLVIDA;
-    pending.resolvedAt = new Date();
-    pending.resolvedByUserId = lastResolvedByUserId;
-    await this.pendingAdjustmentsRepository.save(pending);
-
-    await this.inspectionsRepository.update(inspectionId, {
-      status: InspectionStatus.RESOLVIDA,
-    });
+    throw new ForbiddenException(
+      'Apenas o supervisor pode lançar a resolução. O fiscal só lança em obra de investimento.',
+    );
   }
 
   private async syncPendingAdjustmentByStatus(
@@ -2701,28 +2796,30 @@ export class InspectionsService {
 
   private async calculateFinalScorePercent(
     inspectionId: string,
-    hasParalysisPenalty: boolean,
+    penaltyPercent: number | null,
   ): Promise<number> {
     const baseScorePercent = await this.calculateScorePercent(inspectionId);
     return this.inspectionDomainService.applyParalysisPenalty(
       baseScorePercent,
-      hasParalysisPenalty,
+      penaltyPercent,
     );
   }
 
   /**
-   * Resolve a vistoria inteira. Só é permitido quando todos os itens não conformes
-   * já foram resolvidos individualmente (resolvedAt preenchido).
+   * Envia a resolução para aprovação. Exige PENDENTE_AJUSTE e todos os
+   * itens não conformes com resolvedAt. Não encerra a vistoria.
    */
   async resolve(
     id: string,
     resolutionData: {
-      resolutionNotes: string;
+      resolutionNotes?: string;
       resolutionEvidence?: string;
     },
     userId: string,
+    userRole: UserRole,
   ): Promise<InspectionDetailResponseDto> {
     const inspection = await this.findInspectionCoreForManagement(id);
+    this.assertCanLaunchResolution(inspection, userRole);
 
     if (inspection.status !== InspectionStatus.PENDENTE_AJUSTE) {
       throw new BadRequestException('Vistoria não está pendente de ajuste');
@@ -2758,21 +2855,126 @@ export class InspectionsService {
       });
     }
 
+    if (resolutionData.resolutionNotes != null) {
+      pending.resolutionNotes = resolutionData.resolutionNotes;
+    }
+    if (resolutionEvidencePath) {
+      pending.resolutionEvidencePath = resolutionEvidencePath;
+    }
+    pending.status = PendingStatus.PENDENTE;
+
+    await this.pendingAdjustmentsRepository.save(pending);
+
+    const submittedAt = new Date();
+    await this.inspectionsRepository.update(inspectionId, {
+      status: InspectionStatus.AGUARDANDO_APROVACAO,
+      resolutionSubmittedByUserId: userId,
+      resolutionSubmittedAt: submittedAt,
+      resolutionRejectionReason: null,
+      resolutionRejectedAt: null,
+      resolutionRejectedByUserId: null,
+    });
+    this.logger.log('Inspection resolution submitted', {
+      inspectionId,
+      resolutionSubmittedByUserId: userId,
+    });
+
+    await this.inspectionNoticesService.notifyResolutionSubmitted({
+      id: inspectionId,
+      contractId: inspection.contractId ?? null,
+    });
+
+    return this.findOneDetail(inspectionId);
+  }
+
+  async approveResolution(
+    id: string,
+    userId: string,
+  ): Promise<InspectionDetailResponseDto> {
+    const inspection = await this.findInspectionCoreForManagement(id);
+    if (inspection.status !== InspectionStatus.AGUARDANDO_APROVACAO) {
+      throw new BadRequestException(
+        'Vistoria não está aguardando aprovação da resolução',
+      );
+    }
+
+    const inspectionId = inspection.id;
+    let pending = await this.pendingAdjustmentsRepository.findOne({
+      where: { inspectionId },
+    });
+    if (!pending) {
+      pending = this.pendingAdjustmentsRepository.create({ inspectionId });
+    }
     pending.status = PendingStatus.RESOLVIDA;
     pending.resolvedAt = new Date();
-    pending.resolvedByUserId = userId;
-    pending.resolutionNotes = resolutionData.resolutionNotes;
-    pending.resolutionEvidencePath = resolutionEvidencePath;
-
+    pending.resolvedByUserId =
+      inspection.resolutionSubmittedByUserId ?? userId;
     await this.pendingAdjustmentsRepository.save(pending);
 
     await this.inspectionsRepository.update(inspectionId, {
       status: InspectionStatus.RESOLVIDA,
+      resolutionRejectionReason: null,
+      resolutionRejectedAt: null,
+      resolutionRejectedByUserId: null,
     });
-    this.logger.log('Inspection resolved', {
+    this.logger.log('Inspection resolution approved', {
       inspectionId,
-      resolvedByUserId: userId,
+      approvedByUserId: userId,
     });
+
+    await this.inspectionNoticesService.notifyResolutionApproved({
+      id: inspectionId,
+      resolutionSubmittedByUserId: inspection.resolutionSubmittedByUserId,
+    });
+
+    return this.findOneDetail(inspectionId);
+  }
+
+  async rejectResolution(
+    id: string,
+    reason: string,
+    userId: string,
+  ): Promise<InspectionDetailResponseDto> {
+    const trimmedReason = reason?.trim() ?? '';
+    if (!trimmedReason) {
+      throw new BadRequestException('Motivo da reprovação é obrigatório');
+    }
+
+    const inspection = await this.findInspectionCoreForManagement(id);
+    if (inspection.status !== InspectionStatus.AGUARDANDO_APROVACAO) {
+      throw new BadRequestException(
+        'Vistoria não está aguardando aprovação da resolução',
+      );
+    }
+
+    const inspectionId = inspection.id;
+    const pending = await this.pendingAdjustmentsRepository.findOne({
+      where: { inspectionId },
+    });
+    if (pending) {
+      pending.status = PendingStatus.PENDENTE;
+      await this.pendingAdjustmentsRepository.save(pending);
+    }
+
+    await this.inspectionsRepository.update(inspectionId, {
+      status: InspectionStatus.PENDENTE_AJUSTE,
+      resolutionSubmittedAt: null,
+      resolutionRejectionReason: trimmedReason,
+      resolutionRejectedAt: new Date(),
+      resolutionRejectedByUserId: userId,
+    });
+    this.logger.log('Inspection resolution rejected', {
+      inspectionId,
+      rejectedByUserId: userId,
+    });
+
+    await this.inspectionNoticesService.notifyResolutionRejected(
+      {
+        id: inspectionId,
+        resolutionSubmittedByUserId: inspection.resolutionSubmittedByUserId,
+      },
+      trimmedReason,
+    );
 
     return this.findOneDetail(inspectionId);
   }

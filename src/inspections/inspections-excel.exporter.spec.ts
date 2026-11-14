@@ -1,4 +1,8 @@
-import { InspectionExcelLayout, InspectionStatus, ModuleType } from '../common/enums';
+import {
+  InspectionExcelLayout,
+  InspectionStatus,
+  ModuleType,
+} from '../common/enums';
 import { ExcelService } from '../excel/excel.service';
 import { InspectionsExcelExporter } from './inspections-excel.exporter';
 import * as XLSX from 'xlsx';
@@ -52,7 +56,9 @@ describe('InspectionsExcelExporter', () => {
       InspectionsExcelExporter.MAX_EXPORT_ROWS,
       { role: 'ADMIN' },
     );
-    expect(file.filename).toMatch(/^vistorias-qualidade-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    expect(file.filename).toMatch(
+      /^vistorias-qualidade-\d{4}-\d{2}-\d{2}\.xlsx$/,
+    );
 
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
     expect(workbook.SheetNames).toEqual(['Avaliações']);
@@ -94,7 +100,9 @@ describe('InspectionsExcelExporter', () => {
       InspectionExcelLayout.PENDENCIAS,
     );
 
-    expect(file.filename).toMatch(/^pendencias-ajuste-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    expect(file.filename).toMatch(
+      /^pendencias-ajuste-\d{4}-\d{2}-\d{2}\.xlsx$/,
+    );
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
     expect(workbook.SheetNames).toEqual(['Pendências']);
     const rows = XLSX.utils.sheet_to_json<string[]>(

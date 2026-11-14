@@ -5,10 +5,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, QueryFailedError, Repository } from 'typeorm';
-import { Foreman, Team } from '../entities';
+import { FieldSupervisor, Foreman, Team } from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 
 export type ForemanTeamSummary = {
+  id: string;
+  name: string;
+};
+
+export type ForemanFieldSupervisorSummary = {
   id: string;
   name: string;
 };
@@ -17,6 +22,8 @@ export type ForemanResponse = {
   id: string;
   name: string;
   active: boolean;
+  fieldSupervisorId: string | null;
+  fieldSupervisor: ForemanFieldSupervisorSummary | null;
   createdAt: Date;
   updatedAt: Date;
   teams: ForemanTeamSummary[];
@@ -29,6 +36,8 @@ export class ForemenService {
     private foremenRepository: Repository<Foreman>,
     @InjectRepository(Team)
     private teamsRepository: Repository<Team>,
+    @InjectRepository(FieldSupervisor)
+    private fieldSupervisorsRepository: Repository<FieldSupervisor>,
   ) {}
 
   async findAll(
@@ -38,7 +47,9 @@ export class ForemenService {
     limit: number = 10,
   ): Promise<PaginatedResponseDto<ForemanResponse>> {
     const skip = (page - 1) * limit;
-    const query = this.foremenRepository.createQueryBuilder('foreman');
+    const query = this.foremenRepository
+      .createQueryBuilder('foreman')
+      .leftJoinAndSelect('foreman.fieldSupervisor', 'fieldSupervisor');
     const trimmedName = name?.trim() ?? '';
 
     if (trimmedName.length >= 3) {
@@ -71,7 +82,10 @@ export class ForemenService {
   }
 
   async findOne(id: string): Promise<ForemanResponse> {
-    const foreman = await this.foremenRepository.findOne({ where: { id } });
+    const foreman = await this.foremenRepository.findOne({
+      where: { id },
+      relations: ['fieldSupervisor'],
+    });
     if (!foreman) {
       throw new NotFoundException('Encarregado não encontrado');
     }
@@ -79,9 +93,16 @@ export class ForemenService {
     return this.toResponse(foreman, teamsByForeman.get(id) ?? []);
   }
 
-  async create(input: { name: string; active?: boolean }): Promise<ForemanResponse> {
+  async create(input: {
+    name: string;
+    active?: boolean;
+    fieldSupervisorId?: string | null;
+  }): Promise<ForemanResponse> {
     const name = this.normalizeName(input.name);
     await this.ensureNameIsAvailable(name);
+    if (input.fieldSupervisorId) {
+      await this.ensureFieldSupervisorExists(input.fieldSupervisorId);
+    }
 
     let saved: Foreman;
     try {
@@ -89,6 +110,7 @@ export class ForemenService {
         this.foremenRepository.create({
           name,
           active: input.active ?? true,
+          fieldSupervisorId: input.fieldSupervisorId ?? null,
         }),
       );
     } catch (error) {
@@ -103,7 +125,7 @@ export class ForemenService {
 
   async update(
     id: string,
-    input: { name?: string; active?: boolean },
+    input: { name?: string; active?: boolean; fieldSupervisorId?: string | null },
   ): Promise<ForemanResponse> {
     const existing = await this.foremenRepository.findOne({ where: { id } });
     if (!existing) {
@@ -118,6 +140,12 @@ export class ForemenService {
     }
     if (input.active !== undefined) {
       payload.active = input.active;
+    }
+    if (input.fieldSupervisorId !== undefined) {
+      if (input.fieldSupervisorId) {
+        await this.ensureFieldSupervisorExists(input.fieldSupervisorId);
+      }
+      payload.fieldSupervisorId = input.fieldSupervisorId;
     }
 
     if (Object.keys(payload).length > 0) {
@@ -181,10 +209,23 @@ export class ForemenService {
       id: foreman.id,
       name: foreman.name,
       active: foreman.active,
+      fieldSupervisorId: foreman.fieldSupervisorId ?? null,
+      fieldSupervisor: foreman.fieldSupervisor
+        ? { id: foreman.fieldSupervisor.id, name: foreman.fieldSupervisor.name }
+        : null,
       createdAt: foreman.createdAt,
       updatedAt: foreman.updatedAt,
       teams,
     };
+  }
+
+  private async ensureFieldSupervisorExists(fieldSupervisorId: string): Promise<void> {
+    const exists = await this.fieldSupervisorsRepository.exist({
+      where: { id: fieldSupervisorId },
+    });
+    if (!exists) {
+      throw new BadRequestException('fieldSupervisorId informado não existe');
+    }
   }
 
   private normalizeName(name?: string): string {

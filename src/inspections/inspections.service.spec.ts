@@ -120,6 +120,11 @@ describe('InspectionsService', () => {
       assetStorageRegistry as any,
       dataSource as any,
       new InspectionDomainService(),
+      {
+        notifyResolutionSubmitted: jest.fn(),
+        notifyResolutionApproved: jest.fn(),
+        notifyResolutionRejected: jest.fn(),
+      } as any,
     );
   });
 
@@ -628,6 +633,7 @@ describe('InspectionsService', () => {
       status: InspectionStatus.FINALIZADA,
       scorePercent: 98.5,
       hasParalysisPenalty: false,
+      paralysisPenaltyPercent: null,
       finalizedAt: null,
       createdAt: new Date('2026-01-10T10:00:00.000Z'),
       team: { name: 'Equipe A' },
@@ -898,6 +904,7 @@ describe('InspectionsService', () => {
       status: InspectionStatus.RASCUNHO,
       scorePercent: null,
       hasParalysisPenalty: true,
+      paralysisPenaltyPercent: null,
       finalizedAt: null,
       createdAt: new Date('2026-01-11T10:00:00.000Z'),
       team: null,

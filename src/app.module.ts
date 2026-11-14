@@ -11,6 +11,8 @@ import { TeamsModule } from './teams/teams.module';
 import { SectorsModule } from './sectors/sectors.module';
 import { CollaboratorsModule } from './collaborators/collaborators.module';
 import { ForemenModule } from './foremen/foremen.module';
+import { CoordinatorsModule } from './coordinators/coordinators.module';
+import { FieldSupervisorsModule } from './field-supervisors/field-supervisors.module';
 import { ChecklistsModule } from './checklists/checklists.module';
 import { InspectionsModule } from './inspections/inspections.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
@@ -51,6 +53,8 @@ import { MonitoringModule } from './monitoring/monitoring.module';
     SectorsModule,
     CollaboratorsModule,
     ForemenModule,
+    CoordinatorsModule,
+    FieldSupervisorsModule,
     ChecklistsModule,
     InspectionsModule,
     DashboardsModule,

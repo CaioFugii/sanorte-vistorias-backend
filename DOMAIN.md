@@ -104,7 +104,7 @@ ReportRecord ── ReportFile
 | `status` | Ciclo de vida da vistoria |
 | `externalId` | UUID idempotente para sync offline |
 | `scorePercent` | Nota recalculada ao atualizar itens |
-| `hasParalysisPenalty` | Flag persistente de penalidade de 25% |
+| `hasParalysisPenalty` | Flag de penalidade. A taxa fica em `paralysisPenaltyPercent` (35 nas novas, 25 nas antigas) |
 | `paralyzedReason` / `paralyzedAt` | Metadados de paralisação |
 | `finalizedAt` | Timestamp de finalização |
 | `teamId` | Obrigatório exceto `SEGURANCA_TRABALHO` |

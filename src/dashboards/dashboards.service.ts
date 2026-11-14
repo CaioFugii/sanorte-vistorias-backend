@@ -24,6 +24,7 @@ import {
   LowScoreCollaboratorsResponseDto,
   NonConformitiesByChecklistResponseDto,
   NonConformitiesByTeamResponseDto,
+  QualityNonConformitiesListResponseDto,
   DashboardOverviewModuleDto,
   DashboardOverviewResponseDto,
   QualityByServiceResponseDto,
@@ -39,7 +40,12 @@ const DASHBOARD_TIMEZONE = 'America/Sao_Paulo';
 const QUALITY_RELEVANT_STATUSES = [
   InspectionStatus.FINALIZADA,
   InspectionStatus.PENDENTE_AJUSTE,
+  InspectionStatus.AGUARDANDO_APROVACAO,
   InspectionStatus.RESOLVIDA,
+];
+const OPEN_PENDING_STATUSES = [
+  InspectionStatus.PENDENTE_AJUSTE,
+  InspectionStatus.AGUARDANDO_APROVACAO,
 ];
 const QUALITY_BY_SERVICE_ALLOWED_SECTORS = [
   'AGUA',
@@ -75,16 +81,84 @@ const QUALITY_RANKING_MODULES = [
 ];
 const SAFETY_WORK_DASHBOARD_MODULES = [ModuleType.SEGURANCA_TRABALHO];
 
+function rankingModuleMatchExpr(
+  targetParam: 'fieldModule' | 'postWorkModule',
+): string {
+  return `inspection.module = :${targetParam} OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:${targetParam} AS text))`;
+}
+
 function rankingModuleScoreExpr(
   targetParam: 'fieldModule' | 'postWorkModule',
 ): string {
-  return `AVG(CASE WHEN inspection.module = :${targetParam} OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:${targetParam} AS text)) THEN inspection.scorePercent ELSE NULL END)`;
+  return `AVG(CASE WHEN ${rankingModuleMatchExpr(targetParam)} THEN inspection.scorePercent ELSE NULL END)`;
 }
 
 function rankingModuleCountExpr(
   targetParam: 'fieldModule' | 'postWorkModule',
 ): string {
-  return `SUM(CASE WHEN inspection.module = :${targetParam} OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:${targetParam} AS text)) THEN 1 ELSE 0 END)`;
+  return `SUM(CASE WHEN ${rankingModuleMatchExpr(targetParam)} THEN 1 ELSE 0 END)`;
+}
+
+const QUALITY_NC_MODULE_ORDER = [
+  'REMOTO',
+  'POS_OBRA',
+  'CAMPO',
+  'OBRA_SEM_TIPO',
+] as const;
+
+type QualityNcEffectiveModule = (typeof QUALITY_NC_MODULE_ORDER)[number];
+
+const QUALITY_NC_SECTOR_ORDER: Record<
+  QualityNcEffectiveModule,
+  readonly string[]
+> = {
+  REMOTO: ['AGUA', 'ESGOTO', 'REPOSICAO', 'DESOBSTRUCAO', 'HIDROMETRIA'],
+  POS_OBRA: ['REPOSICAO', 'AGUA', 'ESGOTO'],
+  CAMPO: [],
+  OBRA_SEM_TIPO: [],
+};
+
+/** Mesma regra de rankingModuleCountExpr, mais o bloco de obra sem evaluationModule. */
+function qualityEffectiveModuleExpr(): string {
+  return `CASE WHEN inspection.module = :remoteModule THEN 'REMOTO' WHEN ${rankingModuleMatchExpr('postWorkModule')} THEN 'POS_OBRA' WHEN ${rankingModuleMatchExpr('fieldModule')} THEN 'CAMPO' WHEN inspection.module = :investmentWorksModule AND inspection.evaluationModule IS NULL THEN 'OBRA_SEM_TIPO' ELSE NULL END`;
+}
+
+function normalizeDashboardSectorName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+}
+
+function isQualityNcEffectiveModule(
+  value: string | null | undefined,
+): value is QualityNcEffectiveModule {
+  return (
+    !!value &&
+    (QUALITY_NC_MODULE_ORDER as readonly string[]).includes(value)
+  );
+}
+
+function compareQualityNcSectors(
+  module: QualityNcEffectiveModule,
+  left: string,
+  right: string,
+): number {
+  const order = QUALITY_NC_SECTOR_ORDER[module];
+  const leftIndex = order.indexOf(normalizeDashboardSectorName(left));
+  const rightIndex = order.indexOf(normalizeDashboardSectorName(right));
+  const leftRank = leftIndex === -1 ? order.length : leftIndex;
+  const rightRank = rightIndex === -1 ? order.length : rightIndex;
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+  return left.localeCompare(right, 'pt-BR', { sensitivity: 'base' });
+}
+
+/** Pós-obra sem nenhuma resposta NAO_CONFORME. Mesmo conjunto de rankingModuleCountExpr('postWorkModule'). */
+function postWorkApprovedCountExpr(): string {
+  return `SUM(CASE WHEN (${rankingModuleMatchExpr('postWorkModule')}) AND NOT EXISTS (SELECT 1 FROM "inspection_items" "postWorkApprovalItem" WHERE "postWorkApprovalItem"."inspection_id" = inspection.id AND CAST("postWorkApprovalItem"."answer" AS text) = :nonConformAnswer) THEN 1 ELSE 0 END)`;
 }
 
 function rankingTargetModuleWhere(): string {
@@ -448,7 +522,7 @@ export class DashboardsService {
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .select('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect(
-        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        `SUM(CASE WHEN inspection.status IN (:...pendingStatuses) THEN 1 ELSE 0 END)`,
         'pendingCount',
       )
       .addSelect(
@@ -477,7 +551,7 @@ export class DashboardsService {
         draft: InspectionStatus.RASCUNHO,
       })
       .andWhere('inspection.teamId IS NOT NULL')
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .setParameter('pendingStatuses', OPEN_PENDING_STATUSES)
       .setParameter('fieldModule', ModuleType.CAMPO)
       .setParameter('postWorkModule', ModuleType.POS_OBRA)
       .setParameter('remoteModule', ModuleType.REMOTO)
@@ -518,6 +592,13 @@ export class DashboardsService {
       module: periodModule,
     });
 
+    if (filters.includeQualityModuleCounts) {
+      qb.addSelect(
+        postWorkApprovedCountExpr(),
+        'postWorkApprovedCount',
+      ).setParameter('nonConformAnswer', ChecklistAnswer.NAO_CONFORME);
+    }
+
     const row = await qb.getRawOne<{
       inspectionsCount: string;
       pendingCount: string;
@@ -526,6 +607,7 @@ export class DashboardsService {
       fieldAveragePercent: string | null;
       postWorkInspectionsCount: string;
       postWorkAveragePercent: string | null;
+      postWorkApprovedCount: string | null;
       remoteInspectionsCount: string;
       remoteAveragePercent: string | null;
     }>();
@@ -570,6 +652,7 @@ export class DashboardsService {
       postWork?: {
         inspectionsCount: number;
         averagePercent: number;
+        approvalRatePercent: number | null;
       };
       remote?: {
         inspectionsCount: number;
@@ -582,9 +665,23 @@ export class DashboardsService {
         inspectionsCount: parseInt(row?.fieldInspectionsCount ?? '0', 10),
         averagePercent: fieldAveragePercent ?? 0,
       };
+      const postWorkInspectionsCount = parseInt(
+        row?.postWorkInspectionsCount ?? '0',
+        10,
+      );
+      const postWorkApprovedCount = parseInt(
+        row?.postWorkApprovedCount ?? '0',
+        10,
+      );
       summary.postWork = {
-        inspectionsCount: parseInt(row?.postWorkInspectionsCount ?? '0', 10),
+        inspectionsCount: postWorkInspectionsCount,
         averagePercent: postWorkAveragePercent ?? 0,
+        approvalRatePercent:
+          postWorkInspectionsCount === 0
+            ? null
+            : roundTo2(
+                (postWorkApprovedCount / postWorkInspectionsCount) * 100,
+              ),
       };
       summary.remote = {
         inspectionsCount: parseInt(row?.remoteInspectionsCount ?? '0', 10),
@@ -1046,14 +1143,14 @@ export class DashboardsService {
         'investmentWorksPercent',
       )
       .addSelect(
-        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        `SUM(CASE WHEN inspection.status IN (:...pendingStatuses) THEN 1 ELSE 0 END)`,
         'pendingCount',
       )
       .where('inspection.status != :draft', {
         draft: InspectionStatus.RASCUNHO,
       })
       .andWhere('inspection.teamId IS NOT NULL')
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .setParameter('pendingStatuses', OPEN_PENDING_STATUSES)
       .setParameter('postWorkModule', ModuleType.POS_OBRA)
       .setParameter('remoteModule', ModuleType.REMOTO)
       .setParameter('fieldModule', ModuleType.CAMPO)
@@ -1224,7 +1321,7 @@ export class DashboardsService {
       .select('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect(
-        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        `SUM(CASE WHEN inspection.status IN (:...pendingStatuses) THEN 1 ELSE 0 END)`,
         'pendingCount',
       )
       .addSelect(
@@ -1235,7 +1332,7 @@ export class DashboardsService {
         draft: InspectionStatus.RASCUNHO,
       })
       .andWhere('inspection.teamId = :teamId', { teamId })
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
+      .setParameter('pendingStatuses', OPEN_PENDING_STATUSES);
 
     const periodModule = this.resolvePeriodModule(
       filters.module,
@@ -1616,10 +1713,10 @@ export class DashboardsService {
       .select('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect(
-        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        `SUM(CASE WHEN inspection.status IN (:...pendingStatuses) THEN 1 ELSE 0 END)`,
         'pendingAdjustmentsCount',
       )
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
+      .setParameter('pendingStatuses', OPEN_PENDING_STATUSES);
 
     this.applyQualityFilters(summaryQb, {
       sector: filters.sector,
@@ -1720,7 +1817,7 @@ export class DashboardsService {
       .select('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect(
-        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        `SUM(CASE WHEN inspection.status IN (:...pendingStatuses) THEN 1 ELSE 0 END)`,
         'pendingAdjustmentsCount',
       )
       .where('inspection.status IN (:...qualityStatuses)', {
@@ -1729,7 +1826,7 @@ export class DashboardsService {
       .andWhere('inspection.teamId IN (:...teamIds)', { teamIds })
       .andWhere('inspection.createdAt >= :from', { from: filters.from })
       .andWhere('inspection.createdAt <= :to', { to: toLimit })
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
+      .setParameter('pendingStatuses', OPEN_PENDING_STATUSES);
 
     const previousSummaryQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -1751,7 +1848,7 @@ export class DashboardsService {
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect(
-        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        `SUM(CASE WHEN inspection.status IN (:...pendingStatuses) THEN 1 ELSE 0 END)`,
         'pendingAdjustmentsCount',
       )
       .where('inspection.status IN (:...qualityStatuses)', {
@@ -1764,7 +1861,7 @@ export class DashboardsService {
       .addGroupBy('team.name')
       .orderBy('AVG(inspection.scorePercent)', 'DESC', 'NULLS LAST')
       .addOrderBy('team.name', 'ASC')
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE);
+      .setParameter('pendingStatuses', OPEN_PENDING_STATUSES);
 
     const collaboratorsQb = this.inspectionsRepository
       .createQueryBuilder('inspection')
@@ -2141,6 +2238,195 @@ export class DashboardsService {
     };
   }
 
+  async getQualityNonConformitiesList(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    sector?: DashboardSector;
+    module?: ModuleType;
+    teamId?: string;
+    limitPerChecklist?: number;
+    contractId?: string;
+  }): Promise<QualityNonConformitiesListResponseDto> {
+    this.validateDateRange(filters.from, filters.to);
+    const toLimit = toEndOfDay(filters.to);
+    const limitPerChecklist = Math.min(
+      Math.max(
+        filters.limitPerChecklist ??
+          DEFAULT_NON_CONFORMITIES_LIMIT_PER_CHECKLIST,
+        1,
+      ),
+      MAX_NON_CONFORMITIES_LIMIT_PER_CHECKLIST,
+    );
+
+    const nonConformCountExpr = `SUM(CASE WHEN inspectionItem.answer = :nonConformAnswer THEN 1 ELSE 0 END)`;
+    const answersCountExpr = `SUM(CASE WHEN inspectionItem.answer IS NOT NULL THEN 1 ELSE 0 END)`;
+    const effectiveModuleExpr = qualityEffectiveModuleExpr();
+
+    const qb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.items', 'inspectionItem')
+      .innerJoin('inspection.checklist', 'checklist')
+      .leftJoin('checklist.sector', 'sector')
+      .innerJoin('inspectionItem.checklistItem', 'checklistItem')
+      .leftJoin('inspection.serviceOrder', 'serviceOrder')
+      .select(effectiveModuleExpr, 'effectiveModule')
+      .addSelect('checklist.id', 'checklistId')
+      .addSelect('checklist.name', 'checklistName')
+      .addSelect('sector.name', 'sectorName')
+      .addSelect('checklistItem.id', 'checklistItemId')
+      .addSelect('checklistItem.title', 'checklistItemTitle')
+      .addSelect(nonConformCountExpr, 'nonConformitiesCount')
+      .addSelect(answersCountExpr, 'answersCount')
+      .where('inspection.status IN (:...qualityStatuses)', {
+        qualityStatuses: QUALITY_RELEVANT_STATUSES,
+      })
+      .andWhere('inspection.createdAt >= :from', { from: filters.from })
+      .andWhere('inspection.createdAt <= :to', { to: toLimit })
+      .andWhere(`${effectiveModuleExpr} IS NOT NULL`)
+      .setParameter('nonConformAnswer', ChecklistAnswer.NAO_CONFORME)
+      .setParameter('fieldModule', ModuleType.CAMPO)
+      .setParameter('postWorkModule', ModuleType.POS_OBRA)
+      .setParameter('remoteModule', ModuleType.REMOTO)
+      .setParameter('investmentWorksModule', ModuleType.OBRAS_INVESTIMENTO)
+      .groupBy(effectiveModuleExpr)
+      .addGroupBy('checklist.id')
+      .addGroupBy('checklist.name')
+      .addGroupBy('sector.name')
+      .addGroupBy('checklistItem.id')
+      .addGroupBy('checklistItem.title')
+      .having(`${nonConformCountExpr} > 0`);
+
+    this.applyQualityFilters(qb, {
+      sector: 'QUALITY',
+      teamId: filters.teamId,
+    });
+    this.applyDashboardContractScope(qb, {
+      user: filters.user,
+      contractId: filters.contractId,
+    });
+
+    const rows = await qb.getRawMany<{
+      effectiveModule: string | null;
+      checklistId: string;
+      checklistName: string;
+      sectorName: string | null;
+      checklistItemId: string;
+      checklistItemTitle: string;
+      nonConformitiesCount: string;
+      answersCount: string;
+    }>();
+
+    type QuestionEntry = {
+      checklistItemId: string;
+      checklistItemTitle: string;
+      nonConformitiesCount: number;
+      answersCount: number;
+      nonConformityRatePercent: number;
+    };
+    type ChecklistEntry = {
+      checklistId: string;
+      checklistName: string;
+      totalNonConformities: number;
+      questions: QuestionEntry[];
+    };
+    const modulesMap = new Map<
+      QualityNcEffectiveModule,
+      Map<string, Map<string, ChecklistEntry>>
+    >();
+
+    for (const row of rows) {
+      if (!isQualityNcEffectiveModule(row.effectiveModule)) {
+        continue;
+      }
+      const nonConformitiesCount = parseInt(
+        row.nonConformitiesCount ?? '0',
+        10,
+      );
+      const answersCount = parseInt(row.answersCount ?? '0', 10);
+      const nonConformityRatePercent =
+        answersCount > 0
+          ? roundTo2((nonConformitiesCount / answersCount) * 100)
+          : 0;
+      const sectorName = row.sectorName ?? '';
+      const sectors =
+        modulesMap.get(row.effectiveModule) ??
+        new Map<string, Map<string, ChecklistEntry>>();
+      const checklists =
+        sectors.get(sectorName) ?? new Map<string, ChecklistEntry>();
+      const checklist =
+        checklists.get(row.checklistId) ??
+        ({
+          checklistId: row.checklistId,
+          checklistName: row.checklistName,
+          totalNonConformities: 0,
+          questions: [],
+        } satisfies ChecklistEntry);
+
+      checklist.totalNonConformities += nonConformitiesCount;
+      checklist.questions.push({
+        checklistItemId: row.checklistItemId,
+        checklistItemTitle: row.checklistItemTitle,
+        nonConformitiesCount,
+        answersCount,
+        nonConformityRatePercent,
+      });
+      checklists.set(row.checklistId, checklist);
+      sectors.set(sectorName, checklists);
+      modulesMap.set(row.effectiveModule, sectors);
+    }
+
+    const modules = QUALITY_NC_MODULE_ORDER.filter((moduleKey) =>
+      modulesMap.has(moduleKey),
+    )
+      .map((moduleKey) => {
+        const sectors = modulesMap.get(moduleKey)!;
+        return {
+          module: moduleKey,
+          sectors: Array.from(sectors.entries())
+            .map(([sectorName, checklists]) => ({
+              sectorName,
+              checklists: Array.from(checklists.values())
+                .map((checklist) => ({
+                  checklistId: checklist.checklistId,
+                  checklistName: checklist.checklistName,
+                  totalNonConformities: checklist.totalNonConformities,
+                  questions: [...checklist.questions]
+                    .sort((a, b) => {
+                      if (b.nonConformitiesCount !== a.nonConformitiesCount) {
+                        return b.nonConformitiesCount - a.nonConformitiesCount;
+                      }
+                      return a.checklistItemTitle.localeCompare(
+                        b.checklistItemTitle,
+                        'pt-BR',
+                        { sensitivity: 'base' },
+                      );
+                    })
+                    .slice(0, limitPerChecklist),
+                }))
+                .sort((a, b) =>
+                  a.checklistName.localeCompare(b.checklistName, 'pt-BR', {
+                    sensitivity: 'base',
+                  }),
+                ),
+            }))
+            .filter((sector) => sector.checklists.length > 0)
+            .sort((a, b) =>
+              compareQualityNcSectors(moduleKey, a.sectorName, b.sectorName),
+            ),
+        };
+      })
+      .filter((moduleEntry) => moduleEntry.sectors.length > 0);
+
+    return {
+      from: filters.from,
+      to: filters.to,
+      teamId: filters.teamId,
+      limitPerChecklist,
+      modules,
+    };
+  }
+
   async getTopNonConformitiesByTeam(filters: {
     user?: any;
     from: string;
@@ -2322,7 +2608,7 @@ export class DashboardsService {
       .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
       .addSelect('COUNT(inspection.id)', 'inspectionsCount')
       .addSelect(
-        `SUM(CASE WHEN inspection.status = :pendingStatus THEN 1 ELSE 0 END)`,
+        `SUM(CASE WHEN inspection.status IN (:...pendingStatuses) THEN 1 ELSE 0 END)`,
         'pendingAdjustmentsCount',
       )
       .addSelect(
@@ -2332,7 +2618,7 @@ export class DashboardsService {
       .where('inspection.status != :draft', {
         draft: InspectionStatus.RASCUNHO,
       })
-      .setParameter('pendingStatus', InspectionStatus.PENDENTE_AJUSTE)
+      .setParameter('pendingStatuses', OPEN_PENDING_STATUSES)
       .setParameter('resolvedStatus', InspectionStatus.RESOLVIDA)
       .groupBy('foreman.id')
       .addGroupBy('foreman.name');

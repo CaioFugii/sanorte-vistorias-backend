@@ -194,7 +194,7 @@ Authorization: Bearer <token>
 - FISCAL só edita vistoria em `RASCUNHO`.
 - Atualização de itens recalcula automaticamente a nota da vistoria (`scorePercent`).
 - Vistoria pode ser paralisada por FISCAL/GESTOR/SUPERVISOR/ADMIN com motivo obrigatório.
-- Ao paralisar, a vistoria recebe penalidade persistente de 25% na nota (`scorePercent`).
+- Ao paralisar, a vistoria nova recebe penalidade de 35% na nota (`scorePercent`). Vistorias já paralisadas continuam em 25%.
 - GESTOR/SUPERVISOR/ADMIN podem remover a penalidade via `POST /inspections/:id/unparalyze` (correção de erro).
 - Para GESTOR/SUPERVISOR/ADMIN, ao atualizar itens em vistoria `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA` ↔ `PENDENTE_AJUSTE`).
 - Exceção: em `SEGURANCA_TRABALHO`, a vistoria não vai para `PENDENTE_AJUSTE` (mantém `FINALIZADA`).

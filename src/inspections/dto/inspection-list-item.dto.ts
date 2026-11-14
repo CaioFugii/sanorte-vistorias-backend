@@ -13,6 +13,7 @@ export interface InspectionListItemDto {
   status: InspectionStatus;
   scorePercent: number | null;
   hasParalysisPenalty: boolean;
+  paralysisPenaltyPercent: number | null;
   finalizedAt: Date | null;
   createdAt: Date;
   team: { name: string } | null;
@@ -29,4 +30,6 @@ export interface InspectionListItemDto {
   pendingItemsCount?: number;
   pendingItemsPreview?: string[];
   createdBy?: { name: string } | null;
+  resolutionRejectionReason?: string | null;
+  resolutionSubmittedByUserId?: string | null;
 }

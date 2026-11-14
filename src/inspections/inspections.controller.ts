@@ -33,6 +33,8 @@ import {
 } from './dto/filter-inspections.dto';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
 import { ResolveItemDto } from './dto/resolve-item.dto';
+import { FinalizeInspectionDto } from './dto/finalize-inspection.dto';
+import { RejectResolutionDto } from './dto/reject-resolution.dto';
 import { ParalyzeInspectionDto } from './dto/paralyze-inspection.dto';
 import { PresignEvidenceDto } from './dto/presign-evidence.dto';
 import { ConfirmEvidenceDto } from './dto/confirm-evidence.dto';
@@ -271,8 +273,8 @@ export class InspectionsController {
   @Post(':id/finalize')
   @UseGuards(RolesGuard)
   @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR)
-  finalize(@Param('id') id: string) {
-    return this.inspectionsService.finalize(id);
+  finalize(@Param('id') id: string, @Body() body: FinalizeInspectionDto) {
+    return this.inspectionsService.finalize(id, body);
   }
 
   @Post(':id/paralyze')
@@ -299,7 +301,7 @@ export class InspectionsController {
 
   @Post(':id/items/:itemId/resolve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.SUPERVISOR)
   resolveItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
@@ -311,19 +313,38 @@ export class InspectionsController {
       itemId,
       resolveItemDto,
       user.id,
+      user.role,
     );
   }
 
   @Post(':id/resolve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
+  @Roles(UserRole.FISCAL, UserRole.SUPERVISOR)
   resolve(
     @Param('id') id: string,
     @Body()
-    resolveDto: { resolutionNotes: string; resolutionEvidence?: string },
+    resolveDto: { resolutionNotes?: string; resolutionEvidence?: string },
     @CurrentUser() user: any,
   ) {
-    return this.inspectionsService.resolve(id, resolveDto, user.id);
+    return this.inspectionsService.resolve(id, resolveDto, user.id, user.role);
+  }
+
+  @Post(':id/approve-resolution')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  approveResolution(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.inspectionsService.approveResolution(id, user.id);
+  }
+
+  @Post(':id/reject-resolution')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  rejectResolution(
+    @Param('id') id: string,
+    @Body() body: RejectResolutionDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.inspectionsService.rejectResolution(id, body.reason, user.id);
   }
 
   private toListFilters(

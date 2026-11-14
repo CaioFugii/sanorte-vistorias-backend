@@ -1,5 +1,10 @@
 import { DashboardsService } from './dashboards.service';
-import { InspectionScope, InspectionStatus, ModuleType } from '../common/enums';
+import {
+  ChecklistAnswer,
+  InspectionScope,
+  InspectionStatus,
+  ModuleType,
+} from '../common/enums';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { TeamRankingMetric } from './dto';
 
@@ -1015,6 +1020,7 @@ describe('DashboardsService', () => {
         fieldAveragePercent: '91.2',
         postWorkInspectionsCount: '4',
         postWorkAveragePercent: '87.3',
+        postWorkApprovedCount: '4',
         remoteInspectionsCount: '3',
         remoteAveragePercent: '85.5',
       },
@@ -1062,6 +1068,7 @@ describe('DashboardsService', () => {
       postWork: {
         inspectionsCount: 4,
         averagePercent: 87.3,
+        approvalRatePercent: 100,
       },
       remote: {
         inspectionsCount: 3,
@@ -1080,6 +1087,7 @@ describe('DashboardsService', () => {
         fieldAveragePercent: null,
         postWorkInspectionsCount: '163',
         postWorkAveragePercent: '68.5',
+        postWorkApprovedCount: '10',
         remoteInspectionsCount: '780',
         remoteAveragePercent: '80.2',
       },
@@ -1098,6 +1106,188 @@ describe('DashboardsService', () => {
       inspectionsCount: 0,
       averagePercent: 0,
     });
+    expect(result.postWork).toEqual({
+      inspectionsCount: 163,
+      averagePercent: 68.5,
+      approvalRatePercent: 6.13,
+    });
+  });
+
+  it('conta pós-obra sem não conformidade no numerador e no denominador da taxa', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '2',
+        pendingCount: '0',
+        averagePercent: '90',
+        fieldInspectionsCount: '0',
+        fieldAveragePercent: null,
+        postWorkInspectionsCount: '2',
+        postWorkAveragePercent: '90',
+        postWorkApprovedCount: '2',
+        remoteInspectionsCount: '0',
+        remoteAveragePercent: null,
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getSummary({
+      from: '2026-02-01',
+      to: '2026-02-28',
+      sector: 'QUALITY' as any,
+      teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+      contractId: 'contract-1',
+      includeQualityModuleCounts: true,
+    });
+
+    expect(inspectionsRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+    expect(qb.where).toHaveBeenCalledWith('inspection.status != :draft', {
+      draft: InspectionStatus.RASCUNHO,
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId IS NOT NULL');
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
+      teamId: '7f214d1f-5e2a-46f8-8f90-e64129876f84',
+    });
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'nonConformAnswer',
+      ChecklistAnswer.NAO_CONFORME,
+    );
+
+    const approvedSql = qb.addSelect.mock.calls
+      .map(([sql]: [string]) => sql)
+      .find((sql: string) => sql.includes('NOT EXISTS'));
+    const postWorkMatch =
+      'inspection.module = :postWorkModule OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:postWorkModule AS text))';
+    expect(approvedSql).toContain(postWorkMatch);
+    expect(approvedSql).toContain('inspection_items');
+    expect(approvedSql).toContain(':nonConformAnswer');
+    expect(approvedSql).not.toContain('scorePercent');
+    expect(approvedSql).not.toContain('resolved_at');
+    expect(approvedSql).not.toContain('AGUARDANDO_APROVACAO');
+    expect(approvedSql).not.toContain('PENDENTE_AJUSTE');
+    expect(approvedSql).not.toContain('RESOLVIDA');
+    expect(approvedSql).not.toContain(':fieldModule');
+
+    expect(result.postWork).toEqual({
+      inspectionsCount: 2,
+      averagePercent: 90,
+      approvalRatePercent: 100,
+    });
+  });
+
+  it('deixa pós-obra com não conformidade só no denominador, mesmo resolvida', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '4',
+        pendingCount: '1',
+        averagePercent: '70',
+        fieldInspectionsCount: '0',
+        fieldAveragePercent: null,
+        postWorkInspectionsCount: '4',
+        postWorkAveragePercent: '70',
+        postWorkApprovedCount: '1',
+        remoteInspectionsCount: '0',
+        remoteAveragePercent: null,
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getSummary({
+      from: '2026-03-01',
+      to: '2026-03-31',
+      sector: 'QUALITY' as any,
+      includeQualityModuleCounts: true,
+    });
+
+    const approvedSql = qb.addSelect.mock.calls
+      .map(([sql]: [string]) => sql)
+      .find((sql: string) => sql.includes('NOT EXISTS')) as string;
+    expect(approvedSql).toContain(':nonConformAnswer');
+    expect(approvedSql).not.toContain('inspection.status');
+    expect(approvedSql).not.toContain('resolved_at');
+
+    expect(result.postWork).toEqual({
+      inspectionsCount: 4,
+      averagePercent: 70,
+      approvalRatePercent: 25,
+    });
+    expect(result.averagePercent).toBe(70);
+  });
+
+  it('inclui obra de investimento avaliada como pós-obra e exclui a avaliada como campo', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '1',
+        pendingCount: '0',
+        averagePercent: '80',
+        fieldInspectionsCount: '1',
+        fieldAveragePercent: '80',
+        postWorkInspectionsCount: '1',
+        postWorkAveragePercent: '80',
+        postWorkApprovedCount: '1',
+        remoteInspectionsCount: '0',
+        remoteAveragePercent: null,
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.getSummary({
+      from: '2026-04-01',
+      to: '2026-04-30',
+      sector: 'QUALITY' as any,
+      includeQualityModuleCounts: true,
+    });
+
+    const selects = qb.addSelect.mock.calls.map(([sql]: [string]) => sql);
+    const postWorkMatch =
+      'inspection.module = :postWorkModule OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:postWorkModule AS text))';
+    const countSql = selects.find(
+      (sql: string) =>
+        sql.startsWith('SUM(CASE WHEN') &&
+        sql.includes(':postWorkModule') &&
+        !sql.includes('NOT EXISTS'),
+    );
+    const approvedSql = selects.find((sql: string) => sql.includes('NOT EXISTS'));
+
+    expect(countSql).toContain(postWorkMatch);
+    expect(approvedSql).toContain(postWorkMatch);
+    expect(approvedSql).not.toContain(':fieldModule');
+    expect(approvedSql).not.toContain('CAMPO');
+    expect(qb.setParameter).toHaveBeenCalledWith(
+      'postWorkModule',
+      ModuleType.POS_OBRA,
+    );
+  });
+
+  it('devolve taxa nula quando o período não tem vistoria de pós-obra', async () => {
+    const qb = createMockQueryBuilder({
+      rawOne: {
+        inspectionsCount: '0',
+        pendingCount: '0',
+        averagePercent: null,
+        fieldInspectionsCount: '0',
+        fieldAveragePercent: null,
+        postWorkInspectionsCount: '0',
+        postWorkAveragePercent: null,
+        postWorkApprovedCount: null,
+        remoteInspectionsCount: '0',
+        remoteAveragePercent: null,
+      },
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getSummary({
+      from: '2026-05-01',
+      to: '2026-05-31',
+      sector: 'QUALITY' as any,
+      includeQualityModuleCounts: true,
+    });
+
+    expect(result.postWork).toEqual({
+      inspectionsCount: 0,
+      averagePercent: 0,
+      approvalRatePercent: null,
+    });
+    expect(result.inspectionsCount).toBe(0);
   });
 
   it('deve agregar média e vistorias por checklist no resumo de Segurança do Trabalho', async () => {
@@ -1854,5 +2044,352 @@ describe('DashboardsService', () => {
       }),
     ).rejects.toThrow('A data inicial (from) não pode ser posterior');
     expect(inspectionsRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  function qualityNcRow(overrides: Record<string, string>) {
+    return {
+      effectiveModule: 'CAMPO',
+      checklistId: 'cl-1',
+      checklistName: 'Checklist',
+      sectorName: 'AGUA',
+      checklistItemId: 'item-1',
+      checklistItemTitle: 'Pergunta',
+      nonConformitiesCount: '1',
+      answersCount: '4',
+      ...overrides,
+    };
+  }
+
+  it('coloca obra de investimento avaliada como CAMPO no grupo Campo', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        qualityNcRow({
+          effectiveModule: 'CAMPO',
+          checklistId: 'cl-obra-campo',
+          checklistName: 'Checklist Obra Campo',
+          sectorName: 'AGUA',
+          checklistItemId: 'item-1',
+          checklistItemTitle: 'Compactação',
+          nonConformitiesCount: '4',
+          answersCount: '10',
+        }),
+        qualityNcRow({
+          effectiveModule: 'CAMPO',
+          checklistId: 'cl-obra-campo',
+          checklistName: 'Checklist Obra Campo',
+          sectorName: 'AGUA',
+          checklistItemId: 'item-2',
+          checklistItemTitle: 'Sinalização',
+          nonConformitiesCount: '1',
+          answersCount: '10',
+        }),
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getQualityNonConformitiesList({
+      from: '2026-01-01',
+      to: '2026-01-31',
+      sector: 'QUALITY' as any,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      limitPerChecklist: 1,
+    });
+
+    const effectiveModuleSql = qb.select.mock.calls[0][0] as string;
+    expect(effectiveModuleSql).toContain(
+      'inspection.module = :fieldModule OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:fieldModule AS text))',
+    );
+    const campoThen = effectiveModuleSql.indexOf("THEN 'CAMPO'");
+    const fieldMatch = effectiveModuleSql.indexOf('CAST(:fieldModule AS text)');
+    expect(fieldMatch).toBeGreaterThan(-1);
+    expect(campoThen).toBeGreaterThan(fieldMatch);
+    expect(effectiveModuleSql).not.toContain("THEN 'OBRAS_INVESTIMENTO'");
+    expect(effectiveModuleSql).not.toContain('AGUARDANDO_APROVACAO');
+    expect(qb.where).toHaveBeenCalledWith(
+      'inspection.status IN (:...qualityStatuses)',
+      {
+        qualityStatuses: [
+          InspectionStatus.FINALIZADA,
+          InspectionStatus.PENDENTE_AJUSTE,
+          InspectionStatus.RESOLVIDA,
+        ],
+      },
+    );
+    expect(qb.andWhere).not.toHaveBeenCalledWith(
+      'inspection.module = :module',
+      expect.anything(),
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      {
+        dashboardSectorModules: [
+          ModuleType.CAMPO,
+          ModuleType.POS_OBRA,
+          ModuleType.REMOTO,
+          ModuleType.OBRAS_INVESTIMENTO,
+        ],
+      },
+    );
+    expect(qb.groupBy).toHaveBeenCalledWith(effectiveModuleSql);
+    expect(result.modules.map((module) => module.module)).toEqual(['CAMPO']);
+    expect(result.limitPerChecklist).toBe(1);
+    expect(result.modules[0].sectors[0].checklists).toEqual([
+      {
+        checklistId: 'cl-obra-campo',
+        checklistName: 'Checklist Obra Campo',
+        totalNonConformities: 5,
+        questions: [
+          {
+            checklistItemId: 'item-1',
+            checklistItemTitle: 'Compactação',
+            nonConformitiesCount: 4,
+            answersCount: 10,
+            nonConformityRatePercent: 40,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('coloca obra de investimento avaliada como POS_OBRA no grupo Pós-obra', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        qualityNcRow({
+          effectiveModule: 'POS_OBRA',
+          checklistId: 'cl-obra-pos',
+          checklistName: 'Passeio',
+          sectorName: 'REPOSICAO',
+          nonConformitiesCount: '3',
+          answersCount: '12',
+        }),
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getQualityNonConformitiesList({
+      from: '2026-02-01',
+      to: '2026-02-28',
+      sector: 'QUALITY' as any,
+    });
+
+    const effectiveModuleSql = qb.select.mock.calls[0][0] as string;
+    expect(effectiveModuleSql).toContain(
+      'inspection.module = :postWorkModule OR (inspection.module = :investmentWorksModule AND CAST(inspection.evaluationModule AS text) = CAST(:postWorkModule AS text))',
+    );
+    const postWorkThen = effectiveModuleSql.indexOf("THEN 'POS_OBRA'");
+    const postWorkMatch = effectiveModuleSql.indexOf(
+      'CAST(:postWorkModule AS text)',
+    );
+    expect(postWorkMatch).toBeGreaterThan(-1);
+    expect(postWorkThen).toBeGreaterThan(postWorkMatch);
+    expect(result.modules.map((module) => module.module)).toEqual(['POS_OBRA']);
+    expect(result.modules[0].sectors[0]).toMatchObject({
+      sectorName: 'REPOSICAO',
+      checklists: [
+        expect.objectContaining({
+          checklistId: 'cl-obra-pos',
+          totalNonConformities: 3,
+          questions: [
+            expect.objectContaining({ nonConformityRatePercent: 25 }),
+          ],
+        }),
+      ],
+    });
+  });
+
+  it('mantém obra de investimento sem evaluationModule no bloco sem tipo', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        qualityNcRow({
+          effectiveModule: 'OBRA_SEM_TIPO',
+          checklistId: 'cl-sem-tipo',
+          checklistName: 'Obra sem tipo',
+          sectorName: 'ESGOTO',
+          nonConformitiesCount: '2',
+          answersCount: '8',
+        }),
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getQualityNonConformitiesList({
+      from: '2026-03-01',
+      to: '2026-03-31',
+    });
+
+    const effectiveModuleSql = qb.select.mock.calls[0][0] as string;
+    expect(effectiveModuleSql).toContain(
+      "inspection.module = :investmentWorksModule AND inspection.evaluationModule IS NULL THEN 'OBRA_SEM_TIPO'",
+    );
+    expect(result.modules).toEqual([
+      {
+        module: 'OBRA_SEM_TIPO',
+        sectors: [
+          {
+            sectorName: 'ESGOTO',
+            checklists: [
+              {
+                checklistId: 'cl-sem-tipo',
+                checklistName: 'Obra sem tipo',
+                totalNonConformities: 2,
+                questions: [
+                  {
+                    checklistItemId: 'item-1',
+                    checklistItemTitle: 'Pergunta',
+                    nonConformitiesCount: 2,
+                    answersCount: 8,
+                    nonConformityRatePercent: 25,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('não mistura Campo, Remoto e Pós-obra no mesmo checklist', async () => {
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        qualityNcRow({
+          effectiveModule: 'CAMPO',
+          checklistId: 'cl-shared',
+          checklistName: 'Checklist Compartilhado',
+          sectorName: 'AGUA',
+          nonConformitiesCount: '4',
+          answersCount: '10',
+        }),
+        qualityNcRow({
+          effectiveModule: 'REMOTO',
+          checklistId: 'cl-shared',
+          checklistName: 'Checklist Compartilhado',
+          sectorName: 'AGUA',
+          checklistItemId: 'item-remoto',
+          nonConformitiesCount: '2',
+          answersCount: '10',
+        }),
+        qualityNcRow({
+          effectiveModule: 'POS_OBRA',
+          checklistId: 'cl-shared',
+          checklistName: 'Checklist Compartilhado',
+          sectorName: 'AGUA',
+          checklistItemId: 'item-pos',
+          nonConformitiesCount: '7',
+          answersCount: '10',
+        }),
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getQualityNonConformitiesList({
+      from: '2026-04-01',
+      to: '2026-04-30',
+    });
+
+    expect(result.modules.map((module) => module.module)).toEqual([
+      'REMOTO',
+      'POS_OBRA',
+      'CAMPO',
+    ]);
+    const totals = Object.fromEntries(
+      result.modules.map((module) => [
+        module.module,
+        module.sectors[0].checklists[0].totalNonConformities,
+      ]),
+    );
+    expect(totals).toEqual({ REMOTO: 2, POS_OBRA: 7, CAMPO: 4 });
+    for (const module of result.modules) {
+      expect(module.sectors[0].checklists[0].checklistId).toBe('cl-shared');
+    }
+    expect(qb.groupBy).toHaveBeenCalledWith(qb.select.mock.calls[0][0]);
+  });
+
+  it('restringe a lista de não conformidades ao teamId informado', async () => {
+    const teamId = '7f214d1f-5e2a-46f8-8f90-e64129876f84';
+    const qb = createMockQueryBuilder({
+      rawMany: [
+        qualityNcRow({
+          effectiveModule: 'REMOTO',
+          checklistId: 'cl-equipe',
+          checklistName: 'Checklist da equipe',
+          sectorName: 'ESGOTO',
+          nonConformitiesCount: '3',
+          answersCount: '6',
+        }),
+      ],
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getQualityNonConformitiesList({
+      from: '2026-05-01',
+      to: '2026-05-31',
+      teamId,
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith('inspection.teamId = :teamId', {
+      teamId,
+    });
+    expect(result.teamId).toBe(teamId);
+    expect(result.modules).toHaveLength(1);
+    expect(
+      result.modules[0].sectors[0].checklists[0].totalNonConformities,
+    ).toBe(3);
+  });
+
+  it('devolve setor fora da ordem nomeada no fim do módulo', async () => {
+    const sectors = [
+      'HIDROMETRIA',
+      'DRENAGEM',
+      'AGUA',
+      'DESOBSTRUCAO',
+      'ESGOTO',
+      'REPOSICAO',
+    ];
+    const qb = createMockQueryBuilder({
+      rawMany: sectors.flatMap((sectorName) => [
+        qualityNcRow({
+          effectiveModule: 'REMOTO',
+          checklistId: `cl-${sectorName}-z`,
+          checklistName: 'Zeta',
+          sectorName,
+          checklistItemId: `item-${sectorName}-z`,
+          nonConformitiesCount: '1',
+          answersCount: '4',
+        }),
+        qualityNcRow({
+          effectiveModule: 'REMOTO',
+          checklistId: `cl-${sectorName}-a`,
+          checklistName: 'Alfa',
+          sectorName,
+          checklistItemId: `item-${sectorName}-a`,
+          nonConformitiesCount: '2',
+          answersCount: '4',
+        }),
+      ]),
+    });
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await service.getQualityNonConformitiesList({
+      from: '2026-06-01',
+      to: '2026-06-30',
+    });
+
+    expect(result.modules.map((module) => module.module)).toEqual(['REMOTO']);
+    const remote = result.modules[0];
+    expect(remote.sectors.map((sector) => sector.sectorName)).toEqual([
+      'AGUA',
+      'ESGOTO',
+      'REPOSICAO',
+      'DESOBSTRUCAO',
+      'HIDROMETRIA',
+      'DRENAGEM',
+    ]);
+    const extra = remote.sectors.find(
+      (sector) => sector.sectorName === 'DRENAGEM',
+    );
+    expect(extra?.checklists.map((checklist) => checklist.checklistName)).toEqual(
+      ['Alfa', 'Zeta'],
+    );
   });
 });

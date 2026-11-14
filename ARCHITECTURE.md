@@ -131,7 +131,7 @@ POST /inspections          → RASCUNHO
 PUT  /inspections/:id/items → recalcula scorePercent
 POST /inspections/:id/evidences
 POST /inspections/:id/signature
-POST /inspections/:id/paralyze   → penalidade 25% na nota
+POST /inspections/:id/paralyze   → penalidade nova de 35% na nota
 POST /inspections/:id/unparalyze → remove penalidade (GESTOR/SUPERVISOR/ADMIN)
 POST /inspections/:id/finalize   → FINALIZADA ou PENDENTE_AJUSTE
 POST /inspections/:id/items/:itemId/resolve
@@ -144,7 +144,7 @@ POST /inspections/:id/resolve    → RESOLVIDA
 |-------|---------------|
 | Finalização | Exige assinatura; evidência obrigatória para `NAO_CONFORME` quando `requiresPhotoOnNonConformity` |
 | SEGURANCA_TRABALHO | Não gera `PENDENTE_AJUSTE`; `teamId` opcional; mantém `FINALIZADA` com não conformidades |
-| Paralisação | Penalidade persistente de 25% em `scorePercent` |
+| Paralisação | Penalidade gravada em `paralysisPenaltyPercent` (35% nova, 25% antiga) |
 | Reavaliação por gestor | Atualizar itens em FINALIZADA/PENDENTE_AJUSTE reavalia status (exceto ST) |
 | Sync offline | `POST /sync/inspections` — idempotente por `externalId`; sem assets em `dataUrl` |
 

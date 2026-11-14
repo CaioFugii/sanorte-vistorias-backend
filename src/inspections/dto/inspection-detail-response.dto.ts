@@ -65,7 +65,16 @@ export interface InspectionDetailResponseDto {
   status: InspectionStatus;
   module: ModuleType;
   evaluationModule: InvestmentWorkEvaluationModule | null;
+  generatePending?: boolean | null;
+  resolutionSubmittedByUserId?: string | null;
+  resolutionSubmittedAt?: Date | null;
+  resolutionSubmittedBy?: { name: string } | null;
+  resolutionRejectionReason?: string | null;
+  resolutionRejectedAt?: Date | null;
+  resolutionRejectedByUserId?: string | null;
+  resolutionRejectedBy?: { name: string } | null;
   hasParalysisPenalty: boolean;
+  paralysisPenaltyPercent: number | null;
   serviceOrderId: string | null;
   serviceDescription: string | null;
   locationDescription: string | null;

@@ -2,6 +2,7 @@ import { ForemenService } from './foremen.service';
 
 function createQueryBuilderMock() {
   return {
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
@@ -22,6 +23,7 @@ describe('ForemenService', () => {
     const service = new ForemenService(
       foremenRepository as any,
       teamsRepository as any,
+      {} as any,
     );
 
     await service.findAll('ab', undefined, 1, 10);
@@ -38,7 +40,7 @@ describe('ForemenService', () => {
       create: jest.fn(),
       save: jest.fn(),
     };
-    const service = new ForemenService(foremenRepository as any, {} as any);
+    const service = new ForemenService(foremenRepository as any, {} as any, {} as any);
 
     await expect(service.create({ name: '  joão  ' })).rejects.toThrow(
       'Já existe um encarregado com este nome',
@@ -57,11 +59,94 @@ describe('ForemenService', () => {
     const service = new ForemenService(
       foremenRepository as any,
       teamsRepository as any,
+      {} as any,
     );
 
     await expect(service.remove('foreman-1')).rejects.toThrow(
       'Não é possível excluir um encarregado vinculado a equipes',
     );
     expect(foremenRepository.delete).not.toHaveBeenCalled();
+  });
+
+  it('atualiza encarregado com fieldSupervisorId nulo', async () => {
+    const existing = {
+      id: 'foreman-1',
+      name: 'João',
+      active: true,
+      fieldSupervisorId: 'sup-1',
+    };
+    const updated = {
+      ...existing,
+      fieldSupervisorId: null,
+      fieldSupervisor: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const foremenRepository = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(existing)
+        .mockResolvedValueOnce(updated),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const teamsRepository = { find: jest.fn().mockResolvedValue([]) };
+    const fieldSupervisorsRepository = { exist: jest.fn() };
+    const service = new ForemenService(
+      foremenRepository as any,
+      teamsRepository as any,
+      fieldSupervisorsRepository as any,
+    );
+
+    const result = await service.update('foreman-1', { fieldSupervisorId: null });
+
+    expect(fieldSupervisorsRepository.exist).not.toHaveBeenCalled();
+    expect(foremenRepository.update).toHaveBeenCalledWith('foreman-1', {
+      fieldSupervisorId: null,
+    });
+    expect(result.fieldSupervisorId).toBeNull();
+    expect(result.fieldSupervisor).toBeNull();
+  });
+
+  it('atualiza encarregado com fieldSupervisorId válido', async () => {
+    const existing = {
+      id: 'foreman-1',
+      name: 'João',
+      active: true,
+      fieldSupervisorId: null,
+    };
+    const supervisor = { id: 'sup-1', name: 'Maria' };
+    const updated = {
+      ...existing,
+      fieldSupervisorId: 'sup-1',
+      fieldSupervisor: supervisor,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const foremenRepository = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(existing)
+        .mockResolvedValueOnce(updated),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const teamsRepository = { find: jest.fn().mockResolvedValue([]) };
+    const fieldSupervisorsRepository = {
+      exist: jest.fn().mockResolvedValue(true),
+    };
+    const service = new ForemenService(
+      foremenRepository as any,
+      teamsRepository as any,
+      fieldSupervisorsRepository as any,
+    );
+
+    const result = await service.update('foreman-1', { fieldSupervisorId: 'sup-1' });
+
+    expect(fieldSupervisorsRepository.exist).toHaveBeenCalledWith({
+      where: { id: 'sup-1' },
+    });
+    expect(foremenRepository.update).toHaveBeenCalledWith('foreman-1', {
+      fieldSupervisorId: 'sup-1',
+    });
+    expect(result.fieldSupervisor).toEqual({ id: 'sup-1', name: 'Maria' });
   });
 });

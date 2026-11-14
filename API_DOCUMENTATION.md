@@ -98,7 +98,7 @@ Authorization: Bearer <token>
   - GESTOR/SUPERVISOR/ADMIN em qualquer status.
 - `POST /inspections/:id/paralyze`:
   - disponível para FISCAL/GESTOR/SUPERVISOR/ADMIN.
-  - ativa penalidade persistente de 25% na nota.
+  - ativa penalidade de 35% na nota e grava `paralysisPenaltyPercent`. Vistorias já paralisadas permanecem em 25%.
 - `POST /inspections/:id/unparalyze`:
   - disponível apenas para GESTOR/SUPERVISOR/ADMIN.
   - remove penalidade e recalcula nota (correção de erro).
@@ -124,7 +124,7 @@ Authorization: Bearer <token>
 - `RESOLVIDA`
   - status final após resolução de pendências.
 - Paralisação é um estado paralelo:
-  - `hasParalysisPenalty = true` indica que a penalidade de 25% deve ser aplicada na nota.
+  - `hasParalysisPenalty = true` indica penalidade. A taxa usada no recálculo é `paralysisPenaltyPercent` (35 nas novas, 25 nas antigas).
 
 ### Filtros disponíveis para listagens (essencial para telas)
 
@@ -934,12 +934,13 @@ Request JSON:
 ```
 
 - Nome único ignorando maiúsculas e espaços nas pontas.
+- `fieldSupervisorId` (uuid, opcional, ou `null` para desvincular): supervisor de campo, sem login. Não é o perfil `SUPERVISOR`.
 - Response 201: encarregado criado, com `teams` (vazio)
 
 ### PUT /foremen/:id
 
 - Auth: JWT + ADMIN
-- Body parcial: `name`, `active`
+- Body parcial: `name`, `active`, `fieldSupervisorId`
 - Response 200: encarregado atualizado
 - Response 404: encarregado não encontrado
 
@@ -949,6 +950,54 @@ Request JSON:
 - Response 200: vazio
 - Response 400: ainda existem equipes com esse encarregado
 - Response 404: encarregado não encontrado
+
+## Coordinators e Field Supervisors
+
+Cadastros da hierarquia de campo, sem senha e sem relação com `UserRole.SUPERVISOR`. Hierarquia: Equipe → Encarregado → Supervisor de campo → Coordenador.
+
+Escrita (`POST`, `PUT`, `DELETE`) exige JWT + ADMIN. Leitura exige JWT. Exclusão de coordenador com supervisor de campo, ou de supervisor de campo com encarregado, responde **409** e não apaga os filhos.
+
+### GET /coordinators
+
+- Query: `page`, `limit`, `name` (busca parcial; menos de 3 caracteres é ignorado), `active`
+- Item: `id`, `name`, `active`, `contracts: [{ id, name }]`
+
+### POST /coordinators
+
+```json
+{ "name": "Ana Costa", "active": true, "contractIds": [] }
+```
+
+`contractIds` é obrigatório e pode ser lista vazia.
+
+### PUT /coordinators/:id
+
+- Body parcial: `name`, `active`, `contractIds`
+
+### DELETE /coordinators/:id
+
+- 409 se existir supervisor de campo vinculado
+
+### GET /field-supervisors
+
+- Mesmos filtros de coordenador
+- Item inclui `coordinatorId` e `coordinator: { id, name }`, além de `contracts`
+
+### POST /field-supervisors
+
+```json
+{ "name": "Carlos Lima", "active": true, "coordinatorId": "uuid", "contractIds": [] }
+```
+
+`coordinatorId` é obrigatório.
+
+### PUT /field-supervisors/:id
+
+- Body parcial: `name`, `active`, `coordinatorId`, `contractIds`
+
+### DELETE /field-supervisors/:id
+
+- 409 se existir encarregado vinculado
 
 ## Sectors
 
@@ -1676,7 +1725,7 @@ Response 200: mesmo payload enxuto de `GET /inspections/:id`
   - FISCAL só atualiza itens se `status = RASCUNHO`
   - GESTOR/SUPERVISOR/ADMIN podem atualizar itens em qualquer status
   - A nota (`scorePercent`) é recalculada automaticamente a cada atualização de itens
-  - Se `hasParalysisPenalty = true`, a nota final recebe penalidade persistente de 25%
+  - Se `paralysisPenaltyPercent` estiver preenchido, a nota final recebe essa penalidade (35 nas paralisações novas, 25 nas antigas)
   - Para GESTOR/SUPERVISOR/ADMIN, se a vistoria estiver em `FINALIZADA` ou `PENDENTE_AJUSTE`, o status é reavaliado automaticamente (`FINALIZADA ↔ PENDENTE_AJUSTE`) com base nos itens
   - Exceção: para `module = SEGURANCA_TRABALHO`, a reavaliação mantém `status = FINALIZADA` (sem `PENDENTE_AJUSTE`)
 
@@ -1884,7 +1933,7 @@ Regras:
 
 - Assinatura do líder/encarregado é opcional.
 - Item `NAO_CONFORME` com `requiresPhotoOnNonConformity = true` exige evidência.
-- Calcula `scorePercent` (com penalidade de 25% quando `hasParalysisPenalty = true`).
+- Calcula `scorePercent` com a taxa gravada em `paralysisPenaltyPercent` (35 nas paralisações novas, 25 nas antigas).
 - Se `module = SEGURANCA_TRABALHO`: status `FINALIZADA` (mesmo com `NAO_CONFORME`) e sem criação de pendência de ajuste.
 - Nos demais módulos:
   - Se houver `NAO_CONFORME`: status `PENDENTE_AJUSTE` e pendência `PENDENTE`.
@@ -1896,7 +1945,7 @@ Regras:
 - Regra:
   - `reason` é obrigatório.
   - Define `hasParalysisPenalty = true` (persistente).
-  - Recalcula `scorePercent` com penalidade de 25%.
+  - Recalcula `scorePercent` com `paralysisPenaltyPercent` gravado na vistoria.
   - Chamada é idempotente: se já tiver penalidade ativa, retorna sem alterar estado.
 
 Request JSON:
@@ -2294,6 +2343,7 @@ Response 200:
 - Comportamento: mantém o resumo base e adiciona contadores de Campo, Pós-obra e Remoto.
   - `field`: `CAMPO` e `OBRAS_INVESTIMENTO` com `evaluationModule = CAMPO`.
   - `postWork`: `POS_OBRA` e `OBRAS_INVESTIMENTO` com `evaluationModule = POS_OBRA`.
+  - `postWork.approvalRatePercent`: vistorias desse conjunto sem nenhum item `NAO_CONFORME`, divididas pelo total, em percentual com duas casas. `null` quando o total é zero. Pendência resolvida continua no denominador e fora do numerador. Não altera `averagePercent`.
   - `remote`: somente `REMOTO`.
   - `OBRAS_INVESTIMENTO` não tem bloco próprio. Essas vistorias entram na média de Campo ou Pós-obra conforme `evaluationModule`.
   - `averagePercent` (Média Geral): média aritmética de `field.averagePercent`, `remote.averagePercent` e `postWork.averagePercent` **que tiverem vistoria no período**. Não pondera pela quantidade de vistorias. Módulo sem vistoria não entra como 0%. Com os três módulos no período, equivale a `(Campo + Remoto + Pós-obra) / 3`.
@@ -2311,7 +2361,8 @@ Response 200:
   },
   "postWork": {
     "inspectionsCount": 8,
-    "averagePercent": 90.11
+    "averagePercent": 90.11,
+    "approvalRatePercent": 75
   },
   "remote": {
     "inspectionsCount": 9,
@@ -2894,6 +2945,15 @@ Response 200 (estrutura simplificada):
   ]
 }
 ```
+
+### GET /dashboards/quality/non-conformities/list
+
+- Auth: JWT
+- Só Qualidade. A Segurança continua em `GET /dashboards/non-conformities/by-checklist`.
+- Query: `from`, `to`, `teamId`, `contractId`, `limitPerChecklist` (padrão 5, máximo 20). Mesmo período e escopo de contrato do dashboard de Qualidade.
+- Agrupa por módulo efetivo, setor e checklist. `module`: `REMOTO`, `POS_OBRA`, `CAMPO` ou `OBRA_SEM_TIPO`, nessa ordem. Módulo sem não conformidade não volta.
+- `OBRAS_INVESTIMENTO` entra em Campo ou Pós-obra pelo `evaluationModule`. Sem `evaluationModule`, cai em `OBRA_SEM_TIPO`.
+- Cada checklist traz `totalNonConformities` e até `limitPerChecklist` perguntas (`nonConformitiesCount`, `answersCount`, `nonConformityRatePercent`).
 
 ### GET /dashboards/non-conformities/by-checklist
 

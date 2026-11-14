@@ -12,6 +12,8 @@ import {
   InvestmentWorkStatus,
 } from '../common/enums';
 import { InspectionDomainService } from './inspection-domain.service';
+import { InspectionNoticesService } from '../inspection-notices/inspection-notices.service';
+import { InspectionNoticeType } from '../common/enums';
 
 describe('InspectionsService - Regras de Negócio', () => {
   let service: InspectionsService;
@@ -25,6 +27,10 @@ describe('InspectionsService - Regras de Negócio', () => {
   let serviceOrderRepository: any;
   let investmentWorkRepository: any;
   let dataSource: any;
+  let noticesRepository: any;
+  let usersRepository: any;
+  let noticeQueryBuilder: any;
+  let inspectionNoticesService: InspectionNoticesService;
 
   const mockInspection: Partial<Inspection> = {
     id: 'test-id',
@@ -89,6 +95,30 @@ describe('InspectionsService - Regras de Negócio', () => {
       findOne: jest.fn(),
     };
     dataSource = { getRepository: jest.fn() };
+    noticesRepository = {
+      create: jest.fn((payload: any) => ({
+        id: `notice-${payload.recipientUserId}`,
+        ...payload,
+      })),
+      save: jest.fn(async (rows: any) => rows),
+      find: jest.fn(),
+      findOne: jest.fn(),
+    };
+    noticeQueryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([{ id: 'gestor-1' }]),
+    };
+    usersRepository = {
+      find: jest.fn().mockResolvedValue([{ id: 'admin-1' }]),
+      createQueryBuilder: jest.fn(() => noticeQueryBuilder),
+    };
+    inspectionNoticesService = new InspectionNoticesService(
+      noticesRepository,
+      usersRepository,
+    );
 
     service = new InspectionsService(
       inspectionsRepository as any,
@@ -112,6 +142,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       { deleteStoredAsset: jest.fn() } as any,
       dataSource as any,
       new InspectionDomainService(),
+      inspectionNoticesService,
     );
   });
 
@@ -359,7 +390,7 @@ describe('InspectionsService - Regras de Negócio', () => {
     expect(pendingAdjustmentsRepository.save).toHaveBeenCalled();
   });
 
-  it('deve finalizar vistoria ST mesmo com NAO_CONFORME e sem criar pendência', async () => {
+  it('deve gerar pendência em Segurança nova com não conformidade', async () => {
     inspectionsRepository.findOne.mockResolvedValue({
       ...mockInspection,
       module: ModuleType.SEGURANCA_TRABALHO,
@@ -391,10 +422,45 @@ describe('InspectionsService - Regras de Negócio', () => {
     expect(inspectionsRepository.update).toHaveBeenCalledWith(
       'test-id',
       expect.objectContaining({
+        status: InspectionStatus.PENDENTE_AJUSTE,
+        safetyPendingRule: true,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).toHaveBeenCalled();
+  });
+
+  it('não transforma Segurança antiga em pendência ao editar item', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.FINALIZADA,
+      module: ModuleType.SEGURANCA_TRABALHO,
+      evaluationModule: null,
+      generatePending: null,
+      safetyPendingRule: false,
+      hasParalysisPenalty: false,
+      paralysisPenaltyPercent: null,
+    });
+    inspectionItemsRepository.findOne.mockResolvedValue({
+      id: 'item-1',
+      inspectionId: 'test-id',
+    } as InspectionItem);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.NAO_CONFORME },
+    ] as InspectionItem[]);
+
+    await service.updateItems(
+      'test-id',
+      [{ inspectionItemId: 'item-1', answer: ChecklistAnswer.NAO_CONFORME }],
+      'gestor-id',
+      UserRole.GESTOR,
+    );
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
         status: InspectionStatus.FINALIZADA,
       }),
     );
-    expect(pendingAdjustmentsRepository.save).not.toHaveBeenCalled();
   });
 
   it('deve finalizar vistoria REMOTO mesmo com NAO_CONFORME e sem criar pendência', async () => {
@@ -465,6 +531,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       status: InspectionStatus.FINALIZADA,
       module: ModuleType.QUALIDADE,
       hasParalysisPenalty: true,
+      paralysisPenaltyPercent: 25,
     });
     jest.spyOn(service, 'findOne').mockResolvedValue(inspection);
     inspectionItemsRepository.findOne.mockResolvedValue({
@@ -492,6 +559,56 @@ describe('InspectionsService - Regras de Negócio', () => {
       expect.objectContaining({
         scorePercent: 37.5,
         status: InspectionStatus.PENDENTE_AJUSTE,
+      }),
+    );
+  });
+
+  it('deve aplicar 35% ao atualizar itens de paralisação nova', async () => {
+    const inspection = {
+      ...mockInspection,
+      status: InspectionStatus.FINALIZADA,
+      hasParalysisPenalty: true,
+      paralysisPenaltyPercent: 35,
+    } as Inspection;
+
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.FINALIZADA,
+      module: ModuleType.QUALIDADE,
+      hasParalysisPenalty: true,
+      paralysisPenaltyPercent: 35,
+    });
+    jest.spyOn(service, 'findOne').mockResolvedValue(inspection);
+    inspectionItemsRepository.findOne.mockResolvedValue({
+      id: 'item-1',
+      inspectionId: 'test-id',
+    } as InspectionItem);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.CONFORME },
+      { answer: ChecklistAnswer.NAO_CONFORME },
+    ] as InspectionItem[]);
+    pendingAdjustmentsRepository.findOne.mockResolvedValue({
+      inspectionId: 'test-id',
+      status: PendingStatus.PENDENTE,
+    } as PendingAdjustment);
+
+    await service.updateItems(
+      'test-id',
+      [{ inspectionItemId: 'item-1', answer: ChecklistAnswer.CONFORME }],
+      'gestor-id',
+      UserRole.GESTOR,
+    );
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        scorePercent: 32.5,
+      }),
+    );
+    expect(inspectionsRepository.update).not.toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        paralysisPenaltyPercent: 25,
       }),
     );
   });
@@ -607,9 +724,10 @@ describe('InspectionsService - Regras de Negócio', () => {
       'test-id',
       expect.objectContaining({
         hasParalysisPenalty: true,
+        paralysisPenaltyPercent: 35,
         paralyzedReason: 'Chuva intensa',
         paralyzedByUserId: 'gestor-id',
-        scorePercent: 37.5,
+        scorePercent: 32.5,
       }),
     );
   });
@@ -651,6 +769,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       'test-id',
       expect.objectContaining({
         hasParalysisPenalty: false,
+        paralysisPenaltyPercent: null,
         paralyzedReason: null,
         paralyzedAt: null,
         paralyzedByUserId: null,
@@ -906,6 +1025,400 @@ describe('InspectionsService - Regras de Negócio', () => {
         evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA,
       }),
     );
+  });
+
+  const mockNonConformItems = () => {
+    inspectionItemsRepository.find.mockImplementation((opts: any) => {
+      if (opts?.where?.answer === ChecklistAnswer.NAO_CONFORME) {
+        return Promise.resolve([
+          {
+            id: 'item-1',
+            checklistItemId: 'check-item-1',
+            answer: ChecklistAnswer.NAO_CONFORME,
+            resolvedAt: new Date(),
+          },
+        ]);
+      }
+      return Promise.resolve([
+        { answer: ChecklistAnswer.NAO_CONFORME } as InspectionItem,
+      ]);
+    });
+    checklistItemsRepository.find.mockResolvedValue([
+      {
+        id: 'check-item-1',
+        title: 'Item de teste',
+        requiresPhotoOnNonConformity: true,
+      },
+    ]);
+    evidencesRepository.count.mockResolvedValue(1);
+    pendingAdjustmentsRepository.findOne.mockResolvedValue(null);
+    pendingAdjustmentsRepository.save.mockImplementation(async (value: any) => value);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+  };
+
+  it('Campo com não conformidade e generatePending false finaliza sem pendência', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.CAMPO,
+      evaluationModule: null,
+    });
+    mockNonConformItems();
+
+    await service.finalize('test-id', { generatePending: false });
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.FINALIZADA,
+        generatePending: false,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('Campo com não conformidade e generatePending true fica PENDENTE_AJUSTE', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.CAMPO,
+      evaluationModule: null,
+    });
+    mockNonConformItems();
+
+    await service.finalize('test-id', { generatePending: true });
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.PENDENTE_AJUSTE,
+        generatePending: true,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).toHaveBeenCalled();
+  });
+
+  it('Campo exige generatePending na finalização', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.CAMPO,
+    });
+    mockNonConformItems();
+
+    await expect(service.finalize('test-id')).rejects.toThrow(BadRequestException);
+    expect(inspectionsRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('Pós-obra com não conformidade fica PENDENTE_AJUSTE sem o flag', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.POS_OBRA,
+    });
+    mockNonConformItems();
+
+    await service.finalize('test-id', { generatePending: false });
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.PENDENTE_AJUSTE,
+        generatePending: null,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).toHaveBeenCalled();
+  });
+
+  it('Obra de Investimento avaliada como Campo obedece generatePending', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      evaluationModule: InvestmentWorkEvaluationModule.CAMPO,
+    });
+    mockNonConformItems();
+
+    await service.finalize('test-id', { generatePending: false });
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.FINALIZADA,
+        generatePending: false,
+      }),
+    );
+
+    inspectionsRepository.update.mockClear();
+    pendingAdjustmentsRepository.save.mockClear();
+    await service.finalize('test-id', { generatePending: true });
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.PENDENTE_AJUSTE,
+        generatePending: true,
+      }),
+    );
+  });
+
+  it('Obra de Investimento avaliada como Pós-obra gera pendência e sem avaliação mantém o comportamento atual', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      evaluationModule: InvestmentWorkEvaluationModule.POS_OBRA,
+    });
+    mockNonConformItems();
+
+    await service.finalize('test-id');
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.PENDENTE_AJUSTE,
+        generatePending: null,
+      }),
+    );
+
+    inspectionsRepository.findOne.mockResolvedValue({
+      ...mockInspection,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      evaluationModule: null,
+    });
+    inspectionsRepository.update.mockClear();
+    await service.finalize('test-id');
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.PENDENTE_AJUSTE,
+        generatePending: null,
+      }),
+    );
+  });
+
+  it('não reabre Campo finalizada com generatePending false ao atualizar itens', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.FINALIZADA,
+      module: ModuleType.CAMPO,
+      evaluationModule: null,
+      generatePending: false,
+      hasParalysisPenalty: false,
+      paralysisPenaltyPercent: null,
+    });
+    inspectionItemsRepository.findOne.mockResolvedValue({
+      id: 'item-1',
+      inspectionId: 'test-id',
+    } as InspectionItem);
+    inspectionItemsRepository.find.mockResolvedValue([
+      { answer: ChecklistAnswer.NAO_CONFORME },
+    ] as InspectionItem[]);
+
+    await service.updateItems(
+      'test-id',
+      [{ inspectionItemId: 'item-1', answer: ChecklistAnswer.NAO_CONFORME }],
+      'gestor-id',
+      UserRole.GESTOR,
+    );
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.FINALIZADA,
+      }),
+    );
+    expect(pendingAdjustmentsRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('Fiscal recebe 403 ao lançar resolução fora de Obras de Investimento e consegue quando é', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.PENDENTE_AJUSTE,
+      module: ModuleType.CAMPO,
+      contractId: 'contract-1',
+    });
+
+    await expect(
+      service.resolve('test-id', {}, 'fiscal-id', UserRole.FISCAL),
+    ).rejects.toThrow(ForbiddenException);
+
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.PENDENTE_AJUSTE,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      contractId: 'contract-1',
+    });
+    inspectionItemsRepository.find.mockResolvedValue([
+      {
+        answer: ChecklistAnswer.NAO_CONFORME,
+        resolvedAt: new Date(),
+      },
+    ]);
+    pendingAdjustmentsRepository.findOne.mockResolvedValue({
+      inspectionId: 'test-id',
+      status: PendingStatus.PENDENTE,
+    });
+    pendingAdjustmentsRepository.save.mockImplementation(async (value: any) => value);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+
+    await service.resolve('test-id', {}, 'fiscal-id', UserRole.FISCAL);
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.AGUARDANDO_APROVACAO,
+        resolutionSubmittedByUserId: 'fiscal-id',
+      }),
+    );
+  });
+
+  it('Gestor não consegue lançar a resolução', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.PENDENTE_AJUSTE,
+      module: ModuleType.CAMPO,
+      contractId: 'contract-1',
+    });
+
+    await expect(
+      service.resolve('test-id', {}, 'gestor-id', UserRole.GESTOR),
+    ).rejects.toThrow(ForbiddenException);
+    expect(inspectionsRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('Supervisor submete e Gestor aprova para RESOLVIDA, gravando notices', async () => {
+    let persisted = false;
+    noticesRepository.save.mockImplementation(async (rows: any) => {
+      persisted = true;
+      return rows;
+    });
+    const seen: boolean[] = [];
+    const subscription = inspectionNoticesService.watch('gestor-1').subscribe(() => {
+      seen.push(persisted);
+    });
+
+    inspectionsRepository.findOne.mockResolvedValueOnce({
+      id: 'test-id',
+      status: InspectionStatus.PENDENTE_AJUSTE,
+      module: ModuleType.CAMPO,
+      contractId: 'contract-1',
+    });
+    inspectionItemsRepository.find.mockResolvedValue([
+      {
+        answer: ChecklistAnswer.NAO_CONFORME,
+        resolvedAt: new Date(),
+      },
+    ]);
+    pendingAdjustmentsRepository.findOne.mockResolvedValue({
+      inspectionId: 'test-id',
+      status: PendingStatus.PENDENTE,
+    });
+    pendingAdjustmentsRepository.save.mockImplementation(async (value: any) => value);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+
+    await service.resolve('test-id', {}, 'supervisor-id', UserRole.SUPERVISOR);
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.AGUARDANDO_APROVACAO,
+        resolutionSubmittedByUserId: 'supervisor-id',
+      }),
+    );
+    const submitted = noticesRepository.save.mock.calls[0][0];
+    expect(submitted.map((notice: any) => notice.recipientUserId).sort()).toEqual([
+      'admin-1',
+      'gestor-1',
+    ]);
+    expect(submitted[0].type).toBe(InspectionNoticeType.RESOLUTION_SUBMITTED);
+    expect(submitted[0].message).toContain('aprovação');
+    expect(noticeQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'contract.id = :contractId',
+      { contractId: 'contract-1' },
+    );
+    expect(seen).toEqual([true]);
+
+    inspectionsRepository.findOne.mockResolvedValueOnce({
+      id: 'test-id',
+      status: InspectionStatus.AGUARDANDO_APROVACAO,
+      module: ModuleType.CAMPO,
+      contractId: 'contract-1',
+      resolutionSubmittedByUserId: 'supervisor-id',
+    });
+    await service.approveResolution('test-id', 'gestor-id');
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.RESOLVIDA,
+        resolutionRejectionReason: null,
+      }),
+    );
+    const approved = noticesRepository.save.mock.calls.at(-1)[0];
+    expect(approved).toEqual([
+      expect.objectContaining({
+        recipientUserId: 'supervisor-id',
+        type: InspectionNoticeType.RESOLUTION_APPROVED,
+      }),
+    ]);
+    subscription.unsubscribe();
+  });
+
+  it('vistoria sem contrato avisa só os admins', async () => {
+    await inspectionNoticesService.notifyResolutionSubmitted({
+      id: 'test-id',
+      contractId: null,
+    });
+
+    expect(usersRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(noticesRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        recipientUserId: 'admin-1',
+        type: InspectionNoticeType.RESOLUTION_SUBMITTED,
+      }),
+    ]);
+  });
+
+  it('reprovar sem motivo retorna 400 e com motivo devolve a pendência preservando o autor', async () => {
+    await expect(
+      service.rejectResolution('test-id', '   ', 'gestor-id'),
+    ).rejects.toThrow(BadRequestException);
+
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.AGUARDANDO_APROVACAO,
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      contractId: 'contract-1',
+      resolutionSubmittedByUserId: 'fiscal-id',
+    });
+    pendingAdjustmentsRepository.findOne.mockResolvedValue({
+      inspectionId: 'test-id',
+      status: PendingStatus.PENDENTE,
+      resolutionNotes: 'corrigido',
+      resolutionEvidencePath: 'https://cdn.example/foto.jpg',
+    });
+    pendingAdjustmentsRepository.save.mockImplementation(async (value: any) => value);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+
+    await service.rejectResolution('test-id', ' Foto ilegível ', 'gestor-id');
+
+    const payload = inspectionsRepository.update.mock.calls.at(-1)[1];
+    expect(payload).toEqual(
+      expect.objectContaining({
+        status: InspectionStatus.PENDENTE_AJUSTE,
+        resolutionRejectionReason: 'Foto ilegível',
+        resolutionSubmittedAt: null,
+        resolutionRejectedByUserId: 'gestor-id',
+      }),
+    );
+    expect(payload).not.toHaveProperty('resolutionSubmittedByUserId');
+    expect(inspectionItemsRepository.save).not.toHaveBeenCalled();
+    expect(inspectionItemsRepository.update).not.toHaveBeenCalled();
+    expect(pendingAdjustmentsRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resolutionNotes: 'corrigido',
+        resolutionEvidencePath: 'https://cdn.example/foto.jpg',
+      }),
+    );
+    expect(noticesRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        recipientUserId: 'fiscal-id',
+        type: InspectionNoticeType.RESOLUTION_REJECTED,
+        message: expect.stringContaining('Foto ilegível'),
+      }),
+    ]);
   });
 
   it('deve rejeitar evaluationModule fora do módulo Obras de Investimento', async () => {

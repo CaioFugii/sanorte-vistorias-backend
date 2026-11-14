@@ -129,7 +129,7 @@ Detalhes completos: `DOMAIN.md`.
 5. **Equipe empreiteira** (`isContractor`) — não aceita colaboradores vinculados.
 6. **Finalização** — evidência obrigatória para `NAO_CONFORME` com `requiresPhotoOnNonConformity`; assinatura validada no frontend, não no `finalize` server-side.
 7. **SEGURANCA_TRABALHO** e **REMOTO** — não geram `PENDENTE_AJUSTE` (`resolveFinalStatus`).
-8. **Paralisação** — penalidade persistente de 25% (`scorePercent × 0.75`); removível via `unparalyze` (GESTOR/SUPERVISOR/ADMIN).
+8. **Paralisação** — ação nova grava 35% (`scorePercent × 0,65`). Recálculo usa `paralysisPenaltyPercent` (25% nas vistorias já paralisadas). Removível via `unparalyze` (GESTOR/SUPERVISOR/ADMIN).
 9. **Pendências** — resolução item a item; `POST .../resolve` só quando todos NC tiverem `resolvedAt`.
 10. **Sync offline** — idempotente por `externalId`; não aceita assets em `dataUrl`.
 11. **Paginação** — `{ data, meta: { page, limit, total, totalPages, hasNext, hasPrev } }`.
