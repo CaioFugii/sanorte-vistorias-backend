@@ -23,6 +23,7 @@ describe('ServiceOrdersExcelExporter', () => {
         field: false,
         remote: true,
         postWork: false,
+        postWorkRequired: false,
         status: 'Fechada',
         equipe: 'ROBSON DA SILVA',
         fimExecucao: new Date('2026-08-11T17:49:00.000Z'),
@@ -75,8 +76,9 @@ describe('ServiceOrdersExcelExporter', () => {
     ]);
     expect(String(rows[3]?.[0])).toBe('26100010434');
     expect(rows[3]?.[1]).toBe('AGUA');
-    expect(rows[3]?.[3]).toBe('Não');
+    expect(rows[3]?.[3]).toBe('');
     expect(rows[3]?.[4]).toBe('Sim');
+    expect(rows[3]?.[5]).toBe('');
     expect(rows[3]?.[7]).toBe('ROBSON DA SILVA');
     expect(rows[3]?.[10]).toBe('REPARO DE REDE DE AGUA');
     expect(rows[2]?.includes('Equipe Real')).toBe(false);

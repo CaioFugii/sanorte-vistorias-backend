@@ -46,6 +46,11 @@ import { S3AssetStorageAdapter } from './adapters/s3-asset-storage.adapter';
       useExisting: AssetStorageRegistry,
     },
   ],
-  exports: [ASSET_STORAGE, ASSET_STORAGE_REGISTRY, AssetStorageRegistry],
+  exports: [
+    ASSET_STORAGE,
+    ASSET_STORAGE_REGISTRY,
+    AssetStorageRegistry,
+    S3AssetStorageAdapter,
+  ],
 })
 export class StorageModule {}

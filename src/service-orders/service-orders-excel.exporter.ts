@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ExcelService } from '../excel/excel.service';
 import { ExcelCellValue, ExcelFile } from '../excel/excel.types';
 import { ServiceOrder } from '../entities';
+import { isPostWorkRequired } from './post-work-eligibility';
 import { ServiceOrdersService } from './service-orders.service';
 
 export type ServiceOrdersExportFilters = {
@@ -13,6 +14,7 @@ export type ServiceOrdersExportFilters = {
   field?: boolean;
   remote?: boolean;
   postWork?: boolean;
+  postWorkEligible?: boolean;
   equipe?: string;
   resultado?: string;
 };
@@ -87,14 +89,18 @@ export class ServiceOrdersExcelExporter {
     });
   }
 
-  private toDataRow(row: ServiceOrder): ExcelCellValue[] {
+  private toDataRow(
+    row: ServiceOrder & { postWorkRequired?: boolean },
+  ): ExcelCellValue[] {
+    const postWorkRequired =
+      row.postWorkRequired ?? isPostWorkRequired(row.resultado);
     return [
       row.osNumber,
       row.sector?.name ?? '',
       row.address,
-      this.booleanLabel(row.field),
+      row.field ? 'Sim' : '',
       this.booleanLabel(row.remote),
-      this.booleanLabel(row.postWork),
+      postWorkRequired ? this.booleanLabel(row.postWork) : '',
       row.status ?? '',
       row.equipe ?? '',
       this.formatDateTime(row.fimExecucao),

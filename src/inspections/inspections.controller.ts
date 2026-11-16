@@ -32,6 +32,7 @@ import {
   ExportInspectionsDto,
 } from './dto/filter-inspections.dto';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
+import { BulkTeamInspectionsDto } from './dto/bulk-team-inspections.dto';
 import { ResolveItemDto } from './dto/resolve-item.dto';
 import { FinalizeInspectionDto } from './dto/finalize-inspection.dto';
 import { RejectResolutionDto } from './dto/reject-resolution.dto';
@@ -59,6 +60,14 @@ export class InspectionsController {
     @CurrentUser() user: any,
   ) {
     return this.inspectionsService.create(createInspectionDto, user.id, user);
+  }
+
+  @Post('bulk-team')
+  @HttpCode(204)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async changeTeam(@Body() dto: BulkTeamInspectionsDto): Promise<void> {
+    await this.inspectionsService.changeTeam(dto.inspectionIds, dto.teamId);
   }
 
   @Get()
@@ -126,8 +135,11 @@ export class InspectionsController {
   @HttpCode(204)
   @UseGuards(RolesGuard)
   @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.ADMIN)
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.inspectionsService.remove(id);
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() user: { role: string },
+  ): Promise<void> {
+    await this.inspectionsService.remove(id, user.role);
   }
 
   @Put(':id/items')

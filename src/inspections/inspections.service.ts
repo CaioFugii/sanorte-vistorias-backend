@@ -9,7 +9,7 @@ import {
 import * as fs from 'fs/promises';
 import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DataSource } from 'typeorm';
+import { Repository, In, DataSource, EntityManager } from 'typeorm';
 import {
   Inspection,
   InspectionItem,
@@ -34,6 +34,10 @@ import {
   InvestmentWorkStatus,
   InvestmentWorkEvaluationModule,
 } from '../common/enums';
+import {
+  isPostWorkRequired,
+  POST_WORK_REQUIRED_MESSAGE,
+} from '../service-orders/post-work-eligibility';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { InspectionMineListItem } from './dto/inspection-mine-list-item.dto';
 import { InspectionListFilters } from './dto/inspection-list-filters';
@@ -295,6 +299,10 @@ export class InspectionsService {
         );
       }
 
+      this.assertPostWorkEligibility(
+        inspectionData.module,
+        serviceOrder.resultado,
+      );
       resolvedContractId = serviceOrder.contractId;
     } else {
       resolvedContractId = providedContractId;
@@ -1235,6 +1243,7 @@ export class InspectionsService {
    */
   private async findInspectionCoreForManagement(
     id: string,
+    repository: Repository<Inspection> = this.inspectionsRepository,
   ): Promise<
     Pick<
       Inspection,
@@ -1251,7 +1260,7 @@ export class InspectionsService {
       | 'resolutionSubmittedByUserId'
     >
   > {
-    const inspection = await this.inspectionsRepository.findOne({
+    const inspection = await repository.findOne({
       where: [{ id }, { externalId: id }],
       select: [
         'id',
@@ -1314,42 +1323,154 @@ export class InspectionsService {
     }
   }
 
-  async remove(id: string): Promise<void> {
-    const inspection = await this.findInspectionCoreForManagement(id);
+  async remove(
+    id: string,
+    userRole?: string,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const inspectionsRepository =
+      manager?.getRepository(Inspection) ?? this.inspectionsRepository;
+    const serviceOrders =
+      manager?.getRepository(ServiceOrder) ?? this.serviceOrderRepository;
+    const inspection = await this.findInspectionCoreForManagement(
+      id,
+      inspectionsRepository,
+    );
 
-    if (inspection.status !== InspectionStatus.RASCUNHO) {
+    if (
+      inspection.status !== InspectionStatus.RASCUNHO &&
+      userRole !== UserRole.ADMIN
+    ) {
       this.logger.warn('Inspection deletion blocked due status', {
         inspectionId: inspection.id,
         status: inspection.status,
+        userRole,
       });
       throw new BadRequestException(
         'Só é possível excluir vistoria com status RASCUNHO',
       );
     }
 
-    const serviceOrderUpdate: Partial<ServiceOrder> = {};
-    if (inspection.module === ModuleType.CAMPO)
-      serviceOrderUpdate.field = false;
-    if (inspection.module === ModuleType.REMOTO)
-      serviceOrderUpdate.remote = false;
-    if (inspection.module === ModuleType.POS_OBRA)
-      serviceOrderUpdate.postWork = false;
-    if (
-      inspection.serviceOrderId &&
-      Object.keys(serviceOrderUpdate).length > 0
-    ) {
-      await this.serviceOrderRepository.update(
-        inspection.serviceOrderId,
-        serviceOrderUpdate,
-      );
-    }
-
     await this.deleteInspectionStoredAssets(inspection.id);
-    await this.inspectionsRepository.delete(inspection.id);
+    await inspectionsRepository.delete(inspection.id);
+    await this.syncServiceOrderStageFlag(
+      inspection,
+      inspectionsRepository,
+      serviceOrders,
+    );
     this.logger.log('Inspection removed', {
       inspectionId: inspection.id,
       module: inspection.module,
     });
+  }
+
+  private stageFlagForModule(
+    module: ModuleType,
+  ): 'field' | 'remote' | 'postWork' | null {
+    if (module === ModuleType.CAMPO) return 'field';
+    if (module === ModuleType.REMOTO) return 'remote';
+    if (module === ModuleType.POS_OBRA) return 'postWork';
+    return null;
+  }
+
+  private async syncServiceOrderStageFlag(
+    inspection: Pick<Inspection, 'module' | 'serviceOrderId'>,
+    inspectionsRepository: Repository<Inspection> = this.inspectionsRepository,
+    serviceOrders: Repository<ServiceOrder> = this.serviceOrderRepository,
+  ): Promise<void> {
+    const flag = this.stageFlagForModule(inspection.module);
+    if (!inspection.serviceOrderId || !flag) return;
+
+    const remaining = await inspectionsRepository.count({
+      where: {
+        serviceOrderId: inspection.serviceOrderId,
+        module: inspection.module,
+      },
+    });
+    await serviceOrders.update(inspection.serviceOrderId, {
+      [flag]: remaining > 0,
+    });
+  }
+
+  async changeTeam(inspectionIds: string[], teamId: string): Promise<void> {
+    const uniqueIds = [
+      ...new Set(inspectionIds.map((id) => id.trim()).filter(Boolean)),
+    ];
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('Informe ao menos uma vistoria.');
+    }
+
+    const team = await this.teamsRepository.findOne({
+      where: { id: teamId },
+      relations: ['contracts'],
+    });
+    if (!team) {
+      throw new BadRequestException('Equipe não encontrada');
+    }
+    const teamContractIds = new Set(
+      (team.contracts ?? []).map((contract) => contract.id),
+    );
+
+    const inspections = await this.inspectionsRepository.find({
+      where: [{ id: In(uniqueIds) }, { externalId: In(uniqueIds) }],
+      select: ['id', 'externalId', 'module', 'contractId'],
+    });
+    const byKey = new Map<string, Inspection>();
+    for (const inspection of inspections) {
+      byKey.set(inspection.id, inspection);
+      if (inspection.externalId) {
+        byKey.set(inspection.externalId, inspection);
+      }
+    }
+
+    const resolved: Inspection[] = [];
+    const seen = new Set<string>();
+    for (const requestedId of uniqueIds) {
+      const inspection = byKey.get(requestedId);
+      if (!inspection) {
+        throw new BadRequestException('Vistoria não encontrada');
+      }
+      if (seen.has(inspection.id)) continue;
+      seen.add(inspection.id);
+      resolved.push(inspection);
+    }
+
+    for (const inspection of resolved) {
+      if (inspection.module === ModuleType.SEGURANCA_TRABALHO) {
+        throw new BadRequestException(
+          'Vistoria de Segurança do Trabalho não entra na troca em lote.',
+        );
+      }
+      if (!inspection.contractId) {
+        throw new BadRequestException('A vistoria não tem contrato.');
+      }
+      if (!teamContractIds.has(inspection.contractId)) {
+        throw new BadRequestException(
+          'A equipe não está ligada ao contrato desta vistoria.',
+        );
+      }
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      await queryRunner.manager.update(
+        Inspection,
+        { id: In(resolved.map((inspection) => inspection.id)) },
+        { teamId },
+      );
+      await queryRunner.commitTransaction();
+      this.logger.log('Inspection team changed in batch', {
+        count: resolved.length,
+        teamId,
+      });
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async update(
@@ -1440,6 +1561,7 @@ export class InspectionsService {
           'Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.',
         );
       }
+      this.assertPostWorkEligibility(nextModule, serviceOrder.resultado);
     }
 
     await this.validateCollaboratorsForContractorTeam(
@@ -2174,6 +2296,23 @@ export class InspectionsService {
         ? this.normalizeServiceDescription(payload.serviceDescription)
         : inspection.serviceDescription;
 
+      if (this.isServiceOrderRequired(nextModule) && !inspection.serviceOrderId) {
+        throw new BadRequestException(
+          'serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.',
+        );
+      }
+      if (nextModule === ModuleType.POS_OBRA && inspection.serviceOrderId) {
+        const serviceOrder = await this.serviceOrderRepository.findOne({
+          where: { id: inspection.serviceOrderId },
+        });
+        if (!serviceOrder) {
+          throw new BadRequestException(
+            'Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.',
+          );
+        }
+        this.assertPostWorkEligibility(nextModule, serviceOrder.resultado);
+      }
+
       if (this.isTeamRequired(nextModule) && !nextTeamId) {
         throw new BadRequestException(
           'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
@@ -2495,8 +2634,19 @@ export class InspectionsService {
   private isServiceOrderRequired(module: ModuleType): boolean {
     return (
       module !== ModuleType.SEGURANCA_TRABALHO &&
-      module !== ModuleType.OBRAS_INVESTIMENTO
+      module !== ModuleType.OBRAS_INVESTIMENTO &&
+      module !== ModuleType.CAMPO
     );
+  }
+
+  private assertPostWorkEligibility(
+    module: ModuleType,
+    resultado: string | null | undefined,
+  ): void {
+    if (module !== ModuleType.POS_OBRA) return;
+    if (!isPostWorkRequired(resultado)) {
+      throw new BadRequestException(POST_WORK_REQUIRED_MESSAGE);
+    }
   }
 
   private isTeamRequired(module: ModuleType): boolean {
@@ -2673,8 +2823,10 @@ export class InspectionsService {
   }
 
   /**
-   * Resolve um item não conforme. A vistoria só sai de PENDENTE_AJUSTE
-   * quando quem pode lançar chama POST /inspections/:id/resolve.
+   * Resolve um item não conforme, ou ajusta um item já resolvido enquanto
+   * a vistoria está em PENDENTE_AJUSTE (inclusive depois de uma recusa).
+   * A vistoria só sai de PENDENTE_AJUSTE quando quem pode lançar chama
+   * POST /inspections/:id/resolve.
    */
   async resolveItem(
     inspectionId: string,
@@ -2720,7 +2872,10 @@ export class InspectionsService {
     item.resolvedAt = new Date();
     item.resolvedByUserId = userId;
     item.resolutionNotes = resolutionData.resolutionNotes;
-    item.resolutionEvidencePath = resolutionEvidencePath;
+    // Ajuste depois da recusa: sem foto nova, a evidência anterior fica.
+    if (resolutionEvidencePath) {
+      item.resolutionEvidencePath = resolutionEvidencePath;
+    }
     await this.inspectionItemsRepository.save(item);
 
     const updated = await this.inspectionItemsRepository.findOne({
@@ -2955,6 +3110,18 @@ export class InspectionsService {
       pending.status = PendingStatus.PENDENTE;
       await this.pendingAdjustmentsRepository.save(pending);
     }
+
+    // A recusa reabre os itens. Notas e foto ficam para o novo lançamento.
+    await this.inspectionItemsRepository.update(
+      {
+        inspectionId,
+        answer: ChecklistAnswer.NAO_CONFORME,
+      },
+      {
+        resolvedAt: null,
+        resolvedByUserId: null,
+      },
+    );
 
     await this.inspectionsRepository.update(inspectionId, {
       status: InspectionStatus.PENDENTE_AJUSTE,

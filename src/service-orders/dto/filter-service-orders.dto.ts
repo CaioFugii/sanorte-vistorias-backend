@@ -67,4 +67,9 @@ export class FilterServiceOrdersDto extends PaginationQueryDto {
   @IsString()
   @MaxLength(200)
   resultado?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => toBoolean(value))
+  @IsBoolean({ message: 'postWorkEligible must be true or false' })
+  postWorkEligible?: boolean;
 }

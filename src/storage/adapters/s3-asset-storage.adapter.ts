@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -185,6 +186,23 @@ export class S3AssetStorageAdapter implements AssetStorage {
     );
 
     this.logger.log(`Deleted S3 object key=${key}`);
+  }
+
+  async getObjectBuffer(key: string): Promise<Buffer> {
+    this.assertConfigured();
+    const normalizedKey = key.trim();
+    const result = await this.client!.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: normalizedKey,
+      }),
+    );
+    const body = result.Body;
+    if (!body || !('transformToByteArray' in body)) {
+      throw new InternalServerErrorException('Arquivo não encontrado no storage');
+    }
+    const bytes = await body.transformToByteArray();
+    return Buffer.from(bytes);
   }
 
   /** Backfill/migration: upload preserving an explicit S3 key. */

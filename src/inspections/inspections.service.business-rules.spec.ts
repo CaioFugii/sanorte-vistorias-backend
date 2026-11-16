@@ -167,7 +167,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       status: InspectionStatus.RASCUNHO,
     } as any);
 
-    await expect(service.remove('test-id')).resolves.toBeUndefined();
+    await expect(
+      service.remove('test-id', UserRole.FISCAL),
+    ).resolves.toBeUndefined();
 
     expect(inspectionsRepository.delete).toHaveBeenCalledWith('test-id');
   });
@@ -178,9 +180,9 @@ describe('InspectionsService - Regras de Negócio', () => {
       status: InspectionStatus.FINALIZADA,
     } as any);
 
-    await expect(service.remove('test-id')).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(
+      service.remove('test-id', UserRole.GESTOR),
+    ).rejects.toThrow(BadRequestException);
     expect(inspectionsRepository.delete).not.toHaveBeenCalled();
   });
 
@@ -839,6 +841,157 @@ describe('InspectionsService - Regras de Negócio', () => {
     );
   });
 
+  it('deve gravar vistoria de Campo sem OS', async () => {
+    inspectionsRepository.create.mockImplementation((payload: any) => payload);
+    inspectionsRepository.save.mockResolvedValue({ id: 'inspection-campo-id' });
+    dataSource.getRepository.mockReturnValue({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({
+      id: 'inspection-campo-id',
+      module: ModuleType.CAMPO,
+    } as any);
+
+    await expect(
+      service.create(
+        {
+          module: ModuleType.CAMPO,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          contractId: 'contract-id',
+          serviceDescription: 'Vistoria de campo sem OS',
+        },
+        'user-id',
+      ),
+    ).resolves.toMatchObject({ id: 'inspection-campo-id' });
+    expect(serviceOrderRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('deve rejeitar Campo sem equipe', async () => {
+    await expect(
+      service.create(
+        {
+          module: ModuleType.CAMPO,
+          checklistId: 'checklist-id',
+          contractId: 'contract-id',
+          serviceDescription: 'Vistoria de campo sem equipe',
+        },
+        'user-id',
+      ),
+    ).rejects.toThrow(
+      'teamId é obrigatório para módulos diferentes de SEGURANCA_TRABALHO.',
+    );
+  });
+
+  it('deve rejeitar pós-obra quando o resultado não exige a etapa', async () => {
+    serviceOrderRepository.findOne.mockResolvedValue({
+      id: 'service-order-id',
+      contractId: 'contract-id',
+      resultado: 'REPARO DE REDE DE AGUA',
+    });
+
+    await expect(
+      service.create(
+        {
+          module: ModuleType.POS_OBRA,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
+          serviceDescription: 'Pós-obra',
+        },
+        'user-id',
+      ),
+    ).rejects.toThrow(
+      'O resultado desta ordem de serviço não exige vistoria de pós-obra.',
+    );
+    expect(inspectionsRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('deve gravar pós-obra quando o resultado está na lista e ligar o flag', async () => {
+    serviceOrderRepository.findOne.mockResolvedValue({
+      id: 'service-order-id',
+      contractId: 'contract-id',
+      resultado: 'reposição de asfalto',
+    });
+    inspectionsRepository.create.mockImplementation((payload: any) => payload);
+    inspectionsRepository.save.mockResolvedValue({ id: 'inspection-pos-id' });
+    dataSource.getRepository.mockReturnValue({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({
+      id: 'inspection-pos-id',
+      module: ModuleType.POS_OBRA,
+    } as any);
+
+    await expect(
+      service.create(
+        {
+          module: ModuleType.POS_OBRA,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
+          serviceDescription: 'Pós-obra',
+        },
+        'user-id',
+      ),
+    ).resolves.toMatchObject({ id: 'inspection-pos-id' });
+    expect(serviceOrderRepository.update).toHaveBeenCalledWith(
+      'service-order-id',
+      { postWork: true },
+    );
+  });
+
+  it('sync de Campo sem OS cria a vistoria e pós-obra inelegível volta erro', async () => {
+    inspectionsRepository.findOne.mockResolvedValue(null);
+    inspectionsRepository.create.mockImplementation((payload: any) => payload);
+    inspectionsRepository.save.mockResolvedValue({ id: 'synced-campo' });
+    dataSource.getRepository.mockReturnValue({
+      findOne: jest.fn().mockResolvedValue(null),
+    });
+
+    const created = await service.syncInspections(
+      [
+        {
+          externalId: 'ext-campo',
+          module: ModuleType.CAMPO,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          contractId: 'contract-id',
+          serviceDescription: 'Campo sincronizado',
+        },
+      ] as any,
+      { id: 'user-id', role: UserRole.ADMIN },
+    );
+    expect(created.results[0]).toMatchObject({
+      status: 'CREATED',
+      serverId: 'synced-campo',
+    });
+
+    serviceOrderRepository.findOne.mockResolvedValue({
+      id: 'service-order-id',
+      contractId: 'contract-id',
+      resultado: 'REPARO DE REDE DE AGUA',
+    });
+    const rejected = await service.syncInspections(
+      [
+        {
+          externalId: 'ext-pos',
+          module: ModuleType.POS_OBRA,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
+          serviceDescription: 'Pós-obra',
+        },
+      ] as any,
+      { id: 'user-id', role: UserRole.ADMIN },
+    );
+    expect(rejected.results[0]).toMatchObject({
+      status: 'ERROR',
+      message:
+        'O resultado desta ordem de serviço não exige vistoria de pós-obra.',
+    });
+  });
+
   it('deve rejeitar criar vistoria sem teamId quando módulo não é ST', async () => {
     await expect(
       service.create(
@@ -1405,7 +1558,16 @@ describe('InspectionsService - Regras de Negócio', () => {
     );
     expect(payload).not.toHaveProperty('resolutionSubmittedByUserId');
     expect(inspectionItemsRepository.save).not.toHaveBeenCalled();
-    expect(inspectionItemsRepository.update).not.toHaveBeenCalled();
+    expect(inspectionItemsRepository.update).toHaveBeenCalledWith(
+      {
+        inspectionId: 'test-id',
+        answer: ChecklistAnswer.NAO_CONFORME,
+      },
+      {
+        resolvedAt: null,
+        resolvedByUserId: null,
+      },
+    );
     expect(pendingAdjustmentsRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         resolutionNotes: 'corrigido',
@@ -1419,6 +1581,74 @@ describe('InspectionsService - Regras de Negócio', () => {
         message: expect.stringContaining('Foto ilegível'),
       }),
     ]);
+  });
+
+  it('depois da recusa o item volta a pendente e o novo lançamento preserva a foto', async () => {
+    const item = {
+      id: 'item-1',
+      inspectionId: 'test-id',
+      answer: ChecklistAnswer.NAO_CONFORME,
+      resolvedAt: null,
+      resolutionNotes: 'TESTE',
+      resolutionEvidencePath: 'https://cdn.example/foto.jpg',
+    };
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'test-id',
+      status: InspectionStatus.PENDENTE_AJUSTE,
+      module: ModuleType.CAMPO,
+      contractId: 'contract-1',
+      resolutionSubmittedByUserId: 'supervisor-id',
+      resolutionRejectionReason: 'Foto ilegível',
+    });
+    inspectionItemsRepository.findOne
+      .mockResolvedValueOnce(item)
+      .mockResolvedValueOnce({
+        ...item,
+        resolutionNotes: 'Ajustado',
+        checklistItem: null,
+        resolvedBy: null,
+      });
+    inspectionItemsRepository.save.mockImplementation(async (value: any) => value);
+
+    await service.resolveItem(
+      'test-id',
+      'item-1',
+      { resolutionNotes: 'Ajustado' },
+      'supervisor-id',
+      UserRole.SUPERVISOR,
+    );
+
+    expect(inspectionItemsRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resolutionNotes: 'Ajustado',
+        resolutionEvidencePath: 'https://cdn.example/foto.jpg',
+        resolvedByUserId: 'supervisor-id',
+      }),
+    );
+
+    inspectionItemsRepository.find.mockResolvedValue([
+      {
+        answer: ChecklistAnswer.NAO_CONFORME,
+        resolvedAt: new Date(),
+      },
+    ]);
+    pendingAdjustmentsRepository.findOne.mockResolvedValue({
+      inspectionId: 'test-id',
+      status: PendingStatus.PENDENTE,
+    });
+    pendingAdjustmentsRepository.save.mockImplementation(async (value: any) => value);
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'test-id' } as any);
+
+    await service.resolve('test-id', {}, 'supervisor-id', UserRole.SUPERVISOR);
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'test-id',
+      expect.objectContaining({
+        status: InspectionStatus.AGUARDANDO_APROVACAO,
+        resolutionSubmittedByUserId: 'supervisor-id',
+        resolutionRejectionReason: null,
+      }),
+    );
   });
 
   it('deve rejeitar evaluationModule fora do módulo Obras de Investimento', async () => {

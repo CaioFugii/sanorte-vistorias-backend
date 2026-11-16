@@ -1,5 +1,12 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InspectionsService } from './inspections.service';
+import { InspectionsController } from './inspections.controller';
+import { ROLES_KEY } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { Inspection } from '../entities';
 import {
   ChecklistAnswer,
@@ -41,7 +48,9 @@ describe('InspectionsService', () => {
       save: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
       findAndCount: jest.fn(),
+      find: jest.fn(),
       createQueryBuilder: jest.fn(),
     };
     inspectionItemsRepository = {
@@ -551,6 +560,108 @@ describe('InspectionsService', () => {
       cloudinaryPublicId: 'quality/signatures/s1',
     });
     expect(inspectionsRepository.delete).toHaveBeenCalledWith('i1');
+  });
+
+  it('admin apaga vistoria finalizada e pede o arquivo ao storage antes do delete', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'i1',
+      status: InspectionStatus.FINALIZADA,
+      module: ModuleType.CAMPO,
+      serviceOrderId: 'os-1',
+    });
+    const evidence = { cloudinaryPublicId: 'quality/evidences/final' };
+    evidencesRepository.find.mockResolvedValue([evidence]);
+    signaturesRepository.find.mockResolvedValue([]);
+    inspectionsRepository.count.mockResolvedValue(0);
+
+    const order: string[] = [];
+    assetStorageRegistry.deleteStoredAsset.mockImplementation(async () => {
+      order.push('storage');
+    });
+    inspectionsRepository.delete.mockImplementation(async () => {
+      order.push('delete');
+    });
+
+    await service.remove('i1', UserRole.ADMIN);
+
+    expect(order).toEqual(['storage', 'delete']);
+    expect(assetStorageRegistry.deleteStoredAsset).toHaveBeenCalledWith(
+      evidence,
+    );
+    expect(serviceOrderRepository.update).toHaveBeenCalledWith('os-1', {
+      field: false,
+    });
+  });
+
+  it('remove dentro de uma transação grava no manager', async () => {
+    const transactionalInspections = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'i1',
+        status: InspectionStatus.FINALIZADA,
+        module: ModuleType.CAMPO,
+        serviceOrderId: 'os-1',
+      }),
+      delete: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+    };
+    const transactionalOrders = { update: jest.fn() };
+    const manager = {
+      getRepository: jest.fn((entity: { name: string }) =>
+        entity.name === 'ServiceOrder' ? transactionalOrders : transactionalInspections,
+      ),
+    };
+    evidencesRepository.find.mockResolvedValue([]);
+    signaturesRepository.find.mockResolvedValue([]);
+
+    await service.remove('i1', UserRole.ADMIN, manager as any);
+
+    expect(transactionalInspections.delete).toHaveBeenCalledWith('i1');
+    expect(inspectionsRepository.delete).not.toHaveBeenCalled();
+    expect(transactionalOrders.update).toHaveBeenCalledWith('os-1', {
+      field: false,
+    });
+    expect(serviceOrderRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('apagar uma de duas vistorias remotas mantém remote e a última desliga', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'i1',
+      status: InspectionStatus.FINALIZADA,
+      module: ModuleType.REMOTO,
+      serviceOrderId: 'os-1',
+    });
+    evidencesRepository.find.mockResolvedValue([]);
+    signaturesRepository.find.mockResolvedValue([]);
+
+    inspectionsRepository.count.mockResolvedValue(1);
+    await service.remove('i1', UserRole.ADMIN);
+    expect(serviceOrderRepository.update).toHaveBeenCalledWith('os-1', {
+      remote: true,
+    });
+
+    serviceOrderRepository.update.mockClear();
+    inspectionsRepository.count.mockResolvedValue(0);
+    await service.remove('i1', UserRole.ADMIN);
+    expect(serviceOrderRepository.update).toHaveBeenCalledWith('os-1', {
+      remote: false,
+    });
+  });
+
+  it('apagar segurança ligada a uma OS não altera os flags da OS', async () => {
+    inspectionsRepository.findOne.mockResolvedValue({
+      id: 'i1',
+      status: InspectionStatus.FINALIZADA,
+      module: ModuleType.SEGURANCA_TRABALHO,
+      serviceOrderId: 'os-1',
+    });
+    evidencesRepository.find.mockResolvedValue([]);
+    signaturesRepository.find.mockResolvedValue([]);
+
+    await service.remove('i1', UserRole.ADMIN);
+
+    expect(inspectionsRepository.delete).toHaveBeenCalledWith('i1');
+    expect(serviceOrderRepository.update).not.toHaveBeenCalled();
+    expect(inspectionsRepository.count).not.toHaveBeenCalled();
   });
 
   it('findAll deve retornar DTO enxuto para listagem', async () => {
@@ -1191,5 +1302,235 @@ describe('InspectionsService', () => {
         UserRole.FISCAL,
       ),
     ).rejects.toThrow('storageKey inválida');
+  });
+
+  it('fiscal em rascunho continua podendo trocar a equipe de uma vistoria', async () => {
+    inspectionsRepository.findOne.mockImplementation((options: { select?: string[] }) => {
+      if (options?.select) {
+        return Promise.resolve({
+          id: 'insp-1',
+          status: InspectionStatus.RASCUNHO,
+          module: ModuleType.CAMPO,
+          contractId: 'contract-1',
+          teamId: 'old-team',
+          serviceOrderId: 'so-1',
+          serviceDescription: 'Rascunho fiscal',
+          inspectionScope: InspectionScope.TEAM,
+          hasParalysisPenalty: false,
+          paralysisPenaltyPercent: null,
+          resolutionSubmittedByUserId: null,
+        });
+      }
+      return Promise.resolve({ collaborators: [] });
+    });
+    teamsRepository.findOne.mockResolvedValue({ id: 'new-team' });
+    serviceOrderRepository.findOne.mockResolvedValue({
+      id: 'so-1',
+      resultado: 'QUALQUER',
+    });
+    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'insp-1' } as any);
+
+    await service.update(
+      'insp-1',
+      { teamId: 'new-team' },
+      'fiscal-1',
+      UserRole.FISCAL,
+    );
+
+    expect(inspectionsRepository.update).toHaveBeenCalledWith(
+      'insp-1',
+      expect.objectContaining({ teamId: 'new-team' }),
+    );
+    expect(teamsRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'new-team' },
+      select: ['id'],
+    });
+    expect(serviceOrderRepository.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('InspectionsService.changeTeam', () => {
+  let service: InspectionsService;
+  let inspectionsRepository: { find: jest.Mock };
+  let teamsRepository: { findOne: jest.Mock };
+  let serviceOrderRepository: { update: jest.Mock };
+  let dataSource: { createQueryRunner: jest.Mock };
+  let queryRunner: {
+    connect: jest.Mock;
+    startTransaction: jest.Mock;
+    commitTransaction: jest.Mock;
+    rollbackTransaction: jest.Mock;
+    release: jest.Mock;
+    manager: { update: jest.Mock };
+  };
+
+  const finalized = (
+    id: string,
+    contractId: string | null,
+    module: ModuleType = ModuleType.CAMPO,
+  ) => ({
+    id,
+    externalId: null,
+    module,
+    contractId,
+    status: InspectionStatus.FINALIZADA,
+    scorePercent: id === 'insp-a' ? 80 : 90,
+    serviceOrderId: 'so-1',
+  });
+
+  beforeEach(() => {
+    inspectionsRepository = { find: jest.fn() };
+    teamsRepository = { findOne: jest.fn() };
+    serviceOrderRepository = { update: jest.fn() };
+    queryRunner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      manager: { update: jest.fn().mockResolvedValue(undefined) },
+    };
+    dataSource = {
+      createQueryRunner: jest.fn().mockReturnValue(queryRunner),
+    };
+    service = new InspectionsService(
+      inspectionsRepository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      teamsRepository as any,
+      serviceOrderRepository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      dataSource as any,
+      new InspectionDomainService(),
+      {} as any,
+    );
+  });
+
+  it('troca a equipe de duas vistorias finalizadas sem mexer na nota nem na OS', async () => {
+    teamsRepository.findOne.mockResolvedValue({
+      id: 'team-new',
+      contracts: [{ id: 'contract-1' }],
+    });
+    inspectionsRepository.find.mockResolvedValue([
+      finalized('insp-a', 'contract-1', ModuleType.CAMPO),
+      finalized('insp-b', 'contract-1', ModuleType.OBRAS_INVESTIMENTO),
+    ]);
+
+    await service.changeTeam(['insp-a', 'insp-b'], 'team-new');
+
+    const [, criteria, patch] = queryRunner.manager.update.mock.calls[0];
+    expect(patch).toEqual({ teamId: 'team-new' });
+    expect(criteria.id.value).toEqual(['insp-a', 'insp-b']);
+    expect(queryRunner.commitTransaction).toHaveBeenCalled();
+    expect(serviceOrderRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('equipe de outro contrato recusa o lote e não grava', async () => {
+    teamsRepository.findOne.mockResolvedValue({
+      id: 'team-other',
+      contracts: [{ id: 'contract-2' }],
+    });
+    inspectionsRepository.find.mockResolvedValue([
+      finalized('insp-a', 'contract-1'),
+      finalized('insp-b', 'contract-1'),
+    ]);
+
+    await expect(
+      service.changeTeam(['insp-a', 'insp-b'], 'team-other'),
+    ).rejects.toThrow('A equipe não está ligada ao contrato desta vistoria.');
+    expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
+  });
+
+  it('vistoria sem contrato recusa o lote', async () => {
+    teamsRepository.findOne.mockResolvedValue({
+      id: 'team-new',
+      contracts: [{ id: 'contract-1' }],
+    });
+    inspectionsRepository.find.mockResolvedValue([
+      finalized('insp-a', null),
+      finalized('insp-b', 'contract-1'),
+    ]);
+
+    await expect(
+      service.changeTeam(['insp-a', 'insp-b'], 'team-new'),
+    ).rejects.toThrow('A vistoria não tem contrato.');
+    expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
+  });
+
+  it('id de Segurança do Trabalho recusa o lote', async () => {
+    teamsRepository.findOne.mockResolvedValue({
+      id: 'team-new',
+      contracts: [{ id: 'contract-1' }],
+    });
+    inspectionsRepository.find.mockResolvedValue([
+      finalized('insp-a', 'contract-1'),
+      finalized('insp-b', 'contract-1', ModuleType.SEGURANCA_TRABALHO),
+    ]);
+
+    await expect(
+      service.changeTeam(['insp-a', 'insp-b'], 'team-new'),
+    ).rejects.toThrow(
+      'Vistoria de Segurança do Trabalho não entra na troca em lote.',
+    );
+    expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
+  });
+
+  it('vistoria inexistente responde 400 sem update', async () => {
+    teamsRepository.findOne.mockResolvedValue({
+      id: 'team-new',
+      contracts: [{ id: 'contract-1' }],
+    });
+    inspectionsRepository.find.mockResolvedValue([finalized('insp-a', 'contract-1')]);
+
+    await expect(
+      service.changeTeam(['insp-a', 'missing'], 'team-new'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
+  });
+
+  it('equipe inexistente responde 400 sem update', async () => {
+    teamsRepository.findOne.mockResolvedValue(null);
+
+    await expect(service.changeTeam(['insp-a'], 'missing')).rejects.toThrow(
+      'Equipe não encontrada',
+    );
+    expect(inspectionsRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('lista vazia responde 400', async () => {
+    await expect(service.changeTeam([], 'team-new')).rejects.toThrow(
+      'Informe ao menos uma vistoria.',
+    );
+    expect(teamsRepository.findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('InspectionsController troca de equipe', () => {
+  it('lote é só de ADMIN', () => {
+    expect(
+      Reflect.getMetadata(ROLES_KEY, InspectionsController.prototype.changeTeam),
+    ).toEqual([UserRole.ADMIN]);
+  });
+
+  it('gestor não passa no guard e a API responde 403', () => {
+    const reflector = {
+      getAllAndOverride: jest.fn().mockReturnValue([UserRole.ADMIN]),
+    };
+    const guard = new RolesGuard(reflector as any);
+    const context = {
+      getHandler: () => InspectionsController.prototype.changeTeam,
+      getClass: () => InspectionsController,
+      switchToHttp: () => ({
+        getRequest: () => ({ user: { role: UserRole.GESTOR } }),
+      }),
+    };
+
+    expect(guard.canActivate(context as any)).toBe(false);
   });
 });

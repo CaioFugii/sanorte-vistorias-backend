@@ -6,22 +6,80 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
+import { InspectionsService } from '../inspections/inspections.service';
 import * as XLSX from 'xlsx';
-import { Contract, Inspection, ServiceOrder, Sector } from '../entities';
+import {
+  Contract,
+  Inspection,
+  ServiceOrder,
+  ServiceOrderImport,
+  ServiceOrderImportLine,
+  Sector,
+} from '../entities';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
-import { ServiceOrderImportParserService } from './import/service-order-import-parser.service';
+import {
+  ParsedServiceOrderImportRow,
+  ServiceOrderImportParserService,
+} from './import/service-order-import-parser.service';
+import { ServiceOrderSpreadsheetStorage } from './service-order-spreadsheet.storage';
 import {
   applyContractScopeFilter,
   getAllowedContractIds,
 } from '../common/auth/contract-scope.util';
-import { UserRole } from '../common/enums';
+import {
+  ModuleType,
+  ServiceOrderImportLineStatus,
+  UserRole,
+} from '../common/enums';
+import {
+  isPostWorkRequired,
+  postWorkEligibleResults,
+  postWorkEligibleSql,
+} from './post-work-eligibility';
+import {
+  monthDateRange,
+  previousYearMonth,
+  saoPauloYearMonth,
+} from './service-order-periods';
 
 export interface ImportResult {
+  id: string;
   inserted: number;
   skipped: number;
   deleted: number;
+  notRegistered: number;
   errors: string[];
+}
+
+type ImportRowDecision =
+  | { kind: 'skip' }
+  | {
+      kind: 'silent';
+      osNumber: string;
+      sectorName: string | null;
+      resultado: string | null;
+      sectorId: string | null;
+      serviceIdentifier: string;
+    }
+  | {
+      kind: 'reject';
+      message: string;
+      osNumber: string | null;
+      sectorName: string | null;
+      resultado: string | null;
+    }
+  | {
+      kind: 'enter';
+      parsed: ParsedServiceOrderImportRow;
+      sectorId: string;
+      serviceIdentifier: string;
+      importKey: string;
+    };
+
+export interface ServiceOrderStageSummary {
+  remote: { total: number; done: number };
+  postWork: { total: number; done: number };
 }
 
 @Injectable()
@@ -38,8 +96,27 @@ export class ServiceOrdersService {
     private readonly contractsRepository: Repository<Contract>,
     @InjectRepository(Inspection)
     private readonly inspectionRepository: Repository<Inspection>,
+    @InjectRepository(ServiceOrderImport)
+    private readonly importRepository: Repository<ServiceOrderImport>,
+    @InjectRepository(ServiceOrderImportLine)
+    private readonly importLineRepository: Repository<ServiceOrderImportLine>,
     private readonly serviceOrderImportParser: ServiceOrderImportParserService,
+    private readonly spreadsheetStorage: ServiceOrderSpreadsheetStorage,
+    private readonly dataSource: DataSource,
+    private readonly inspectionsService: InspectionsService,
   ) {}
+
+  private readInspectionCount(rawRow?: Record<string, unknown>): number {
+    if (!rawRow) return 0;
+    const direct = rawRow.inspectionCount ?? rawRow.inspectioncount;
+    const value =
+      direct ??
+      Object.entries(rawRow).find(([key]) =>
+        key.toLowerCase().endsWith('inspectioncount'),
+      )?.[1];
+    const count = Number(value ?? 0);
+    return Number.isFinite(count) ? count : 0;
+  }
 
   private toSearchTerm(value?: string): string | undefined {
     const trimmed = value?.trim();
@@ -128,6 +205,7 @@ export class ServiceOrdersService {
       field?: boolean;
       remote?: boolean;
       postWork?: boolean;
+      postWorkEligible?: boolean;
       equipe?: string;
       resultado?: string;
     },
@@ -171,17 +249,22 @@ export class ServiceOrdersService {
         sectorId: filters.sectorId,
       });
     }
-    if (filters.field !== undefined) {
-      query.andWhere('serviceOrder.field = :field', { field: filters.field });
-    }
-    if (filters.remote !== undefined) {
-      query.andWhere('serviceOrder.remote = :remote', {
-        remote: filters.remote,
-      });
-    }
-    if (filters.postWork !== undefined) {
-      query.andWhere('serviceOrder.postWork = :postWork', {
-        postWork: filters.postWork,
+    this.applyStagePresenceFilter(query, 'field', filters.field, ModuleType.CAMPO);
+    this.applyStagePresenceFilter(
+      query,
+      'remote',
+      filters.remote,
+      ModuleType.REMOTO,
+    );
+    this.applyStagePresenceFilter(
+      query,
+      'postWork',
+      filters.postWork,
+      ModuleType.POS_OBRA,
+    );
+    if (filters.postWorkEligible) {
+      query.andWhere(postWorkEligibleSql('serviceOrder'), {
+        postWorkEligibleResults: postWorkEligibleResults(),
       });
     }
     const equipeTerm = this.toSearchTerm(filters.equipe);
@@ -204,6 +287,139 @@ export class ServiceOrdersService {
     );
   }
 
+  private applyStagePresenceFilter(
+    query: ReturnType<Repository<ServiceOrder>['createQueryBuilder']>,
+    param: string,
+    value: boolean | undefined,
+    module: ModuleType,
+  ): void {
+    if (value === undefined) return;
+    const exists = `EXISTS (
+      SELECT 1 FROM inspections stage_inspection
+      WHERE stage_inspection.service_order_id = "serviceOrder"."id"
+        AND stage_inspection.module = :${param}Module
+    )`;
+    query.andWhere(value ? exists : `NOT ${exists}`, {
+      [`${param}Module`]: module,
+    });
+  }
+
+  private async attachStagePresence<T extends ServiceOrder>(
+    rows: T[],
+  ): Promise<Array<T & { postWorkRequired: boolean }>> {
+    const ids = rows.map((row) => row.id).filter(Boolean);
+    const present = new Map<string, Set<string>>();
+    if (ids.length > 0) {
+      const found = await this.inspectionRepository.manager.query<
+        Array<{ serviceOrderId: string; module: string }>
+      >(
+        `SELECT service_order_id AS "serviceOrderId", module
+         FROM inspections
+         WHERE service_order_id = ANY($1)
+           AND module = ANY($2)
+         GROUP BY service_order_id, module`,
+        [ids, [ModuleType.CAMPO, ModuleType.REMOTO, ModuleType.POS_OBRA]],
+      );
+      for (const row of found) {
+        const stages = present.get(row.serviceOrderId) ?? new Set<string>();
+        stages.add(row.module);
+        present.set(row.serviceOrderId, stages);
+      }
+    }
+
+    return rows.map((row) => {
+      const stages = present.get(row.id) ?? new Set<string>();
+      row.field = stages.has(ModuleType.CAMPO);
+      row.remote = stages.has(ModuleType.REMOTO);
+      row.postWork = stages.has(ModuleType.POS_OBRA);
+      return Object.assign(row, {
+        postWorkRequired: isPostWorkRequired(row.resultado),
+      });
+    });
+  }
+
+  async summarize(
+    user: any,
+    filters: {
+      osNumber?: string;
+      contractId?: string;
+      sectorId?: string;
+      field?: boolean;
+      remote?: boolean;
+      postWork?: boolean;
+      equipe?: string;
+      resultado?: string;
+      postWorkEligible?: boolean;
+    },
+  ): Promise<ServiceOrderStageSummary> {
+    const current = saoPauloYearMonth(new Date());
+    const remoteRange = monthDateRange(current.year, current.month);
+    const previous = previousYearMonth(current.year, current.month);
+    const postRange = monthDateRange(previous.year, previous.month);
+    const remotePeriod = `"serviceOrder"."fim_execucao" IS NOT NULL AND DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) BETWEEN :summaryRemoteFrom AND :summaryRemoteTo`;
+    const postPeriod = `"serviceOrder"."fim_execucao" IS NOT NULL AND DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) BETWEEN :summaryPostFrom AND :summaryPostTo AND ${postWorkEligibleSql('serviceOrder')}`;
+    const remoteExists = `EXISTS (
+      SELECT 1 FROM inspections summary_remote
+      WHERE summary_remote.service_order_id = "serviceOrder"."id"
+        AND summary_remote.module = :summaryRemoteModule
+    )`;
+    const postExists = `EXISTS (
+      SELECT 1 FROM inspections summary_post
+      WHERE summary_post.service_order_id = "serviceOrder"."id"
+        AND summary_post.module = :summaryPostModule
+    )`;
+
+    const query = this.serviceOrderRepository.createQueryBuilder('serviceOrder');
+    this.applyListFilters(query, user, {
+      osNumber: filters.osNumber,
+      contractId: filters.contractId,
+      sectorId: filters.sectorId,
+      field: filters.field,
+      remote: filters.remote,
+      postWork: filters.postWork,
+      equipe: filters.equipe,
+      resultado: filters.resultado,
+      postWorkEligible: filters.postWorkEligible,
+    });
+    query
+      .select(`COUNT(*) FILTER (WHERE ${remotePeriod})`, 'remoteTotal')
+      .addSelect(
+        `COUNT(*) FILTER (WHERE ${remotePeriod} AND ${remoteExists})`,
+        'remoteDone',
+      )
+      .addSelect(`COUNT(*) FILTER (WHERE ${postPeriod})`, 'postTotal')
+      .addSelect(
+        `COUNT(*) FILTER (WHERE ${postPeriod} AND ${postExists})`,
+        'postDone',
+      )
+      .setParameter('summaryRemoteFrom', remoteRange.from)
+      .setParameter('summaryRemoteTo', remoteRange.to)
+      .setParameter('summaryPostFrom', postRange.from)
+      .setParameter('summaryPostTo', postRange.to)
+      .setParameter('summaryRemoteModule', ModuleType.REMOTO)
+      .setParameter('summaryPostModule', ModuleType.POS_OBRA)
+      .setParameter('postWorkEligibleResults', postWorkEligibleResults());
+
+    const row = await query.getRawOne<{
+      remoteTotal: string;
+      remoteDone: string;
+      postTotal: string;
+      postDone: string;
+    }>();
+    const count = (value: string | undefined) => Number(value ?? 0);
+
+    return {
+      remote: {
+        total: count(row?.remoteTotal),
+        done: count(row?.remoteDone),
+      },
+      postWork: {
+        total: count(row?.postTotal),
+        done: count(row?.postDone),
+      },
+    };
+  }
+
   async findAll(
     user: any,
     page: number = 1,
@@ -218,7 +434,12 @@ export class ServiceOrdersService {
     postWork?: boolean,
     equipe?: string,
     resultado?: string,
-  ): Promise<PaginatedResponseDto<ServiceOrder>> {
+    postWorkEligible?: boolean,
+  ): Promise<
+    PaginatedResponseDto<
+      ServiceOrder & { postWorkRequired: boolean; inspectionCount: number }
+    >
+  > {
     const skip = (page - 1) * limit;
 
     const query = this.serviceOrderRepository
@@ -237,18 +458,29 @@ export class ServiceOrdersService {
       postWork,
       equipe,
       resultado,
+      postWorkEligible,
     });
 
-    const [data, total] = await query
+    const total = await query.clone().getCount();
+    const { entities, raw } = await query
+      .addSelect(
+        `(SELECT COUNT(*)::int FROM inspections inspection_count WHERE inspection_count.service_order_id = "serviceOrder"."id")`,
+        'inspectionCount',
+      )
       .skip(skip)
       .take(limit)
       .orderBy('serviceOrder.osNumber', 'ASC')
-      .getManyAndCount();
+      .getRawAndEntities();
 
+    const withCounts = entities.map((row, index) =>
+      Object.assign(row, {
+        inspectionCount: this.readInspectionCount(raw[index]),
+      }),
+    );
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data,
+      data: await this.attachStagePresence(withCounts),
       meta: {
         page,
         limit,
@@ -271,11 +503,12 @@ export class ServiceOrdersService {
       field?: boolean;
       remote?: boolean;
       postWork?: boolean;
+      postWorkEligible?: boolean;
       equipe?: string;
       resultado?: string;
     },
     maxRows: number,
-  ): Promise<ServiceOrder[]> {
+  ): Promise<Array<ServiceOrder & { postWorkRequired: boolean }>> {
     const query = this.serviceOrderRepository
       .createQueryBuilder('serviceOrder')
       .leftJoin('serviceOrder.sector', 'sector')
@@ -312,7 +545,7 @@ export class ServiceOrdersService {
       );
     }
 
-    return rows;
+    return this.attachStagePresence(rows);
   }
 
   async findContractName(contractId?: string): Promise<string | null> {
@@ -368,12 +601,18 @@ export class ServiceOrdersService {
     const sectors = await this.sectorsRepository.find();
     const sectorsByName = new Map(sectors.map((s) => [s.name, s]));
 
-    const result: ImportResult = {
+    const storedFile = await this.spreadsheetStorage.save(
+      file.buffer,
+      file.originalname || 'ordens-de-servico.xlsx',
+    );
+
+    const result = {
       inserted: 0,
       skipped: 0,
       deleted: 0,
-      errors: [],
+      errors: [] as string[],
     };
+    const lineDrafts: Array<Partial<ServiceOrderImportLine>> = [];
 
     const cancelledPairs = new Map<
       string,
@@ -422,149 +661,593 @@ export class ServiceOrdersService {
       }
     }
 
-    const seenOsNumbers = new Set<string>();
+    const seenKeys = new Set<string>();
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const familyRaw = row['Família'] ?? row['Familia'];
+      const lineNumber = i + 2;
+      const decision = this.classifyImportRow(row, sectorsByName, seenKeys);
+      const rawRow = this.spreadsheetCells(row);
 
-      if (this.serviceOrderImportParser.shouldIgnoreFamily(familyRaw)) {
+      if (decision.kind === 'skip') {
         result.skipped++;
         continue;
       }
-
-      const parsedRow = this.serviceOrderImportParser.parseRow(row);
-      const {
-        osNumber,
-        sectorName,
-        status,
-        address,
-        familia,
-        resultado,
-        fimExecucao,
-        tempoExecucaoEfetivo,
-        tempoExecucaoEfetivoSegundos,
-        equipe,
-      } = parsedRow;
-
-      if (!osNumber) {
-        result.errors.push(`Linha ${i + 2}: Número da OS vazio ou inválido`);
+      if (decision.kind === 'silent') {
         continue;
       }
-      if (!sectorName) {
-        result.errors.push(`Linha ${i + 2}: Família vazia ou inválida`);
-        continue;
-      }
-      if (!status) {
-        result.errors.push(`Linha ${i + 2}: Status vazio ou inválido`);
-        continue;
-      }
-
-      if (status.toUpperCase() === 'CANCELADA') continue;
-
-      const sector = sectorsByName.get(sectorName);
-      if (!sector) {
-        result.errors.push(
-          `Linha ${i + 2}: Setor "${sectorName}" não encontrado no banco (AGUA, ESGOTO, REPOSICAO, HIDROMETRIA, DESOBSTRUCAO)`,
+      if (decision.kind === 'reject') {
+        const reason = `Linha ${lineNumber}: ${decision.message}`;
+        result.errors.push(reason);
+        lineDrafts.push(
+          this.lineDraft(lineNumber, rawRow, {
+            status: ServiceOrderImportLineStatus.NOT_REGISTERED,
+            osNumber: decision.osNumber,
+            sectorName: decision.sectorName,
+            resultado: decision.resultado,
+            reason,
+          }),
         );
         continue;
       }
-      if (!address) {
-        result.errors.push(
-          `Linha ${i + 2}: Endereço composto vazio ou inválido (Endereço + Número + Bairro)`,
-        );
-        continue;
-      }
-
-      const importKey = this.buildImportKey(osNumber, sectorName, resultado);
-      if (seenOsNumbers.has(importKey)) {
-        result.skipped++;
-        continue;
-      }
-      seenOsNumbers.add(importKey);
-
-      const serviceIdentifier =
-        sectorName === 'REPOSICAO'
-          ? (resultado ?? '').trim().toUpperCase()
-          : '';
 
       try {
-        await this.serviceOrderRepository
-          .createQueryBuilder()
-          .insert()
-          .into(ServiceOrder)
-          .values({
-            osNumber,
-            sectorId: sector.id,
-            contractId,
-            address,
-            field: false,
-            remote: false,
-            postWork: false,
-            familia,
-            resultado,
-            fimExecucao,
-            tempoExecucaoEfetivo,
-            tempoExecucaoEfetivoSegundos,
-            equipe,
-            status,
-            serviceIdentifier,
-          })
-          .orUpdate(
-            [
-              'contract_id',
-              'status',
-              'resultado',
-              'fim_execucao',
-              'tempo_execucao_efetivo',
-              'tempo_execucao_efetivo_segundos',
-              'service_identifier',
-            ],
-            ['contract_id', 'os_number', 'sector_id', 'service_identifier'],
-          )
-          .execute();
+        await this.upsertImportedServiceOrder(contractId, decision);
+        seenKeys.add(decision.importKey);
         result.inserted++;
+        lineDrafts.push(
+          this.lineDraft(lineNumber, rawRow, {
+            status: ServiceOrderImportLineStatus.ENTERED,
+            osNumber: decision.parsed.osNumber,
+            sectorName: decision.parsed.sectorName,
+            resultado: decision.parsed.resultado,
+            reason: null,
+            resolvedAt: new Date(),
+          }),
+        );
       } catch (error: any) {
-        result.errors.push(
-          `Linha ${i + 2}: ${error?.message || String(error)}`,
+        const reason = `Linha ${lineNumber}: ${error?.message || String(error)}`;
+        result.errors.push(reason);
+        lineDrafts.push(
+          this.lineDraft(lineNumber, rawRow, {
+            status: ServiceOrderImportLineStatus.NOT_REGISTERED,
+            osNumber: decision.parsed.osNumber,
+            sectorName: decision.parsed.sectorName,
+            resultado: decision.parsed.resultado,
+            reason,
+          }),
         );
       }
+    }
+
+    const notRegistered = lineDrafts.filter(
+      (line) => line.status === ServiceOrderImportLineStatus.NOT_REGISTERED,
+    ).length;
+    const savedImport = await this.importRepository.save(
+      this.importRepository.create({
+        userId: user.id,
+        contractId,
+        originalFileName: file.originalname || 'ordens-de-servico.xlsx',
+        storageKey: storedFile.key,
+        storageProvider: storedFile.provider,
+        insertedCount: result.inserted,
+        skippedCount: result.skipped,
+        deletedCount: result.deleted,
+        notRegisteredCount: notRegistered,
+      }),
+    );
+    if (lineDrafts.length > 0) {
+      await this.importLineRepository.save(
+        lineDrafts.map((line) =>
+          this.importLineRepository.create({
+            ...line,
+            importId: savedImport.id,
+          }),
+        ),
+      );
     }
 
     this.logger.log('Service order import completed', {
       contractId,
+      importId: savedImport.id,
       userId: user?.id,
       inserted: result.inserted,
       skipped: result.skipped,
       deleted: result.deleted,
-      errorsCount: result.errors.length,
+      notRegistered,
     });
 
-    return result;
+    return {
+      id: savedImport.id,
+      inserted: result.inserted,
+      skipped: result.skipped,
+      deleted: result.deleted,
+      notRegistered,
+      errors: result.errors,
+    };
+  }
+
+  async listImports(
+    user: any,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponseDto<Record<string, unknown>>> {
+    this.assertHistoryAccess(user);
+    const allowedContractIds = getAllowedContractIds(user);
+    if (allowedContractIds !== null && allowedContractIds.length === 0) {
+      return this.emptyImportPage(page, limit);
+    }
+
+    const where =
+      allowedContractIds === null
+        ? {}
+        : { contractId: In(allowedContractIds) };
+    const [rows, total] = await this.importRepository.findAndCount({
+      where,
+      relations: { contract: true, user: true },
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    const totalPages = Math.ceil(total / limit);
+    return {
+      data: rows.map((row) => this.toImportSummary(row)),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
+  }
+
+  async getImport(user: any, id: string): Promise<Record<string, unknown>> {
+    const record = await this.loadVisibleImport(user, id);
+    const lines = await this.importLineRepository.find({
+      where: { importId: record.id },
+      order: { lineNumber: 'ASC' },
+    });
+    return {
+      ...this.toImportSummary(record),
+      lines: lines.map((line) => this.toImportLine(line)),
+    };
+  }
+
+  async downloadImportFile(
+    user: any,
+    id: string,
+  ): Promise<{ buffer: Buffer; fileName: string; contentType: string }> {
+    const record = await this.loadVisibleImport(user, id);
+    const buffer = await this.spreadsheetStorage.read(
+      record.storageKey,
+      record.storageProvider,
+    );
+    return {
+      buffer,
+      fileName: record.originalFileName,
+      contentType: this.spreadsheetStorage.contentTypeForName(
+        record.originalFileName,
+      ),
+    };
+  }
+
+  async reprocessLine(
+    user: any,
+    importId: string,
+    lineId: string,
+    row: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const record = await this.loadVisibleImport(user, importId);
+    const line = await this.importLineRepository.findOne({
+      where: { id: lineId, importId: record.id },
+    });
+    if (!line) {
+      throw new NotFoundException('Linha da importação não encontrada');
+    }
+    if (line.status !== ServiceOrderImportLineStatus.NOT_REGISTERED) {
+      throw new BadRequestException('Esta linha já foi registrada.');
+    }
+
+    const sectors = await this.sectorsRepository.find();
+    const sectorsByName = new Map(sectors.map((sector) => [sector.name, sector]));
+    const entered = await this.importLineRepository.find({
+      where: {
+        importId: record.id,
+        status: ServiceOrderImportLineStatus.ENTERED,
+      },
+    });
+    const seenKeys = new Set(
+      entered
+        .filter((item) => item.osNumber && item.sectorName)
+        .map((item) =>
+          this.buildImportKey(item.osNumber!, item.sectorName!, item.resultado),
+        ),
+    );
+    const decision = this.classifyImportRow(row, sectorsByName, seenKeys);
+    const rawRow = this.spreadsheetCells(row);
+
+    if (decision.kind === 'enter') {
+      await this.upsertImportedServiceOrder(record.contractId, decision);
+      line.status = ServiceOrderImportLineStatus.ENTERED;
+      line.osNumber = decision.parsed.osNumber;
+      line.sectorName = decision.parsed.sectorName;
+      line.resultado = decision.parsed.resultado;
+      line.reason = null;
+      line.rawRow = rawRow;
+      line.resolvedAt = new Date();
+      const saved = await this.importLineRepository.save(line);
+      return this.toImportLine(saved);
+    }
+
+    if (decision.kind === 'silent') {
+      if (decision.sectorId) {
+        await this.deleteCancelledOrders(record.contractId, [
+          {
+            osNumber: decision.osNumber,
+            sectorId: decision.sectorId,
+            serviceIdentifier: decision.serviceIdentifier,
+          },
+        ]);
+      }
+      line.status = ServiceOrderImportLineStatus.ENTERED;
+      line.osNumber = decision.osNumber;
+      line.sectorName = decision.sectorName;
+      line.resultado = decision.resultado;
+      line.reason = null;
+      line.rawRow = rawRow;
+      line.resolvedAt = new Date();
+      const saved = await this.importLineRepository.save(line);
+      return this.toImportLine(saved);
+    }
+
+    const message =
+      decision.kind === 'skip'
+        ? 'Família VISTORIA é ignorada na importação'
+        : decision.message;
+    line.reason = `Linha ${line.lineNumber}: ${message}`;
+    line.rawRow = rawRow;
+    line.osNumber =
+      decision.kind === 'reject' ? decision.osNumber : line.osNumber;
+    line.sectorName =
+      decision.kind === 'reject' ? decision.sectorName : line.sectorName;
+    line.resultado =
+      decision.kind === 'reject' ? decision.resultado : line.resultado;
+    line.resolvedAt = null;
+    const saved = await this.importLineRepository.save(line);
+    return this.toImportLine(saved);
+  }
+
+  private classifyImportRow(
+    row: Record<string, unknown>,
+    sectorsByName: Map<string, Sector>,
+    seenKeys: Set<string>,
+  ): ImportRowDecision {
+    const familyRaw = row['Família'] ?? row['Familia'];
+    if (this.serviceOrderImportParser.shouldIgnoreFamily(familyRaw as string)) {
+      return { kind: 'skip' };
+    }
+
+    const parsed = this.serviceOrderImportParser.parseRow(row);
+    const identity = {
+      osNumber: parsed.osNumber || null,
+      sectorName: parsed.sectorName,
+      resultado: parsed.resultado,
+    };
+    if (!parsed.osNumber) {
+      return {
+        kind: 'reject',
+        message: 'Número da OS vazio ou inválido',
+        ...identity,
+      };
+    }
+    if (!parsed.sectorName) {
+      return {
+        kind: 'reject',
+        message: 'Família vazia ou inválida',
+        ...identity,
+      };
+    }
+    if (!parsed.status) {
+      return {
+        kind: 'reject',
+        message: 'Status vazio ou inválido',
+        ...identity,
+      };
+    }
+    if (parsed.status.toUpperCase() === 'CANCELADA') {
+      const sector = sectorsByName.get(parsed.sectorName);
+      return {
+        kind: 'silent',
+        osNumber: parsed.osNumber,
+        sectorName: parsed.sectorName,
+        resultado: parsed.resultado,
+        sectorId: sector?.id ?? null,
+        serviceIdentifier: this.serviceIdentifier(
+          parsed.sectorName,
+          parsed.resultado,
+        ),
+      };
+    }
+
+    const sector = sectorsByName.get(parsed.sectorName);
+    if (!sector) {
+      return {
+        kind: 'reject',
+        message: `Setor "${parsed.sectorName}" não encontrado no banco (AGUA, ESGOTO, REPOSICAO, HIDROMETRIA, DESOBSTRUCAO)`,
+        ...identity,
+      };
+    }
+    if (!parsed.address) {
+      return {
+        kind: 'reject',
+        message:
+          'Endereço composto vazio ou inválido (Endereço + Número + Bairro)',
+        ...identity,
+      };
+    }
+
+    const importKey = this.buildImportKey(
+      parsed.osNumber,
+      parsed.sectorName,
+      parsed.resultado,
+    );
+    if (seenKeys.has(importKey)) {
+      return {
+        kind: 'reject',
+        message: 'OS repetida neste arquivo',
+        ...identity,
+      };
+    }
+
+    return {
+      kind: 'enter',
+      parsed,
+      sectorId: sector.id,
+      serviceIdentifier: this.serviceIdentifier(
+        parsed.sectorName,
+        parsed.resultado,
+      ),
+      importKey,
+    };
+  }
+
+  private async upsertImportedServiceOrder(
+    contractId: string,
+    decision: Extract<ImportRowDecision, { kind: 'enter' }>,
+  ): Promise<void> {
+    const parsed = decision.parsed;
+    await this.serviceOrderRepository
+      .createQueryBuilder()
+      .insert()
+      .into(ServiceOrder)
+      .values({
+        osNumber: parsed.osNumber,
+        sectorId: decision.sectorId,
+        contractId,
+        address: parsed.address,
+        field: false,
+        remote: false,
+        postWork: false,
+        familia: parsed.familia,
+        resultado: parsed.resultado,
+        fimExecucao: parsed.fimExecucao,
+        tempoExecucaoEfetivo: parsed.tempoExecucaoEfetivo,
+        tempoExecucaoEfetivoSegundos: parsed.tempoExecucaoEfetivoSegundos,
+        equipe: parsed.equipe,
+        status: parsed.status,
+        serviceIdentifier: decision.serviceIdentifier,
+      })
+      .orUpdate(
+        [
+          'contract_id',
+          'status',
+          'resultado',
+          'fim_execucao',
+          'tempo_execucao_efetivo',
+          'tempo_execucao_efetivo_segundos',
+          'service_identifier',
+        ],
+        ['contract_id', 'os_number', 'sector_id', 'service_identifier'],
+      )
+      .execute();
+  }
+
+  private async deleteCancelledOrders(
+    contractId: string,
+    pairs: Array<{
+      osNumber: string;
+      sectorId: string;
+      serviceIdentifier: string;
+    }>,
+  ): Promise<number> {
+    if (pairs.length === 0) return 0;
+    const toDelete = await this.serviceOrderRepository.find({
+      where: pairs.map((pair) => ({
+        osNumber: pair.osNumber,
+        sectorId: pair.sectorId,
+        contractId,
+        serviceIdentifier: pair.serviceIdentifier,
+      })),
+      select: ['id'],
+    });
+    if (toDelete.length === 0) return 0;
+    await this.serviceOrderRepository.delete(toDelete.map((item) => item.id));
+    return toDelete.length;
+  }
+
+  private serviceIdentifier(
+    sectorName: string,
+    resultado: string | null,
+  ): string {
+    return sectorName === 'REPOSICAO'
+      ? (resultado ?? '').trim().toUpperCase()
+      : '';
+  }
+
+  private spreadsheetCells(
+    row: Record<string, unknown>,
+  ): Record<string, string> {
+    const cells: Record<string, string> = {};
+    for (const [key, value] of Object.entries(row)) {
+      cells[key] = value === undefined || value === null ? '' : String(value);
+    }
+    return cells;
+  }
+
+  private lineDraft(
+    lineNumber: number,
+    rawRow: Record<string, string>,
+    fields: Partial<ServiceOrderImportLine>,
+  ): Partial<ServiceOrderImportLine> {
+    return {
+      lineNumber,
+      rawRow,
+      resolvedAt: null,
+      ...fields,
+    };
+  }
+
+  private assertHistoryAccess(user: any): void {
+    if (user?.role !== UserRole.ADMIN && user?.role !== UserRole.GESTOR) {
+      throw new ForbiddenException(
+        'Você não tem acesso ao histórico de importação.',
+      );
+    }
+  }
+
+  private async loadVisibleImport(
+    user: any,
+    id: string,
+  ): Promise<ServiceOrderImport> {
+    this.assertHistoryAccess(user);
+    const record = await this.importRepository.findOne({
+      where: { id },
+      relations: { contract: true, user: true },
+    });
+    if (!record) {
+      throw new NotFoundException('Lançamento de importação não encontrado');
+    }
+    const allowedContractIds = getAllowedContractIds(user);
+    if (
+      allowedContractIds !== null &&
+      !allowedContractIds.includes(record.contractId)
+    ) {
+      throw new ForbiddenException('Você não tem acesso a este lançamento.');
+    }
+    return record;
+  }
+
+  private toImportSummary(record: ServiceOrderImport): Record<string, unknown> {
+    return {
+      id: record.id,
+      createdAt: record.createdAt,
+      originalFileName: record.originalFileName,
+      insertedCount: record.insertedCount,
+      skippedCount: record.skippedCount,
+      deletedCount: record.deletedCount,
+      notRegisteredCount: record.notRegisteredCount,
+      contract: record.contract
+        ? { id: record.contract.id, name: record.contract.name }
+        : { id: record.contractId, name: '' },
+      user: record.user
+        ? { id: record.user.id, name: record.user.name }
+        : { id: record.userId, name: '' },
+    };
+  }
+
+  private toImportLine(line: ServiceOrderImportLine): Record<string, unknown> {
+    return {
+      id: line.id,
+      lineNumber: line.lineNumber,
+      status: line.status,
+      osNumber: line.osNumber,
+      sectorName: line.sectorName,
+      resultado: line.resultado,
+      reason: line.reason,
+      rawRow: line.rawRow,
+      resolvedAt: line.resolvedAt,
+    };
+  }
+
+  private emptyImportPage(
+    page: number,
+    limit: number,
+  ): PaginatedResponseDto<Record<string, unknown>> {
+    return {
+      data: [],
+      meta: {
+        page,
+        limit,
+        total: 0,
+        totalPages: 0,
+        hasNext: false,
+        hasPrev: false,
+      },
+    };
   }
 
   async remove(id: string): Promise<void> {
-    const serviceOrder = await this.serviceOrderRepository.findOne({
-      where: { id },
+    await this.removeMany([id]);
+  }
+
+  async removeMany(ids: string[]): Promise<void> {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('Informe ao menos uma ordem de serviço.');
+    }
+
+    const orders = await this.serviceOrderRepository.find({
+      where: { id: In(uniqueIds) },
+      select: ['id', 'osNumber'],
     });
-    if (!serviceOrder) {
+    if (orders.length !== uniqueIds.length) {
       throw new NotFoundException('Ordem de serviço não encontrada');
     }
 
-    const inspectionsCount = await this.inspectionRepository.count({
-      where: { serviceOrderId: id },
-    });
-    if (inspectionsCount > 0) {
-      this.logger.warn('Service order removal blocked due linked inspections', {
-        serviceOrderId: id,
-        inspectionsCount,
-      });
-      throw new BadRequestException(
-        'Não é possível excluir ordem de serviço vinculada a vistorias',
-      );
+    const orderById = new Map(orders.map((order) => [order.id, order]));
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      for (const id of uniqueIds) {
+        const order = orderById.get(id)!;
+        try {
+          const inspections = await queryRunner.manager.find(Inspection, {
+            where: { serviceOrderId: id },
+            select: ['id'],
+          });
+          for (const inspection of inspections) {
+            await this.inspectionsService.remove(
+              inspection.id,
+              UserRole.ADMIN,
+              queryRunner.manager,
+            );
+          }
+          await queryRunner.manager.delete(ServiceOrder, id);
+        } catch (error) {
+          const reason =
+            error instanceof Error && error.message
+              ? error.message
+              : 'Não foi possível apagar a vistoria.';
+          this.logger.warn('Service order batch stopped', {
+            serviceOrderId: id,
+            osNumber: order.osNumber,
+            reason,
+          });
+          throw new BadRequestException(
+            `A exclusão parou na OS ${order.osNumber}. ${reason}`,
+          );
+        }
+      }
+      await queryRunner.commitTransaction();
+      this.logger.log('Service orders removed', { ids: uniqueIds });
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    await this.serviceOrderRepository.delete(id);
-    this.logger.log('Service order removed', { serviceOrderId: id });
   }
 }

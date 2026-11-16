@@ -30,10 +30,10 @@ Authorization: Bearer <token>
 - Setores: `GET/POST/PUT/DELETE /sectors`
 - Colaboradores: `GET/POST/PUT/DELETE /collaborators`
 - Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections`, `items` e upload de imagem de referência
-- Ordens de Serviço (OS): `GET /service-orders`, `GET /service-orders/export`, `POST /service-orders/import`, `DELETE /service-orders/:id` (ADMIN)
+- Ordens de Serviço (OS): `GET /service-orders`, `GET /service-orders/summary`, `GET /service-orders/export`, `POST /service-orders/import`, `GET /service-orders/imports`, `GET /service-orders/imports/:id`, `GET /service-orders/imports/:id/file`, `POST /service-orders/imports/:id/lines/:lineId/reprocess`, `POST /service-orders/bulk-delete` (ADMIN), `DELETE /service-orders/:id` (ADMIN)
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/export`, `GET /inspections/mine`, `GET /inspections/:id`
-  - edição: `PUT /inspections/:id`, `PUT /inspections/:id/items`
+  - edição: `PUT /inspections/:id`, `POST /inspections/bulk-team` (ADMIN), `PUT /inspections/:id/items`, `DELETE /inspections/:id`
   - anexos e assinatura: `POST /inspections/:id/evidences/presign`, `POST /inspections/:id/evidences/from-storage`, `POST /inspections/:id/evidences`, `GET /inspections/:id/evidences/:evidenceId/file`, `DELETE /inspections/:id/evidences/:evidenceId`, `POST /inspections/:id/signature`
   - transições: `POST /inspections/:id/paralyze`, `POST /inspections/:id/finalize`, `POST /inspections/:id/items/:itemId/resolve`, `POST /inspections/:id/resolve`
 - Relatórios dinâmicos:
@@ -46,8 +46,9 @@ Authorization: Bearer <token>
 ### Regras críticas que impactam UI
 
 - Nova vistoria (`POST /inspections` e sync):
-  - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
-  - para `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional.
+  - `serviceOrderId` é obrigatório para módulos diferentes de `CAMPO`, `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
+  - para `CAMPO`, `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional. Em Campo, `teamId` continua obrigatório.
+  - `POS_OBRA` exige OS cujo resultado está na lista fixa de pós-obra. Fora da lista, a API responde 400.
   - quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
   - quando `serviceOrderId` for enviado, o backend ignora `contractId` do payload e usa o contrato da OS.
   - quando `module = OBRAS_INVESTIMENTO` e `serviceOrderId` não for enviado, `investmentWorkId` passa a ser obrigatório.
@@ -129,7 +130,8 @@ Authorization: Bearer <token>
 ### Filtros disponíveis para listagens (essencial para telas)
 
 - Paginação padrão em listas: `page`, `limit`.
-- `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; filtra OS por uso no módulo CAMPO, REMOTO ou POS_OBRA), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres).
+- `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; existe vistoria daquele módulo, não a coluna booleana), `postWorkEligible` (`true` devolve só OS cujo resultado exige pós-obra), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres). A resposta inclui `postWorkRequired`. `field`, `remote` e `postWork` na resposta significam que existe vistoria daquele módulo.
+- `GET /service-orders/summary`: mesmos filtros, exceto `from`/`to`, que são ignorados. Conta OS de Remoto no mês vigente e de Pós-obra no mês anterior (`America/Sao_Paulo`).
 - `GET /service-orders/export`: mesmos filtros de `GET /service-orders` (sem paginação); resposta binária `.xlsx`.
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /teams`: filtros por `name` (busca parcial), `contractId` e `sectorId`.
@@ -151,7 +153,7 @@ Authorization: Bearer <token>
 ### Integração offline (resumo operacional)
 
 - Use `externalId` para idempotência no `POST /sync/inspections`.
-- No sync, `serviceOrderId` é obrigatório para criar nova vistoria quando o módulo não é `SEGURANCA_TRABALHO` nem `OBRAS_INVESTIMENTO`.
+- No sync, `serviceOrderId` é obrigatório para criar nova vistoria quando o módulo não é `CAMPO`, `SEGURANCA_TRABALHO` nem `OBRAS_INVESTIMENTO`. Pós-obra fora da lista de resultados responde 400.
 - No sync, quando `serviceOrderId` não for enviado, `contractId` deve ser enviado.
 - Não enviar `dataUrl` em evidências no sync (assets devem ser enviados antes).
 - Se precisar aplicar penalidade de paralisação no sync, envie `paralyze.reason`.
@@ -385,6 +387,7 @@ Resposta paginada:
   "field": false,
   "remote": false,
   "postWork": false,
+  "postWorkRequired": false,
   "createdAt": "2026-02-19T12:00:00.000Z",
   "updatedAt": "2026-02-19T12:00:00.000Z"
 }
@@ -1336,14 +1339,34 @@ Response 201:
   - `sectorId` (opcional; UUID do setor)
   - `contractId` (opcional; UUID do contrato)
   - `from`, `to` (opcional; intervalo de `fimExecucao`, ISO8601)
-  - `field` (opcional; `true` ou `false` — filtra OS já usadas em vistoria CAMPO)
-  - `remote` (opcional; `true` ou `false` — filtra OS já usadas em vistoria REMOTO)
-  - `postWork` (opcional; `true` ou `false` — filtra OS já usadas em vistoria POS_OBRA)
+  - `field` (opcional; `true` ou `false` — existe vistoria CAMPO)
+  - `remote` (opcional; `true` ou `false` — existe vistoria REMOTO)
+  - `postWork` (opcional; `true` ou `false` — existe vistoria POS_OBRA)
+  - `postWorkEligible` (opcional; `true` — resultado exige vistoria de pós-obra)
   - `equipe` (opcional; busca parcial na equipe PDA; mínimo 3 caracteres)
   - `resultado` (opcional; busca parcial no resultado da OS; mínimo 3 caracteres)
-- Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`
-- Uso: listar OS disponíveis para vincular a novas vistorias; filtrar por uso por módulo (field/remote/postWork)
+- Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`. Cada item traz `postWorkRequired` e `inspectionCount` (vistorias ligadas, qualquer status). `field`, `remote` e `postWork` indicam se existe vistoria daquele módulo, em qualquer status.
+- Uso: listar OS disponíveis para vincular a novas vistorias. Campo não exige OS. Pós-obra só aceita OS com `postWorkEligible=true`. Remoto continua exigindo OS.
 - Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` veem apenas OS dos contratos permitidos (`serviceOrder.contractId`)
+
+### GET /service-orders/summary
+
+- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
+- Query: os mesmos filtros de `GET /service-orders`, menos a paginação. `from` e `to` são ignorados.
+- O mês é calculado no servidor, em `America/Sao_Paulo`. O cliente não envia o intervalo.
+- Remoto: OS com fim de execução no mês vigente. Feitas: desse total, as que têm ao menos uma vistoria `REMOTO`.
+- Pós-obra: OS com fim de execução no mês anterior e resultado que exige pós-obra. Feitas: desse total, as que têm ao menos uma vistoria `POS_OBRA`.
+- OS sem fim de execução fica de fora. Duas vistorias na mesma OS contam 1.
+- Escopo de contrato igual ao da listagem.
+
+Response 200:
+
+```json
+{
+  "remote": { "total": 0, "done": 0 },
+  "postWork": { "total": 0, "done": 0 }
+}
+```
 
 ### GET /service-orders/export
 
@@ -1358,6 +1381,7 @@ Response 201:
   - máximo de **5000** linhas; acima disso retorna `400` pedindo para refinar os filtros
   - não inclui a coluna "Equipe Real" (campo inexistente no sistema)
 - Colunas: Número da OS, Setor, Endereço, Campo, Remota, Pós-obra, Status, Equipe PDA, Fim execução, Tempo execução efetivo, Resultado, Atualizada/Inserida em
+- Campo vazio quando não há vistoria, Sim quando há. Remota é Sim ou Não. Pós-obra fica vazia quando o resultado não exige a etapa; dentro da lista, Sim ou Não.
 - Aba: `O.S`
 - Cabeçalho: `ORDENS DE SERVIÇOS CADASTRADAS` e linha `PERÍODO: DD/MM/YYYY A DD/MM/YYYY    CONTRATO: {nome|TODOS}`
 
@@ -1373,26 +1397,68 @@ Response 201:
 - Campos adicionais em cada registro: `field`, `remote`, `postWork` (boolean, default `false`)
 - Regra de escopo: `GESTOR`/`SUPERVISOR` só pode importar para contratos aos quais já está vinculado
 
+O upload grava o arquivo, o contrato, o usuário, os totais e as linhas. `errors` traz a lista completa do que não foi registrado, sem corte. Família `VISTORIA` entra só em `skipped`. OS repetida no arquivo entra em `errors` e em `notRegistered`. OS já existente é atualizada, conta em `inserted` e aparece nas linhas que entraram. Os totais deste upload não mudam quando uma linha é reprocessada depois.
+
 Response 200:
 
 ```json
 {
+  "id": "uuid",
   "inserted": 10,
   "skipped": 2,
   "deleted": 1,
-  "errors": []
+  "notRegistered": 1,
+  "errors": ["Linha 3: Número da OS vazio ou inválido"]
 }
 ```
+
+### GET /service-orders/imports
+
+- Auth: JWT + GESTOR ou ADMIN
+- Query: `page`, `limit`
+- Gestor vê os lançamentos dos próprios contratos. Admin vê todos. Supervisor não acessa.
+- Response 200: paginação de lançamentos com `originalFileName`, totais (`insertedCount`, `skippedCount`, `deletedCount`, `notRegisteredCount`), `contract` e `user` (`id`, `name`)
+
+### GET /service-orders/imports/:id
+
+- Auth: JWT + GESTOR ou ADMIN
+- Response 200: o lançamento e `lines` (`lineNumber`, `status` `entered` ou `not_registered`, `osNumber`, `sectorName`, `resultado`, `reason`, `rawRow`, `resolvedAt`)
+- Gestor fora do contrato: `403`
+
+### GET /service-orders/imports/:id/file
+
+- Auth: JWT + GESTOR ou ADMIN
+- Response: arquivo original da planilha
+- Gestor fora do contrato: `403`
+
+### POST /service-orders/imports/:id/lines/:lineId/reprocess
+
+- Auth: JWT + GESTOR ou ADMIN
+- Body: `{ "row": { "Número OS": "", "Família": "", "Status da OS": "", "Endereço": "", "Número": "", "Bairro": "", "Resultado": "" } }`
+- A linha corrigida passa pelas mesmas regras da importação, no contrato do lançamento. Totais do upload não são reescritos.
+- Linha já registrada: `400`. Gestor fora do contrato: `403`.
+- Response 200: a linha atualizada. `status` `entered` quando passou; `not_registered` com o motivo novo quando continuou recusada.
+
+### POST /service-orders/bulk-delete
+
+- Auth: JWT + ADMIN
+- Body: `{ "ids": ["uuid"] }`
+- Lista vazia: `400`
+- Apaga só as OS informadas. Cada vistoria ligada, em qualquer status, sai antes da OS: o arquivo de storage sai antes da linha. Foto, assinatura, nota e pendência saem com a vistoria.
+- Tudo ou nada. Se algum id não existe, nada é apagado e a resposta é `404`.
+- Se a remoção de um arquivo falha, a transação não confirma e a resposta nomeia a OS que parou o lote: `A exclusão parou na OS {número}.`
+- Gestor, supervisor e fiscal: `403`
+- Response 204: vazio
 
 ### DELETE /service-orders/:id
 
 - Auth: JWT + ADMIN
 - Path: `id` (UUID da ordem de serviço)
-- Regra: não permite excluir OS vinculada a vistorias (`inspection.serviceOrderId`)
+- Usa a mesma rotina de `POST /service-orders/bulk-delete` para uma OS. Vistorias ligadas são apagadas junto, em qualquer status.
 - Response 204: vazio
 - Erros:
   - `404`: ordem de serviço não encontrada
-  - `400`: ordem de serviço vinculada a vistorias
+  - `400`: a exclusão parou nessa OS
 
 ## Investment Works (Obras de Investimento)
 
@@ -1454,8 +1520,9 @@ Response 200:
 
 - Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR
 - Regras:
-  - `serviceOrderId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
-  - para `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional.
+  - `serviceOrderId` é obrigatório para módulos diferentes de `CAMPO`, `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
+  - para `CAMPO`, `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional. Em Campo, `teamId` continua obrigatório.
+  - `POS_OBRA` exige OS cujo resultado está na lista fixa de pós-obra. Fora da lista, a API responde 400.
   - quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
   - quando `serviceOrderId` for enviado, o backend usa automaticamente o `contractId` da OS.
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.
@@ -1717,6 +1784,42 @@ Request JSON (parcial):
 ```
 
 Response 200: mesmo payload enxuto de `GET /inspections/:id`
+
+### POST /inspections/bulk-team
+
+- Auth: JWT + ADMIN
+- Response: `204` sem corpo
+- A troca de uma vistoria por vez continua em `PUT /inspections/:id`
+
+Request JSON:
+
+```json
+{
+  "inspectionIds": ["uuid-da-vistoria", "uuid-da-outra"],
+  "teamId": "uuid-da-equipe"
+}
+```
+
+Regras:
+
+- lista vazia, equipe inexistente ou vistoria inexistente: `400`, sem update
+- valida o lote inteiro antes de gravar. Um `teamId` novo em todas as vistorias aceitas, na mesma transação
+- a equipe precisa estar ligada ao contrato de cada vistoria (`team_contracts`). Vistoria sem `contractId`, ou equipe sem aquele contrato, recusa o lote
+- `module = SEGURANCA_TRABALHO` recusa o lote
+- `scorePercent` não é regravado. `service_orders.equipe` não muda
+- outro papel recebe `403`
+
+### DELETE /inspections/:id
+
+- Auth: JWT + FISCAL, GESTOR, SUPERVISOR ou ADMIN
+- Response: `204` sem corpo
+- Regra:
+  - `RASCUNHO` pode ser excluída pelos papéis acima
+  - qualquer outro status só o ADMIN exclui. Os demais papéis recebem `400` com `Só é possível excluir vistoria com status RASCUNHO`
+  - evidências e assinatura saem do storage antes da linha. Itens, evidências, assinatura, pendências e avisos saem em cascata
+  - a OS não é apagada
+  - se o módulo é `CAMPO`, `REMOTO` ou `POS_OBRA` e a vistoria tinha OS, `field`, `remote` ou `postWork` permanece verdadeiro só quando ainda existe outra vistoria do mesmo módulo nessa OS
+  - `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO` não alteram esses flags
 
 ### PUT /inspections/:id/items
 
@@ -1989,6 +2092,8 @@ Observação:
 
 - `resolutionEvidence` é opcional.
 - Pode ser URL (`http/https`) ou base64 (faz upload e salva URL).
+- Se o item já estiver resolvido, a mesma chamada ajusta as notas. Sem `resolutionEvidence`, a foto anterior permanece.
+- `POST /inspections/:id/reject-resolution` devolve a vistoria para `PENDENTE_AJUSTE` e reabre os itens não conformes (`resolvedAt` nulo). Notas e foto anteriores permanecem para o novo lançamento. Quem lançou resolve os itens de novo e chama `POST /inspections/:id/resolve`. O ciclo segue até a aprovação.
 
 Response 200:
 
@@ -2184,7 +2289,7 @@ Response 200:
 Regras importantes:
 
 - `externalId` é obrigatório.
-- `serviceOrderId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO` e `module != OBRAS_INVESTIMENTO` (OS deve estar cadastrada via `POST /service-orders/import`).
+- `serviceOrderId` é obrigatório para criar nova vistoria quando o módulo não é `CAMPO`, `SEGURANCA_TRABALHO` nem `OBRAS_INVESTIMENTO` (OS deve estar cadastrada via `POST /service-orders/import`). `POS_OBRA` só aceita OS da lista fixa de resultados.
 - Quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
 - `teamId` é obrigatório para criar nova vistoria quando `module != SEGURANCA_TRABALHO`.
 - `evaluationModule` (`CAMPO` | `POS_OBRA`) só se aplica a `OBRAS_INVESTIMENTO`; se omitido nesse módulo, assume `CAMPO`.
@@ -3079,6 +3184,7 @@ Response 200:
 
 - Criar vistoria (exige `serviceOrderId` para módulos que pedem OS; quando não houver OS, exige `contractId`)
 - Editar vistoria apenas em `RASCUNHO`
+- Excluir vistoria apenas em `RASCUNHO`
 - Paralisar vistoria
 - Finalizar vistoria
 - Resolver itens não conformes e pendências
@@ -3089,6 +3195,7 @@ Response 200:
 ### GESTOR
 
 - Criar/editar/finalizar vistorias (exige `serviceOrderId` para módulos que pedem OS; quando não houver OS, exige `contractId`)
+- Excluir vistoria apenas em `RASCUNHO`
 - Importar OS via Excel (`POST /service-orders/import`)
 - Paralisar e remover penalidade de paralisação (unparalyze)
 - Resolver itens não conformes e pendências
@@ -3100,6 +3207,7 @@ Response 200:
 
 - Mesmo nível hierárquico e mesmas permissões operacionais de `GESTOR`
 - Criar/editar/finalizar vistorias (exige `serviceOrderId` para módulos que pedem OS; quando não houver OS, exige `contractId`)
+- Excluir vistoria apenas em `RASCUNHO`
 - Importar OS via Excel (`POST /service-orders/import`)
 - Paralisar e remover penalidade de paralisação (unparalyze)
 - Resolver itens não conformes e pendências
@@ -3110,6 +3218,9 @@ Response 200:
 ### ADMIN
 
 - Todas as permissões operacionais do GESTOR
+- Excluir vistoria em qualquer status (`DELETE /inspections/:id`)
+- Trocar a equipe de várias vistorias de Qualidade (`POST /inspections/bulk-team`)
+- Excluir ordens de serviço, com as vistorias ligadas (`DELETE /service-orders/:id`, `POST /service-orders/bulk-delete`)
 - Importar OS via Excel (`POST /service-orders/import`)
 - CRUD de usuários, contratos/cidades, equipes, colaboradores e checklists
 - Relatórios dinâmicos: consultar tipos e schema do formulário (`GET /reports/types`, `GET /reports/types/:code/fields`)
@@ -3132,6 +3243,7 @@ Mensagens relevantes do domínio:
 - `contractId é obrigatório quando serviceOrderId não for informado.`
 - `Ordem de serviço não encontrada. Cadastre a OS via importação de Excel antes de criar a vistoria.`
 - `serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.`
+- `O resultado desta ordem de serviço não exige vistoria de pós-obra.`
 - `Não foi possível determinar o contractId da vistoria.`
 - `Você não tem acesso ao contrato informado para esta vistoria.`
 - `contractIds é obrigatório`
@@ -3147,6 +3259,13 @@ Mensagens relevantes do domínio:
 - `Todos os colaboradores informados devem existir na plataforma.`
 - `Vistoria não encontrada`
 - `Fiscal não pode editar vistoria após finalização`
+- `Só é possível excluir vistoria com status RASCUNHO`
+- `Informe ao menos uma ordem de serviço.`
+- `Informe ao menos uma vistoria.`
+- `A equipe não está ligada ao contrato desta vistoria.`
+- `A vistoria não tem contrato.`
+- `Vistoria de Segurança do Trabalho não entra na troca em lote.`
+- `A exclusão parou na OS {número}.`
 - `reason should not be empty`
 - `Não é possível adicionar assinatura em vistoria finalizada`
 - `Vistoria já foi finalizada`

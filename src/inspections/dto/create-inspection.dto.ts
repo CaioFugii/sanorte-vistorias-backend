@@ -45,7 +45,8 @@ export class CreateInspectionDto {
   @ValidateIf(
     (o: CreateInspectionDto) =>
       o.module !== ModuleType.SEGURANCA_TRABALHO &&
-      o.module !== ModuleType.OBRAS_INVESTIMENTO,
+      o.module !== ModuleType.OBRAS_INVESTIMENTO &&
+      o.module !== ModuleType.CAMPO,
   )
   @IsNotEmpty({
     message: 'serviceOrderId é obrigatório para criar uma nova vistoria.',
