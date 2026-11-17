@@ -37,6 +37,8 @@ import {
 import {
   isPostWorkRequired,
   POST_WORK_REQUIRED_MESSAGE,
+  postWorkEligibleResults,
+  postWorkEligibleSql,
 } from '../service-orders/post-work-eligibility';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { InspectionMineListItem } from './dto/inspection-mine-list-item.dto';
@@ -711,6 +713,14 @@ export class InspectionsService {
         investmentWorkId: filters.investmentWorkId,
       });
     }
+
+    query.andWhere(
+      `(inspection.module <> :postWorkListModule OR ${postWorkEligibleSql('serviceOrder')})`,
+      {
+        postWorkListModule: ModuleType.POS_OBRA,
+        postWorkEligibleResults: postWorkEligibleResults(),
+      },
+    );
 
     if (allowedContractIds !== null) {
       if (allowedContractIds.length === 0) {

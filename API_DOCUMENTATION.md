@@ -1578,6 +1578,7 @@ Observação: imagens de referência dos itens ficam no `GET /checklists/:id` (`
   - `page`, `limit`
 - Response: paginação de DTO **enxuto de listagem** (sem `items`, `checklist`, `createdBy`, `collaborators` e sem qualquer `passwordHash`)
 - Regra: esta listagem não retorna vistorias com status `RASCUNHO`
+- Regra: vistoria `POS_OBRA` só entra quando o resultado da OS exige pós-obra, a mesma lista das caixas do Painel de Controle. Fora da lista, a vistoria não aparece aqui nem na exportação.
 - Regra: se `status=RASCUNHO` for informado, o retorno é vazio (`data: []`)
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas vistorias vinculadas aos seus contratos (via `inspection.contractId`), inclusive quando não há OS
 

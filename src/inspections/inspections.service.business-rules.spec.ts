@@ -908,6 +908,41 @@ describe('InspectionsService - Regras de Negócio', () => {
     expect(inspectionsRepository.save).not.toHaveBeenCalled();
   });
 
+  it('lista de pós-obra segue a mesma lista de resultado das caixas', async () => {
+    const qb = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+
+    await service.findAll(
+      { module: ModuleType.POS_OBRA },
+      1,
+      10,
+      { role: UserRole.ADMIN },
+    );
+
+    const where = qb.andWhere.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(where).toContain('inspection.module <> :postWorkListModule');
+    expect(where).toContain('postWorkEligibleResults');
+    const params = qb.andWhere.mock.calls
+      .map((call) => call[1])
+      .find((value) => value?.postWorkListModule);
+    expect(params.postWorkListModule).toBe(ModuleType.POS_OBRA);
+    expect(params.postWorkEligibleResults).toEqual(
+      expect.arrayContaining(['REPOSICAO DE ASFALTO']),
+    );
+    expect(params.postWorkEligibleResults).not.toContain(
+      'COMPACTACAO E SELAGEM DA BASE',
+    );
+  });
+
   it('recusa segunda vistoria do mesmo módulo na mesma ordem de serviço', async () => {
     serviceOrderRepository.findOne.mockResolvedValue({
       id: 'service-order-id',
