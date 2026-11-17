@@ -28,6 +28,7 @@ import {
   getAllowedContractIds,
 } from '../common/auth/contract-scope.util';
 import {
+  InspectionStatus,
   ModuleType,
   ServiceOrderImportLineStatus,
   UserRole,
@@ -362,11 +363,13 @@ export class ServiceOrdersService {
       SELECT 1 FROM inspections summary_remote
       WHERE summary_remote.service_order_id = "serviceOrder"."id"
         AND summary_remote.module = :summaryRemoteModule
+        AND summary_remote.status <> :summaryDraftStatus
     )`;
     const postExists = `EXISTS (
       SELECT 1 FROM inspections summary_post
       WHERE summary_post.service_order_id = "serviceOrder"."id"
         AND summary_post.module = :summaryPostModule
+        AND summary_post.status <> :summaryDraftStatus
     )`;
 
     const query = this.serviceOrderRepository.createQueryBuilder('serviceOrder');
@@ -398,6 +401,7 @@ export class ServiceOrdersService {
       .setParameter('summaryPostTo', postRange.to)
       .setParameter('summaryRemoteModule', ModuleType.REMOTO)
       .setParameter('summaryPostModule', ModuleType.POS_OBRA)
+      .setParameter('summaryDraftStatus', InspectionStatus.RASCUNHO)
       .setParameter('postWorkEligibleResults', postWorkEligibleResults());
 
     const row = await query.getRawOne<{

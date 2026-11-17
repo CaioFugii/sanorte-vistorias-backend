@@ -1354,8 +1354,8 @@ Response 201:
 - Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Query: os mesmos filtros de `GET /service-orders`, menos a paginação. `from` e `to` são ignorados.
 - O mês é calculado no servidor, em `America/Sao_Paulo`. O cliente não envia o intervalo.
-- Remoto: OS com fim de execução no mês vigente. Feitas: desse total, as que têm ao menos uma vistoria `REMOTO`.
-- Pós-obra: OS com fim de execução no mês anterior e resultado que exige pós-obra. Feitas: desse total, as que têm ao menos uma vistoria `POS_OBRA`.
+- Remoto: OS com fim de execução no mês vigente. Feitas: desse total, as que têm ao menos uma vistoria `REMOTO` fora de `RASCUNHO`.
+- Pós-obra: OS com fim de execução no mês anterior e resultado que exige pós-obra. Feitas: desse total, as que têm ao menos uma vistoria `POS_OBRA` fora de `RASCUNHO`.
 - OS sem fim de execução fica de fora. Duas vistorias na mesma OS contam 1.
 - Escopo de contrato igual ao da listagem.
 
@@ -1523,6 +1523,7 @@ Response 200:
   - `serviceOrderId` é obrigatório para módulos diferentes de `CAMPO`, `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
   - para `CAMPO`, `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional. Em Campo, `teamId` continua obrigatório.
   - `POS_OBRA` exige OS cujo resultado está na lista fixa de pós-obra. Fora da lista, a API responde 400.
+  - uma OS aceita uma vistoria por módulo. Se já existir vistoria daquele módulo, inclusive rascunho, a API responde 400 `Esta ordem de serviço já tem vistoria de {módulo}.` Outro módulo na mesma OS continua permitido. A mesma trava vale na edição e no sync.
   - quando `serviceOrderId` não for enviado, `contractId` é obrigatório.
   - quando `serviceOrderId` for enviado, o backend usa automaticamente o `contractId` da OS.
   - `teamId` é obrigatório para módulos diferentes de `SEGURANCA_TRABALHO`.

@@ -9,7 +9,7 @@ import {
 import * as fs from 'fs/promises';
 import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DataSource, EntityManager } from 'typeorm';
+import { Repository, In, Not, DataSource, EntityManager } from 'typeorm';
 import {
   Inspection,
   InspectionItem,
@@ -302,6 +302,10 @@ export class InspectionsService {
       this.assertPostWorkEligibility(
         inspectionData.module,
         serviceOrder.resultado,
+      );
+      await this.assertServiceOrderModuleAvailable(
+        serviceOrderId,
+        inspectionData.module,
       );
       resolvedContractId = serviceOrder.contractId;
     } else {
@@ -1562,6 +1566,11 @@ export class InspectionsService {
         );
       }
       this.assertPostWorkEligibility(nextModule, serviceOrder.resultado);
+      await this.assertServiceOrderModuleAvailable(
+        nextServiceOrderId,
+        nextModule,
+        inspection.id,
+      );
     }
 
     await this.validateCollaboratorsForContractorTeam(
@@ -2312,6 +2321,13 @@ export class InspectionsService {
         }
         this.assertPostWorkEligibility(nextModule, serviceOrder.resultado);
       }
+      if (inspection.serviceOrderId) {
+        await this.assertServiceOrderModuleAvailable(
+          inspection.serviceOrderId,
+          nextModule,
+          inspection.id,
+        );
+      }
 
       if (this.isTeamRequired(nextModule) && !nextTeamId) {
         throw new BadRequestException(
@@ -2637,6 +2653,36 @@ export class InspectionsService {
       module !== ModuleType.OBRAS_INVESTIMENTO &&
       module !== ModuleType.CAMPO
     );
+  }
+
+  private async assertServiceOrderModuleAvailable(
+    serviceOrderId: string,
+    module: ModuleType,
+    currentInspectionId?: string,
+  ): Promise<void> {
+    const occupied = await this.inspectionsRepository.count({
+      where: {
+        serviceOrderId,
+        module,
+        ...(currentInspectionId ? { id: Not(currentInspectionId) } : {}),
+      },
+    });
+    if (occupied > 0) {
+      throw new BadRequestException(
+        `Esta ordem de serviço já tem vistoria de ${this.moduleLabel(module)}.`,
+      );
+    }
+  }
+
+  private moduleLabel(module: ModuleType): string {
+    const labels: Partial<Record<ModuleType, string>> = {
+      [ModuleType.CAMPO]: 'Campo',
+      [ModuleType.REMOTO]: 'Remoto',
+      [ModuleType.POS_OBRA]: 'Pós-obra',
+      [ModuleType.SEGURANCA_TRABALHO]: 'Segurança do Trabalho',
+      [ModuleType.OBRAS_INVESTIMENTO]: 'Obra de investimento',
+    };
+    return labels[module] ?? module;
   }
 
   private assertPostWorkEligibility(

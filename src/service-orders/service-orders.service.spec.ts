@@ -492,6 +492,8 @@ describe('ServiceOrdersService.summarize', () => {
     expect(sql).toContain('fim_execucao" IS NOT NULL');
     expect(sql).toContain('summaryRemoteModule');
     expect(sql).toContain('summaryPostModule');
+    expect(sql).toContain('summary_remote.status <> :summaryDraftStatus');
+    expect(sql).toContain('summary_post.status <> :summaryDraftStatus');
     expect(sql).toContain('postWorkEligibleResults');
     expect(sql).not.toContain('JOIN inspections');
 
@@ -505,6 +507,7 @@ describe('ServiceOrdersService.summarize', () => {
     expect(periods.summaryPostFrom).toBe(post.from);
     expect(periods.summaryPostTo).toBe(post.to);
     expect(periods.summaryRemoteFrom).not.toBe(periods.summaryPostFrom);
+    expect(periods.summaryDraftStatus).toBe('RASCUNHO');
 
     const where = qb.andWhere.mock.calls.map((call) => String(call[0])).join('\n');
     expect(where).toContain('serviceOrder.contractId = :contractId');

@@ -52,6 +52,7 @@ describe('InspectionsService - Regras de Negócio', () => {
       save: jest.fn(),
       findAndCount: jest.fn(),
       createQueryBuilder: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
     };
     inspectionItemsRepository = {
       find: jest.fn(),
@@ -903,6 +904,30 @@ describe('InspectionsService - Regras de Negócio', () => {
       ),
     ).rejects.toThrow(
       'O resultado desta ordem de serviço não exige vistoria de pós-obra.',
+    );
+    expect(inspectionsRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('recusa segunda vistoria do mesmo módulo na mesma ordem de serviço', async () => {
+    serviceOrderRepository.findOne.mockResolvedValue({
+      id: 'service-order-id',
+      contractId: 'contract-id',
+      resultado: 'FIM DO DIA',
+    });
+    inspectionsRepository.count.mockResolvedValue(1);
+
+    await expect(
+      service.create(
+        {
+          module: ModuleType.REMOTO,
+          checklistId: 'checklist-id',
+          teamId: 'team-id',
+          serviceOrderId: 'service-order-id',
+        },
+        'outro-usuario',
+      ),
+    ).rejects.toThrow(
+      'Esta ordem de serviço já tem vistoria de Remoto.',
     );
     expect(inspectionsRepository.save).not.toHaveBeenCalled();
   });
