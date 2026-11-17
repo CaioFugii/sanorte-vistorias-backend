@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { ServiceOrdersController } from './service-orders.controller';
 import { ServiceOrdersService } from './service-orders.service';
 import {
+  currentMonthToDate,
   monthDateRange,
   previousYearMonth,
   saoPauloYearMonth,
@@ -422,6 +423,10 @@ describe('ServiceOrdersService.findForExport', () => {
       'serviceOrder.equipe ILIKE :equipe',
       { equipe: '%PDA 01%' },
     );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      `DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) BETWEEN :from AND :to`,
+      { from: '2026-08-01', to: '2026-08-31' },
+    );
     expect(qb.take).toHaveBeenCalledWith(3);
   });
 
@@ -499,7 +504,7 @@ describe('ServiceOrdersService.summarize', () => {
 
     const periods = Object.fromEntries(qb.setParameter.mock.calls);
     const current = saoPauloYearMonth(new Date());
-    const remote = monthDateRange(current.year, current.month);
+    const remote = currentMonthToDate();
     const previous = previousYearMonth(current.year, current.month);
     const post = monthDateRange(previous.year, previous.month);
     expect(periods.summaryRemoteFrom).toBe(remote.from);

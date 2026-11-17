@@ -1,4 +1,5 @@
 import {
+  currentMonthToDate,
   monthDateRange,
   previousYearMonth,
   saoPauloYearMonth,
@@ -20,6 +21,16 @@ describe('service order periods', () => {
     expect(previousYearMonth(2026, 1)).toEqual({ year: 2025, month: 12 });
   });
 
+  it('o mês vigente da caixa vai do dia 1 até hoje em São Paulo', () => {
+    expect(currentMonthToDate(new Date('2026-11-17T02:30:00.000Z'))).toEqual({
+      from: '2026-11-01',
+      to: '2026-11-16',
+    });
+    expect(currentMonthToDate(new Date('2026-11-17T03:30:00.000Z'))).toEqual({
+      from: '2026-11-01',
+      to: '2026-11-17',
+    });
+  });
   it('fevereiro e meses de 31 dias fecham no último dia', () => {
     expect(monthDateRange(2026, 2)).toEqual({
       from: '2026-02-01',

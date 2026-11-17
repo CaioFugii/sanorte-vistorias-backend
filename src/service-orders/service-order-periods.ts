@@ -19,6 +19,27 @@ export function previousYearMonth(
   return { year, month: month - 1 };
 }
 
+export function saoPauloToday(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: SAO_PAULO,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+  return `${read('year')}-${read('month')}-${read('day')}`;
+}
+
+export function currentMonthToDate(date = new Date()): { from: string; to: string } {
+  const { year, month } = saoPauloYearMonth(date);
+  const mm = String(month).padStart(2, '0');
+  return {
+    from: `${year}-${mm}-01`,
+    to: saoPauloToday(date),
+  };
+}
+
 export function monthDateRange(
   year: number,
   month: number,

@@ -131,7 +131,7 @@ Authorization: Bearer <token>
 
 - Paginação padrão em listas: `page`, `limit`.
 - `GET /service-orders`: filtros por `osNumber` (busca parcial, mínimo 3 caracteres), `sectorId`, `contractId`, `from`/`to` (`fimExecucao`), `field`, `remote`, `postWork` (boolean `true`/`false`; existe vistoria daquele módulo, não a coluna booleana), `postWorkEligible` (`true` devolve só OS cujo resultado exige pós-obra), `equipe` e `resultado` (busca parcial, mínimo 3 caracteres). A resposta inclui `postWorkRequired`. `field`, `remote` e `postWork` na resposta significam que existe vistoria daquele módulo.
-- `GET /service-orders/summary`: mesmos filtros, exceto `from`/`to`, que são ignorados. Conta OS de Remoto no mês vigente e de Pós-obra no mês anterior (`America/Sao_Paulo`).
+- `GET /service-orders/summary`: mesmos filtros, exceto `from`/`to`, que são ignorados. Conta OS de Remoto no mês vigente, do dia 1 até hoje, e de Pós-obra no mês anterior (`America/Sao_Paulo`).
 - `GET /service-orders/export`: mesmos filtros de `GET /service-orders` (sem paginação); resposta binária `.xlsx`.
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /teams`: filtros por `name` (busca parcial), `contractId` e `sectorId`.
@@ -1354,7 +1354,7 @@ Response 201:
 - Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR ou ADMIN
 - Query: os mesmos filtros de `GET /service-orders`, menos a paginação. `from` e `to` são ignorados.
 - O mês é calculado no servidor, em `America/Sao_Paulo`. O cliente não envia o intervalo.
-- Remoto: OS com fim de execução no mês vigente. Feitas: desse total, as que têm ao menos uma vistoria `REMOTO` fora de `RASCUNHO`.
+- Remoto: OS com fim de execução no mês vigente, do dia 1 até hoje, no mesmo calendário da lista (`America/Sao_Paulo`). Feitas: desse total, as que têm ao menos uma vistoria `REMOTO` fora de `RASCUNHO`.
 - Pós-obra: OS com fim de execução no mês anterior e resultado que exige pós-obra. Feitas: desse total, as que têm ao menos uma vistoria `POS_OBRA` fora de `RASCUNHO`.
 - OS sem fim de execução fica de fora. Duas vistorias na mesma OS contam 1.
 - Escopo de contrato igual ao da listagem.

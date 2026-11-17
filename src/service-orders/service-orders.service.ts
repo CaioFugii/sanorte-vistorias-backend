@@ -42,6 +42,7 @@ import {
   monthDateRange,
   previousYearMonth,
   saoPauloYearMonth,
+  currentMonthToDate,
 } from './service-order-periods';
 
 export interface ImportResult {
@@ -225,23 +226,50 @@ export class ServiceOrdersService {
     }
 
     if (filters.from || filters.to) {
-      const fromDate = filters.from
-        ? this.parseFimExecucaoBoundary(filters.from, 'start')
-        : undefined;
-      const toDate = filters.to
-        ? this.parseFimExecucaoBoundary(filters.to, 'end')
-        : undefined;
+      const from = filters.from?.trim();
+      const to = filters.to?.trim();
+      const dateOnly = (value?: string) =>
+        value == null || /^\d{4}-\d{2}-\d{2}$/.test(value);
+      if (dateOnly(from) && dateOnly(to)) {
+        if (from && to) {
+          this.assertFimExecucaoRangeAtMostTwoYears(
+            new Date(`${from}T00:00:00.000Z`),
+            new Date(`${to}T00:00:00.000Z`),
+          );
+          query.andWhere(
+            `DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) BETWEEN :from AND :to`,
+            { from, to },
+          );
+        } else if (from) {
+          query.andWhere(
+            `DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) >= :from`,
+            { from },
+          );
+        } else if (to) {
+          query.andWhere(
+            `DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) <= :to`,
+            { to },
+          );
+        }
+      } else {
+        const fromDate = from
+          ? this.parseFimExecucaoBoundary(from, 'start')
+          : undefined;
+        const toDate = to
+          ? this.parseFimExecucaoBoundary(to, 'end')
+          : undefined;
 
-      if (fromDate && toDate) {
-        this.assertFimExecucaoRangeAtMostTwoYears(fromDate, toDate);
-        query.andWhere('serviceOrder.fimExecucao BETWEEN :from AND :to', {
-          from: fromDate,
-          to: toDate,
-        });
-      } else if (fromDate) {
-        query.andWhere('serviceOrder.fimExecucao >= :from', { from: fromDate });
-      } else if (toDate) {
-        query.andWhere('serviceOrder.fimExecucao <= :to', { to: toDate });
+        if (fromDate && toDate) {
+          this.assertFimExecucaoRangeAtMostTwoYears(fromDate, toDate);
+          query.andWhere('serviceOrder.fimExecucao BETWEEN :from AND :to', {
+            from: fromDate,
+            to: toDate,
+          });
+        } else if (fromDate) {
+          query.andWhere('serviceOrder.fimExecucao >= :from', { from: fromDate });
+        } else if (toDate) {
+          query.andWhere('serviceOrder.fimExecucao <= :to', { to: toDate });
+        }
       }
     }
 
@@ -354,7 +382,7 @@ export class ServiceOrdersService {
     },
   ): Promise<ServiceOrderStageSummary> {
     const current = saoPauloYearMonth(new Date());
-    const remoteRange = monthDateRange(current.year, current.month);
+    const remoteRange = currentMonthToDate();
     const previous = previousYearMonth(current.year, current.month);
     const postRange = monthDateRange(previous.year, previous.month);
     const remotePeriod = `"serviceOrder"."fim_execucao" IS NOT NULL AND DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) BETWEEN :summaryRemoteFrom AND :summaryRemoteTo`;
