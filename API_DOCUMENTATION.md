@@ -387,6 +387,9 @@ Resposta paginada:
   "field": false,
   "remote": false,
   "postWork": false,
+  "fieldInspectionId": null,
+  "remoteInspectionId": null,
+  "postWorkInspectionId": null,
   "postWorkRequired": false,
   "createdAt": "2026-02-19T12:00:00.000Z",
   "updatedAt": "2026-02-19T12:00:00.000Z"
@@ -1345,7 +1348,7 @@ Response 201:
   - `postWorkEligible` (opcional; `true` — resultado exige vistoria de pós-obra)
   - `equipe` (opcional; busca parcial na equipe PDA; mínimo 3 caracteres)
   - `resultado` (opcional; busca parcial no resultado da OS; mínimo 3 caracteres)
-- Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`. Cada item traz `postWorkRequired` e `inspectionCount` (vistorias ligadas, qualquer status). `field`, `remote` e `postWork` indicam se existe vistoria daquele módulo, em qualquer status.
+- Response 200: paginação de `ServiceOrder` com relação `sector`, ordenados por `osNumber`. Cada item traz `postWorkRequired` e `inspectionCount` (vistorias ligadas, qualquer status). `field`, `remote` e `postWork` indicam se existe vistoria daquele módulo, em qualquer status. `fieldInspectionId`, `remoteInspectionId` e `postWorkInspectionId` trazem o identificador da vistoria mais recente daquele módulo (`externalId`, ou o `id` quando a vistoria não tem `externalId`), para abrir `/inspections/:id`. Ficam `null` quando não há vistoria.
 - Uso: listar OS disponíveis para vincular a novas vistorias. Campo não exige OS. Pós-obra só aceita OS com `postWorkEligible=true`. Remoto continua exigindo OS.
 - Escopo: `GESTOR`/`SUPERVISOR`/`FISCAL` veem apenas OS dos contratos permitidos (`serviceOrder.contractId`)
 

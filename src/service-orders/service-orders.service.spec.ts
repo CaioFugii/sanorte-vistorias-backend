@@ -329,7 +329,11 @@ describe('ServiceOrdersService.findAll', () => {
     const inspectionRepository = {
       manager: {
         query: jest.fn().mockResolvedValue([
-          { serviceOrderId: 'so-1', module: 'POS_OBRA' },
+          {
+            serviceOrderId: 'so-1',
+            module: 'POS_OBRA',
+            inspectionId: 'inspection-pos',
+          },
         ]),
       },
     };
@@ -354,6 +358,9 @@ describe('ServiceOrdersService.findAll', () => {
       field: false,
       remote: false,
       inspectionCount: 3,
+      fieldInspectionId: null,
+      remoteInspectionId: null,
+      postWorkInspectionId: 'inspection-pos',
     });
     expect(qb.addSelect).toHaveBeenCalledWith(
       expect.stringContaining('inspection_count.service_order_id'),
@@ -417,6 +424,9 @@ describe('ServiceOrdersService.findForExport', () => {
         remote: false,
         postWork: false,
         postWorkRequired: false,
+        fieldInspectionId: null,
+        remoteInspectionId: null,
+        postWorkInspectionId: null,
       },
     ]);
     expect(qb.andWhere).toHaveBeenCalledWith(

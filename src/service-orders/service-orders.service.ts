@@ -335,24 +335,40 @@ export class ServiceOrdersService {
 
   private async attachStagePresence<T extends ServiceOrder>(
     rows: T[],
-  ): Promise<Array<T & { postWorkRequired: boolean }>> {
+  ): Promise<
+    Array<
+      T & {
+        postWorkRequired: boolean;
+        fieldInspectionId: string | null;
+        remoteInspectionId: string | null;
+        postWorkInspectionId: string | null;
+      }
+    >
+  > {
     const ids = rows.map((row) => row.id).filter(Boolean);
     const present = new Map<string, Set<string>>();
+    const externalIds = new Map<string, string | null>();
+    const linkKey = (serviceOrderId: string, module: string) =>
+      `${serviceOrderId}:${module}`;
     if (ids.length > 0) {
       const found = await this.inspectionRepository.manager.query<
-        Array<{ serviceOrderId: string; module: string }>
+        Array<{ serviceOrderId: string; module: string; inspectionId: string | null }>
       >(
-        `SELECT service_order_id AS "serviceOrderId", module
+        `SELECT DISTINCT ON (service_order_id, module)
+           service_order_id AS "serviceOrderId",
+           module,
+           COALESCE(external_id, id) AS "inspectionId"
          FROM inspections
          WHERE service_order_id = ANY($1)
            AND module = ANY($2)
-         GROUP BY service_order_id, module`,
+         ORDER BY service_order_id, module, created_at DESC`,
         [ids, [ModuleType.CAMPO, ModuleType.REMOTO, ModuleType.POS_OBRA]],
       );
       for (const row of found) {
         const stages = present.get(row.serviceOrderId) ?? new Set<string>();
         stages.add(row.module);
         present.set(row.serviceOrderId, stages);
+        externalIds.set(linkKey(row.serviceOrderId, row.module), row.inspectionId ?? null);
       }
     }
 
@@ -363,6 +379,12 @@ export class ServiceOrdersService {
       row.postWork = stages.has(ModuleType.POS_OBRA);
       return Object.assign(row, {
         postWorkRequired: isPostWorkRequired(row.resultado),
+        fieldInspectionId:
+          externalIds.get(linkKey(row.id, ModuleType.CAMPO)) ?? null,
+        remoteInspectionId:
+          externalIds.get(linkKey(row.id, ModuleType.REMOTO)) ?? null,
+        postWorkInspectionId:
+          externalIds.get(linkKey(row.id, ModuleType.POS_OBRA)) ?? null,
       });
     });
   }
