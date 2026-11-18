@@ -255,14 +255,16 @@ describe('ServiceOrdersService import history', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('corrigir a família insere e não reescreve o total original', async () => {
-    importRepository.findOne.mockResolvedValue({
+  it('corrigir a família insere e atualiza os totais do lançamento', async () => {
+    const record = {
       id: 'import-1',
       contractId: 'contract-1',
       insertedCount: 3,
+      notRegisteredCount: 1,
       user: { id: 'user-1', name: 'Admin' },
       contract: { id: 'contract-1', name: 'Contrato' },
-    });
+    };
+    importRepository.findOne.mockResolvedValue(record);
     importLineRepository.findOne.mockResolvedValue({
       id: 'line-1',
       importId: 'import-1',
@@ -281,7 +283,9 @@ describe('ServiceOrdersService import history', () => {
     expect(updated.status).toBe(ServiceOrderImportLineStatus.ENTERED);
     expect(updated.resolvedAt).toBeInstanceOf(Date);
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(importRepository.save).not.toHaveBeenCalled();
+    expect(importRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ insertedCount: 4, notRegisteredCount: 0 }),
+    );
   });
 
   it('supervisor não vê o histórico e gestor de outro contrato recebe 403', async () => {

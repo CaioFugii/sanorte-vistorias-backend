@@ -1400,7 +1400,7 @@ Response 200:
 - Campos adicionais em cada registro: `field`, `remote`, `postWork` (boolean, default `false`)
 - Regra de escopo: `GESTOR`/`SUPERVISOR` só pode importar para contratos aos quais já está vinculado
 
-O upload grava o arquivo, o contrato, o usuário, os totais e as linhas. `errors` traz a lista completa do que não foi registrado, sem corte. Família `VISTORIA` entra só em `skipped`. OS repetida no arquivo entra em `errors` e em `notRegistered`. OS já existente é atualizada, conta em `inserted` e aparece nas linhas que entraram. Os totais deste upload não mudam quando uma linha é reprocessada depois.
+O upload grava o arquivo, o contrato, o usuário, os totais e as linhas. `errors` traz a lista completa do que não foi registrado, sem corte. Família `VISTORIA` entra só em `skipped`. OS repetida no arquivo entra em `errors` e em `notRegistered`. OS já existente é atualizada, conta em `inserted` e aparece nas linhas que entraram. Quando uma linha não registrada passa a entrar, `insertedCount` sobe 1 e `notRegisteredCount` desce 1.
 
 Response 200:
 

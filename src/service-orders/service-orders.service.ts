@@ -936,6 +936,7 @@ export class ServiceOrdersService {
       line.createdNew = savedOrder.createdNew;
       line.removedAt = null;
       const saved = await this.importLineRepository.save(line);
+      await this.countResolvedLine(record);
       return this.toImportLine(saved);
     }
 
@@ -960,6 +961,7 @@ export class ServiceOrdersService {
       line.serviceOrderId = null;
       line.removedAt = null;
       const saved = await this.importLineRepository.save(line);
+      await this.countResolvedLine(record);
       return this.toImportLine(saved);
     }
 
@@ -978,6 +980,12 @@ export class ServiceOrdersService {
     line.resolvedAt = null;
     const saved = await this.importLineRepository.save(line);
     return this.toImportLine(saved);
+  }
+
+  private async countResolvedLine(record: ServiceOrderImport): Promise<void> {
+    record.insertedCount += 1;
+    record.notRegisteredCount = Math.max(0, record.notRegisteredCount - 1);
+    await this.importRepository.save(record);
   }
 
   private classifyImportRow(
