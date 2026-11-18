@@ -39,10 +39,8 @@ import {
   postWorkEligibleSql,
 } from './post-work-eligibility';
 import {
-  monthDateRange,
-  previousYearMonth,
-  saoPauloYearMonth,
-  currentMonthToDate,
+  referenceMonthFromRange,
+  summaryPeriods,
 } from './service-order-periods';
 
 export interface ImportResult {
@@ -401,12 +399,13 @@ export class ServiceOrdersService {
       equipe?: string;
       resultado?: string;
       postWorkEligible?: boolean;
+      from?: string;
+      to?: string;
     },
   ): Promise<ServiceOrderStageSummary> {
-    const current = saoPauloYearMonth(new Date());
-    const remoteRange = currentMonthToDate();
-    const previous = previousYearMonth(current.year, current.month);
-    const postRange = monthDateRange(previous.year, previous.month);
+    const periods = summaryPeriods(referenceMonthFromRange(filters.from, filters.to));
+    const remoteRange = periods.remote;
+    const postRange = periods.postWork;
     const remotePeriod = `"serviceOrder"."fim_execucao" IS NOT NULL AND DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) BETWEEN :summaryRemoteFrom AND :summaryRemoteTo`;
     const postPeriod = `"serviceOrder"."fim_execucao" IS NOT NULL AND DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")) BETWEEN :summaryPostFrom AND :summaryPostTo AND ${postWorkEligibleSql('serviceOrder')}`;
     const remoteExists = `EXISTS (

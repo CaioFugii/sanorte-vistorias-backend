@@ -56,6 +56,8 @@ export class ServiceOrdersController {
       equipe: query.equipe,
       resultado: query.resultado,
       postWorkEligible: query.postWorkEligible,
+      from: query.from,
+      to: query.to,
     });
   }
 

@@ -6,12 +6,7 @@ import { ServiceOrder } from '../entities';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ServiceOrdersController } from './service-orders.controller';
 import { ServiceOrdersService } from './service-orders.service';
-import {
-  currentMonthToDate,
-  monthDateRange,
-  previousYearMonth,
-  saoPauloYearMonth,
-} from './service-order-periods';
+import { summaryPeriods } from './service-order-periods';
 
 describe('ServiceOrdersService.remove', () => {
   let service: ServiceOrdersService;
@@ -486,14 +481,14 @@ describe('ServiceOrdersService.summarize', () => {
     );
   });
 
-  it('conta OS do mês vigente e do mês anterior e ignora o filtro de data', async () => {
+  it('conta o remoto no mês escolhido e a pós-obra no mês anterior', async () => {
     const summary = await service.summarize(
       { role: 'ADMIN' },
       {
         contractId: 'contract-1',
-        from: '2020-01-01',
-        to: '2020-01-31',
-      } as any,
+        from: '2026-10-01',
+        to: '2026-10-31',
+      },
     );
 
     const sql = [
@@ -513,15 +508,13 @@ describe('ServiceOrdersService.summarize', () => {
     expect(sql).not.toContain('JOIN inspections');
 
     const periods = Object.fromEntries(qb.setParameter.mock.calls);
-    const current = saoPauloYearMonth(new Date());
-    const remote = currentMonthToDate();
-    const previous = previousYearMonth(current.year, current.month);
-    const post = monthDateRange(previous.year, previous.month);
-    expect(periods.summaryRemoteFrom).toBe(remote.from);
-    expect(periods.summaryRemoteTo).toBe(remote.to);
-    expect(periods.summaryPostFrom).toBe(post.from);
-    expect(periods.summaryPostTo).toBe(post.to);
-    expect(periods.summaryRemoteFrom).not.toBe(periods.summaryPostFrom);
+    const expected = summaryPeriods({ year: 2026, month: 10 });
+    expect(periods.summaryRemoteFrom).toBe(expected.remote.from);
+    expect(periods.summaryRemoteTo).toBe(expected.remote.to);
+    expect(periods.summaryPostFrom).toBe(expected.postWork.from);
+    expect(periods.summaryPostTo).toBe(expected.postWork.to);
+    expect(periods.summaryRemoteFrom).toBe('2026-10-01');
+    expect(periods.summaryPostFrom).toBe('2026-09-01');
     expect(periods.summaryDraftStatus).toBe('RASCUNHO');
 
     const where = qb.andWhere.mock.calls.map((call) => String(call[0])).join('\n');
@@ -531,5 +524,23 @@ describe('ServiceOrdersService.summarize', () => {
       remote: { total: 4, done: 1 },
       postWork: { total: 2, done: 2 },
     });
+  });
+
+  it('sem mês escolhido usa o mês calendário e ignora intervalo que cruza meses', async () => {
+    await service.summarize({ role: 'ADMIN' }, {});
+    let periods = Object.fromEntries(qb.setParameter.mock.calls);
+    const current = summaryPeriods(undefined);
+    expect(periods.summaryRemoteFrom).toBe(current.remote.from);
+    expect(periods.summaryRemoteTo).toBe(current.remote.to);
+    expect(periods.summaryPostFrom).toBe(current.postWork.from);
+
+    qb.setParameter.mockClear();
+    await service.summarize(
+      { role: 'ADMIN' },
+      { from: '2020-01-01', to: '2020-03-01' },
+    );
+    periods = Object.fromEntries(qb.setParameter.mock.calls);
+    expect(periods.summaryRemoteFrom).toBe(current.remote.from);
+    expect(periods.summaryPostFrom).toBe(current.postWork.from);
   });
 });
