@@ -413,6 +413,32 @@ export class DashboardsController {
     });
   }
 
+  @Get('quality/field-supervisors-ranking')
+  getQualityFieldSupervisorsRanking(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
+    return this.dashboardsService.getQualityFieldSupervisorsRanking({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
+  @Get('quality/coordinators-ranking')
+  getQualityCoordinatorsRanking(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
+    return this.dashboardsService.getQualityCoordinatorsRanking({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
   @Get('quality/foremen-ranking')
   getQualityForemenRanking(
     @CurrentUser() user: any,

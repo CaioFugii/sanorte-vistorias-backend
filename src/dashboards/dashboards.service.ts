@@ -33,6 +33,9 @@ import {
   TeamRankingMetric,
   TeamPerformanceByTeamsResponseDto,
   ForemenRankingResponseDto,
+  FieldSupervisorsRankingResponseDto,
+  CoordinatorsRankingResponseDto,
+  HierarchyRankingItemDto,
 } from './dto';
 
 const MAX_DATE_RANGE_YEARS = 2;
@@ -2764,6 +2767,199 @@ export class DashboardsService {
       to: filters.to,
       foremen,
     };
+  }
+
+  async getQualityFieldSupervisorsRanking(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<FieldSupervisorsRankingResponseDto> {
+    const ranking = await this.getQualityHierarchyRanking(filters, 'supervisor');
+    return {
+      from: ranking.from,
+      to: ranking.to,
+      supervisors: ranking.people,
+    };
+  }
+
+  async getQualityCoordinatorsRanking(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<CoordinatorsRankingResponseDto> {
+    const ranking = await this.getQualityHierarchyRanking(filters, 'coordinator');
+    return {
+      from: ranking.from,
+      to: ranking.to,
+      coordinators: ranking.people,
+    };
+  }
+
+  private async getQualityHierarchyRanking(
+    filters: {
+      user?: any;
+      from: string;
+      to: string;
+      contractId?: string;
+    },
+    level: 'supervisor' | 'coordinator',
+  ): Promise<{ from: string; to: string; people: HierarchyRankingItemDto[] }> {
+    this.validateDateRange(filters.from, filters.to);
+    const personAlias = level === 'supervisor' ? 'fieldSupervisor' : 'coordinator';
+
+    const summaryQb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.team', 'team')
+      .innerJoin('team.foreman', 'foreman')
+      .innerJoin('foreman.fieldSupervisor', 'fieldSupervisor');
+    if (level === 'coordinator') {
+      summaryQb.innerJoin('fieldSupervisor.coordinator', 'coordinator');
+    }
+    summaryQb
+      .select(`${personAlias}.id`, 'personId')
+      .addSelect(`${personAlias}.name`, 'personName')
+      .addSelect('AVG(inspection.scorePercent)', 'averagePercent')
+      .addSelect('COUNT(inspection.id)', 'inspectionsCount')
+      .addSelect(
+        `SUM(CASE WHEN inspection.status IN (:...pendingStatuses) THEN 1 ELSE 0 END)`,
+        'pendingAdjustmentsCount',
+      )
+      .addSelect(
+        `SUM(CASE WHEN inspection.status = :resolvedStatus THEN 1 ELSE 0 END)`,
+        'resolvedCount',
+      )
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .setParameter('pendingStatuses', OPEN_PENDING_STATUSES)
+      .setParameter('resolvedStatus', InspectionStatus.RESOLVIDA)
+      .groupBy(`${personAlias}.id`)
+      .addGroupBy(`${personAlias}.name`);
+
+    const nonConformitiesQb = this.inspectionsRepository
+      .createQueryBuilder('inspection')
+      .innerJoin('inspection.team', 'team')
+      .innerJoin('team.foreman', 'foreman')
+      .innerJoin('foreman.fieldSupervisor', 'fieldSupervisor');
+    if (level === 'coordinator') {
+      nonConformitiesQb.innerJoin('fieldSupervisor.coordinator', 'coordinator');
+    }
+    nonConformitiesQb
+      .select(`${personAlias}.id`, 'personId')
+      .addSelect('COUNT(inspectionItem.id)', 'nonConformitiesCount')
+      .innerJoin('inspection.items', 'inspectionItem')
+      .where('inspection.status != :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .andWhere('inspectionItem.answer = :nonConformAnswer', {
+        nonConformAnswer: ChecklistAnswer.NAO_CONFORME,
+      })
+      .groupBy(`${personAlias}.id`);
+
+    this.applyQualityHierarchyScope(summaryQb, filters);
+    this.applyQualityHierarchyScope(nonConformitiesQb, filters);
+
+    const [summaryRows, nonConformityRows] = await Promise.all([
+      summaryQb.getRawMany<{
+        personId: string;
+        personName: string;
+        averagePercent: string | null;
+        inspectionsCount: string;
+        pendingAdjustmentsCount: string;
+        resolvedCount: string;
+      }>(),
+      nonConformitiesQb.getRawMany<{
+        personId: string;
+        nonConformitiesCount: string;
+      }>(),
+    ]);
+
+    const nonConformitiesByPerson = new Map(
+      nonConformityRows.map((row) => [
+        row.personId,
+        parseInt(row.nonConformitiesCount ?? '0', 10),
+      ]),
+    );
+    const teamsByPerson = await this.teamsByHierarchyPerson(
+      level,
+      summaryRows.map((row) => row.personId),
+    );
+    const people = summaryRows
+      .map((row) => ({
+        id: row.personId,
+        name: row.personName,
+        teams: teamsByPerson.get(row.personId) ?? [],
+        averagePercent: roundTo2(parseFloat(row.averagePercent ?? '0')),
+        inspectionsCount: parseInt(row.inspectionsCount ?? '0', 10),
+        nonConformitiesCount: nonConformitiesByPerson.get(row.personId) ?? 0,
+        pendingAdjustmentsCount: parseInt(
+          row.pendingAdjustmentsCount ?? '0',
+          10,
+        ),
+        resolvedCount: parseInt(row.resolvedCount ?? '0', 10),
+      }))
+      .sort((a, b) => {
+        if (b.averagePercent !== a.averagePercent) {
+          return b.averagePercent - a.averagePercent;
+        }
+        return a.name.localeCompare(b.name, 'pt-BR');
+      });
+
+    return { from: filters.from, to: filters.to, people };
+  }
+
+  private applyQualityHierarchyScope(
+    qb: { andWhere: (...args: any[]) => any },
+    filters: { user?: any; from: string; to: string; contractId?: string },
+  ): void {
+    this.applyQualityFilters(qb as any, { sector: 'QUALITY' });
+    this.applyQualityCalendarPeriod(qb as any, filters);
+    const periodModule = this.resolvePeriodModule(undefined, 'QUALITY');
+    this.applyDashboardContractScope(qb as any, {
+      user: filters.user,
+      contractId: filters.contractId,
+      module: periodModule,
+    });
+  }
+
+  private async teamsByHierarchyPerson(
+    level: 'supervisor' | 'coordinator',
+    personIds: string[],
+  ): Promise<Map<string, Array<{ id: string; name: string }>>> {
+    const grouped = new Map<string, Array<{ id: string; name: string }>>();
+    if (personIds.length === 0) return grouped;
+
+    const qb = this.teamRepository
+      .createQueryBuilder('team')
+      .innerJoin('team.foreman', 'foreman')
+      .innerJoin('foreman.fieldSupervisor', 'fieldSupervisor')
+      .select('team.id', 'id')
+      .addSelect('team.name', 'name')
+      .orderBy('team.name', 'ASC');
+    if (level === 'coordinator') {
+      qb.innerJoin('fieldSupervisor.coordinator', 'coordinator')
+        .addSelect('coordinator.id', 'personId')
+        .where('coordinator.id IN (:...personIds)', { personIds });
+    } else {
+      qb.addSelect('fieldSupervisor.id', 'personId').where(
+        'fieldSupervisor.id IN (:...personIds)',
+        { personIds },
+      );
+    }
+
+    const rows = await qb.getRawMany<{
+      id: string;
+      name: string;
+      personId: string;
+    }>();
+    for (const row of rows) {
+      const current = grouped.get(row.personId) ?? [];
+      current.push({ id: row.id, name: row.name });
+      grouped.set(row.personId, current);
+    }
+    return grouped;
   }
 
   private applyQualityInspectorModuleFilter(

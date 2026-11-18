@@ -41,7 +41,7 @@ Authorization: Bearer <token>
   - consulta de formulário para renderização no frontend (sem persistência)
 - Sync offline: `POST /sync/inspections`
 - Upload genérico: `POST /uploads`, `DELETE /uploads/:publicId`
-- Dashboards: `GET /dashboards/overview`, `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/quality/inspectors-production`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/quality/foremen-ranking`, `GET /dashboards/safety-work/foremen-ranking`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
+- Dashboards: `GET /dashboards/overview`, `GET /dashboards/summary`, `GET /dashboards/quality/summary`, `GET /dashboards/safety-work/summary`, `GET /dashboards/ranking/teams`, `GET /dashboards/ranking/teams/export`, `GET /dashboards/ranking/teams/safety-work`, `GET /dashboards/teams/:teamId`, `GET /dashboards/quality-by-service`, `GET /dashboards/current-month-by-service`, `GET /dashboards/safety-work/low-score-collaborators`, `GET /dashboards/quality/inspectors-production`, `GET /dashboards/safety-work/inspectors-production`, `GET /dashboards/quality/field-supervisors-ranking`, `GET /dashboards/quality/coordinators-ranking`, `GET /dashboards/quality/foremen-ranking`, `GET /dashboards/safety-work/foremen-ranking`, `GET /dashboards/team-performance-by-teams`, `GET /dashboards/non-conformities/by-checklist`, `GET /dashboards/non-conformities/by-team` (inclui aliases `quality/*` e `safety-work/*`; ver `Dashboards`)
 
 ### Regras críticas que impactam UI
 
@@ -2915,6 +2915,73 @@ Response 200:
 - Agrupa pelo usuário criador da vistoria (`createdBy`), no fuso `America/Sao_Paulo`, pela data de `COALESCE(inspection.finalizedAt, inspection.createdAt)` — o mesmo recorte dos outros painéis de Qualidade.
 - Escopo: `GESTOR`/`SUPERVISOR` vê apenas dados dos contratos permitidos; `ADMIN` vê tudo.
 - Response 200: mesmo formato de `GET /dashboards/safety-work/inspectors-production`.
+
+### GET /dashboards/quality/field-supervisors-ranking
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Query:
+  - `from` (`YYYY-MM-DD`) **obrigatório**
+  - `to` (`YYYY-MM-DD`) **obrigatório**
+  - `contractId` (`uuid`) opcional
+- Mesmo recorte de `GET /dashboards/quality/foremen-ranking`: vistorias de Qualidade (`CAMPO`, `REMOTO`, `POS_OBRA`, `OBRAS_INVESTIMENTO`), excluindo `RASCUNHO`.
+- Agrupa pelo supervisor de campo **atual** da cadeia equipe → encarregado → supervisor (`foremen.field_supervisor_id`). Encarregado sem supervisor não entra. Trocar o vínculo passa a contar o histórico para o novo supervisor.
+- Ordenação: nota média decrescente, depois nome.
+- `teams`: equipes atualmente ligadas a encarregados desse supervisor, não só as que tiveram vistoria no período.
+
+Response 200:
+
+```json
+{
+  "from": "2026-09-01",
+  "to": "2026-09-30",
+  "supervisors": [
+    {
+      "id": "uuid",
+      "name": "Maria Souza",
+      "teams": [{ "id": "uuid", "name": "Equipe Norte" }],
+      "averagePercent": 88.4,
+      "inspectionsCount": 20,
+      "nonConformitiesCount": 6,
+      "pendingAdjustmentsCount": 2,
+      "resolvedCount": 10
+    }
+  ]
+}
+```
+
+### GET /dashboards/quality/coordinators-ranking
+
+- Auth: JWT
+- Perfis permitidos: `ADMIN`, `GESTOR`, `SUPERVISOR`
+- Query: iguais às de `GET /dashboards/quality/field-supervisors-ranking`.
+- Mesmo recorte de Qualidade.
+- Agrupa pelo coordenador **atual** da cadeia equipe → encarregado → supervisor → coordenador (`field_supervisors.coordinator_id`). Supervisor sem coordenador não entra.
+- Ordenação: nota média decrescente, depois nome.
+- `teams`: equipes atualmente ligadas, pela cadeia, a esse coordenador.
+
+Response 200:
+
+```json
+{
+  "from": "2026-09-01",
+  "to": "2026-09-30",
+  "coordinators": [
+    {
+      "id": "uuid",
+      "name": "Carlos Lima",
+      "teams": [{ "id": "uuid", "name": "Equipe Norte" }],
+      "averagePercent": 90.1,
+      "inspectionsCount": 40,
+      "nonConformitiesCount": 9,
+      "pendingAdjustmentsCount": 3,
+      "resolvedCount": 18
+    }
+  ]
+}
+```
+
+- `nonConformitiesCount`, `pendingAdjustmentsCount` e `resolvedCount` seguem a mesma regra de `GET /dashboards/quality/foremen-ranking`.
 
 ### GET /dashboards/quality/foremen-ranking
 
