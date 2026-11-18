@@ -745,7 +745,10 @@ export class ServiceOrdersService {
       }
 
       try {
-        await this.upsertImportedServiceOrder(contractId, decision);
+        const savedOrder = await this.upsertImportedServiceOrder(
+          contractId,
+          decision,
+        );
         seenKeys.add(decision.importKey);
         result.inserted++;
         lineDrafts.push(
@@ -756,6 +759,8 @@ export class ServiceOrdersService {
             resultado: decision.parsed.resultado,
             reason: null,
             resolvedAt: new Date(),
+            serviceOrderId: savedOrder.id,
+            createdNew: savedOrder.createdNew,
           }),
         );
       } catch (error: any) {
@@ -922,7 +927,10 @@ export class ServiceOrdersService {
     const rawRow = this.spreadsheetCells(row);
 
     if (decision.kind === 'enter') {
-      await this.upsertImportedServiceOrder(record.contractId, decision);
+      const savedOrder = await this.upsertImportedServiceOrder(
+        record.contractId,
+        decision,
+      );
       line.status = ServiceOrderImportLineStatus.ENTERED;
       line.osNumber = decision.parsed.osNumber;
       line.sectorName = decision.parsed.sectorName;
@@ -930,6 +938,9 @@ export class ServiceOrdersService {
       line.reason = null;
       line.rawRow = rawRow;
       line.resolvedAt = new Date();
+      line.serviceOrderId = savedOrder.id;
+      line.createdNew = savedOrder.createdNew;
+      line.removedAt = null;
       const saved = await this.importLineRepository.save(line);
       return this.toImportLine(saved);
     }
@@ -951,6 +962,9 @@ export class ServiceOrdersService {
       line.reason = null;
       line.rawRow = rawRow;
       line.resolvedAt = new Date();
+      line.createdNew = false;
+      line.serviceOrderId = null;
+      line.removedAt = null;
       const saved = await this.importLineRepository.save(line);
       return this.toImportLine(saved);
     }
@@ -1069,8 +1083,18 @@ export class ServiceOrdersService {
   private async upsertImportedServiceOrder(
     contractId: string,
     decision: Extract<ImportRowDecision, { kind: 'enter' }>,
-  ): Promise<void> {
+  ): Promise<{ id: string; createdNew: boolean }> {
     const parsed = decision.parsed;
+    const identity = {
+      contractId,
+      osNumber: parsed.osNumber,
+      sectorId: decision.sectorId,
+      serviceIdentifier: decision.serviceIdentifier,
+    };
+    const existing = await this.serviceOrderRepository.findOne({
+      where: identity,
+      select: ['id'],
+    });
     await this.serviceOrderRepository
       .createQueryBuilder()
       .insert()
@@ -1105,6 +1129,19 @@ export class ServiceOrdersService {
         ['contract_id', 'os_number', 'sector_id', 'service_identifier'],
       )
       .execute();
+    if (existing) {
+      return { id: existing.id, createdNew: false };
+    }
+    const created = await this.serviceOrderRepository.findOne({
+      where: identity,
+      select: ['id'],
+    });
+    if (!created) {
+      throw new BadRequestException(
+        'Não foi possível gravar a ordem de serviço.',
+      );
+    }
+    return { id: created.id, createdNew: true };
   }
 
   private async deleteCancelledOrders(
@@ -1160,6 +1197,154 @@ export class ServiceOrdersService {
       resolvedAt: null,
       ...fields,
     };
+  }
+
+  private assertCanDeleteServiceOrders(user: any): void {
+    if (user?.role !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Apenas administradores podem excluir ordens de serviço.',
+      );
+    }
+  }
+
+  private async collectInsertedTargets(record: ServiceOrderImport): Promise<{
+    serviceOrderIds: string[];
+    lineIds: string[];
+    classified: ServiceOrderImportLine[];
+  }> {
+    const lines = await this.importLineRepository.find({
+      where: {
+        importId: record.id,
+        status: ServiceOrderImportLineStatus.ENTERED,
+      },
+    });
+    const pending = lines.filter((line) => !line.removedAt);
+    const legacy = pending.filter((line) => line.createdNew == null);
+    if (legacy.length > 0) {
+      await this.classifyLegacyInsertedLines(record, legacy);
+    }
+
+    const created = pending.filter((line) => line.createdNew === true);
+    const knownIds = [
+      ...new Set(
+        created
+          .map((line) => line.serviceOrderId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const existing =
+      knownIds.length > 0
+        ? await this.serviceOrderRepository.find({
+            where: { id: In(knownIds) },
+            select: ['id'],
+          })
+        : [];
+    const existingIds = new Set(existing.map((order) => order.id));
+    return {
+      serviceOrderIds: knownIds.filter((id) => existingIds.has(id)),
+      lineIds: created.map((line) => line.id),
+      classified: legacy,
+    };
+  }
+
+  private async classifyLegacyInsertedLines(
+    record: ServiceOrderImport,
+    lines: ServiceOrderImportLine[],
+  ): Promise<void> {
+    const osNumbers = [
+      ...new Set(
+        lines
+          .map((line) => line.osNumber)
+          .filter((osNumber): osNumber is string => Boolean(osNumber)),
+      ),
+    ];
+    const sectors = await this.sectorsRepository.find();
+    const sectorsByName = new Map(sectors.map((sector) => [sector.name, sector]));
+    const orders =
+      osNumbers.length > 0
+        ? await this.serviceOrderRepository.find({
+            where: { contractId: record.contractId, osNumber: In(osNumbers) },
+            select: ['id', 'osNumber', 'sectorId', 'serviceIdentifier'],
+          })
+        : [];
+    const earlierLines = await this.findEarlierEnteredLines(record, osNumbers);
+
+    for (const line of lines) {
+      const ownedByEarlier = earlierLines.some((earlier) =>
+        this.sameImportedOrder(earlier, line),
+      );
+      if (ownedByEarlier) {
+        line.createdNew = false;
+        continue;
+      }
+      const sector = line.sectorName
+        ? sectorsByName.get(line.sectorName)
+        : undefined;
+      const serviceIdentifier = line.sectorName
+        ? this.serviceIdentifier(line.sectorName, line.resultado)
+        : '';
+      const order = sector
+        ? orders.find(
+            (item) =>
+              item.osNumber === line.osNumber &&
+              item.sectorId === sector.id &&
+              item.serviceIdentifier === serviceIdentifier,
+          )
+        : undefined;
+      line.createdNew = true;
+      if (order) line.serviceOrderId = order.id;
+    }
+  }
+
+  private async findEarlierEnteredLines(
+    record: ServiceOrderImport,
+    osNumbers: string[],
+  ): Promise<ServiceOrderImportLine[]> {
+    if (osNumbers.length === 0) return [];
+    const imports = await this.importRepository.find({
+      where: { contractId: record.contractId },
+      select: ['id', 'createdAt'],
+    });
+    const recordTime = new Date(record.createdAt).getTime();
+    const earlierIds = imports
+      .filter((item) => {
+        if (item.id === record.id) return false;
+        const time = new Date(item.createdAt).getTime();
+        if (time < recordTime) return true;
+        return time === recordTime && item.id < record.id;
+      })
+      .map((item) => item.id);
+    if (earlierIds.length === 0) return [];
+    return this.importLineRepository.find({
+      where: {
+        importId: In(earlierIds),
+        status: ServiceOrderImportLineStatus.ENTERED,
+        osNumber: In(osNumbers),
+      },
+    });
+  }
+
+  private sameImportedOrder(
+    left: Pick<ServiceOrderImportLine, 'osNumber' | 'sectorName' | 'resultado'>,
+    right: Pick<ServiceOrderImportLine, 'osNumber' | 'sectorName' | 'resultado'>,
+  ): boolean {
+    if (left.osNumber !== right.osNumber || left.sectorName !== right.sectorName) {
+      return false;
+    }
+    if (left.sectorName === 'REPOSICAO') {
+      return (
+        (left.resultado ?? '').trim().toUpperCase() ===
+        (right.resultado ?? '').trim().toUpperCase()
+      );
+    }
+    return true;
+  }
+
+  private async countInspections(serviceOrderIds: string[]): Promise<number> {
+    if (serviceOrderIds.length === 0) return 0;
+    return this.inspectionRepository.count({
+      where: { serviceOrderId: In(serviceOrderIds) },
+    });
   }
 
   private assertHistoryAccess(user: any): void {
@@ -1239,6 +1424,44 @@ export class ServiceOrdersService {
         hasPrev: false,
       },
     };
+  }
+
+  async previewInsertedDeletion(
+    user: any,
+    importId: string,
+  ): Promise<{ serviceOrderCount: number; inspectionCount: number }> {
+    this.assertCanDeleteServiceOrders(user);
+    const record = await this.loadVisibleImport(user, importId);
+    const targets = await this.collectInsertedTargets(record);
+    const inspectionCount = await this.countInspections(
+      targets.serviceOrderIds,
+    );
+    return {
+      serviceOrderCount: targets.serviceOrderIds.length,
+      inspectionCount,
+    };
+  }
+
+  async deleteInsertedRecords(user: any, importId: string): Promise<void> {
+    this.assertCanDeleteServiceOrders(user);
+    const record = await this.loadVisibleImport(user, importId);
+    const targets = await this.collectInsertedTargets(record);
+    if (targets.classified.length > 0) {
+      await this.importLineRepository.save(targets.classified);
+    }
+    if (targets.serviceOrderIds.length > 0) {
+      await this.removeMany(targets.serviceOrderIds);
+    }
+    if (targets.lineIds.length > 0) {
+      await this.importLineRepository.update(
+        { id: In(targets.lineIds) },
+        { removedAt: new Date() },
+      );
+    }
+    this.logger.log('Inserted service orders removed for import', {
+      importId: record.id,
+      serviceOrderIds: targets.serviceOrderIds,
+    });
   }
 
   async remove(id: string): Promise<void> {

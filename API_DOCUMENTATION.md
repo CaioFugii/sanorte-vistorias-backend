@@ -30,7 +30,7 @@ Authorization: Bearer <token>
 - Setores: `GET/POST/PUT/DELETE /sectors`
 - Colaboradores: `GET/POST/PUT/DELETE /collaborators`
 - Checklists (com seções/itens): `GET/POST/PUT/DELETE /checklists` + rotas de `sections`, `items` e upload de imagem de referência
-- Ordens de Serviço (OS): `GET /service-orders`, `GET /service-orders/summary`, `GET /service-orders/export`, `POST /service-orders/import`, `GET /service-orders/imports`, `GET /service-orders/imports/:id`, `GET /service-orders/imports/:id/file`, `POST /service-orders/imports/:id/lines/:lineId/reprocess`, `POST /service-orders/bulk-delete` (ADMIN), `DELETE /service-orders/:id` (ADMIN)
+- Ordens de Serviço (OS): `GET /service-orders`, `GET /service-orders/summary`, `GET /service-orders/export`, `POST /service-orders/import`, `GET /service-orders/imports`, `GET /service-orders/imports/:id`, `GET /service-orders/imports/:id/file`, `GET /service-orders/imports/:id/inserted` (ADMIN), `DELETE /service-orders/imports/:id/inserted` (ADMIN), `POST /service-orders/imports/:id/lines/:lineId/reprocess`, `POST /service-orders/bulk-delete` (ADMIN), `DELETE /service-orders/:id` (ADMIN)
 - Vistorias:
   - criação/lista/detalhe: `POST /inspections`, `GET /inspections`, `GET /inspections/export`, `GET /inspections/mine`, `GET /inspections/:id`
   - edição: `PUT /inspections/:id`, `POST /inspections/bulk-team` (ADMIN), `PUT /inspections/:id/items`, `DELETE /inspections/:id`
@@ -1433,6 +1433,29 @@ Response 200:
 - Auth: JWT + GESTOR ou ADMIN
 - Response: arquivo original da planilha
 - Gestor fora do contrato: `403`
+
+### GET /service-orders/imports/:id/inserted
+
+- Auth: JWT + ADMIN
+- Conta as ordens de serviço que este arquivo inseriu e que ainda estão no banco, e as vistorias ligadas a elas. Ordem que o arquivo só atualizou não entra.
+- Lançamento anterior a este registro, sem a marca de inserção, considera inserida a ordem da primeira planilha que a fez entrar.
+- Response 200:
+
+```json
+{ "serviceOrderCount": 12, "inspectionCount": 3 }
+```
+
+- Gestor, supervisor e fiscal: `403`. Lançamento inexistente: `404`.
+
+### DELETE /service-orders/imports/:id/inserted
+
+- Auth: JWT + ADMIN
+- Apaga as ordens de serviço que este arquivo inseriu. Cada vistoria ligada, em qualquer status, sai antes da OS, pelo mesmo caminho de `POST /service-orders/bulk-delete`: arquivo de storage, foto, assinatura, nota e pendência.
+- Ordem que o arquivo só atualizou permanece. O lançamento e o arquivo da planilha permanecem no histórico.
+- Uma segunda chamada não apaga ordem criada depois, ainda que o número seja o mesmo.
+- Se a remoção de um arquivo falha, nada deste pedido é apagado e a resposta nomeia a OS que parou.
+- Gestor, supervisor e fiscal: `403`
+- Response 204: vazio
 
 ### POST /service-orders/imports/:id/lines/:lineId/reprocess
 

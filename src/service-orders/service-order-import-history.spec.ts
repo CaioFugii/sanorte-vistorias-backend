@@ -38,12 +38,14 @@ describe('ServiceOrdersService import history', () => {
   let execute: jest.Mock;
   let serviceOrderRepository: {
     find: jest.Mock;
+    findOne: jest.Mock;
     delete: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
   let importRepository: {
     create: jest.Mock;
     save: jest.Mock;
+    find: jest.Mock;
     findOne: jest.Mock;
     findAndCount: jest.Mock;
   };
@@ -52,7 +54,9 @@ describe('ServiceOrdersService import history', () => {
     save: jest.Mock;
     find: jest.Mock;
     findOne: jest.Mock;
+    update: jest.Mock;
   };
+  let inspectionRepository: { count: jest.Mock };
 
   beforeEach(() => {
     execute = jest.fn().mockResolvedValue(undefined);
@@ -63,14 +67,24 @@ describe('ServiceOrdersService import history', () => {
       orUpdate: jest.fn().mockReturnThis(),
       execute,
     };
+    let awaitingCreatedId = false;
     serviceOrderRepository = {
       find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(async () => {
+        if (!awaitingCreatedId) {
+          awaitingCreatedId = true;
+          return null;
+        }
+        awaitingCreatedId = false;
+        return { id: 'os-created' };
+      }),
       delete: jest.fn().mockResolvedValue(undefined),
       createQueryBuilder: jest.fn().mockReturnValue(query),
     };
     importRepository = {
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => ({ ...value, id: 'import-1' })),
+      find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn(),
       findAndCount: jest.fn(),
     };
@@ -79,13 +93,17 @@ describe('ServiceOrdersService import history', () => {
       save: jest.fn(async (value) => value),
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn(),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    inspectionRepository = {
+      count: jest.fn().mockResolvedValue(0),
     };
 
     service = new ServiceOrdersService(
       serviceOrderRepository as any,
       { find: jest.fn().mockResolvedValue(sectors) } as any,
       { findOne: jest.fn().mockResolvedValue({ id: 'contract-1' }) } as any,
-      {} as any,
+      inspectionRepository as any,
       importRepository as any,
       importLineRepository as any,
       new ServiceOrderImportParserService(),
@@ -149,10 +167,13 @@ describe('ServiceOrdersService import history', () => {
       ServiceOrderImportLineStatus.NOT_REGISTERED,
     ]);
     expect(lines[1].reason).toContain('OS repetida neste arquivo');
+    expect(lines[0].createdNew).toBe(true);
+    expect(lines[0].serviceOrderId).toBe('os-created');
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('OS já existente conta como inserida e como linha que entrou', async () => {
+    serviceOrderRepository.findOne.mockResolvedValueOnce({ id: 'os-existing' });
     const result = await service.importFromExcel(
       { id: 'user-1', role: UserRole.ADMIN },
       fileFrom([validRow()]),
@@ -162,6 +183,8 @@ describe('ServiceOrdersService import history', () => {
     expect(result.inserted).toBe(1);
     expect(result.notRegistered).toBe(0);
     expect(savedLines()[0].status).toBe(ServiceOrderImportLineStatus.ENTERED);
+    expect(savedLines()[0].createdNew).toBe(false);
+    expect(savedLines()[0].serviceOrderId).toBe('os-existing');
     expect(serviceOrderRepository.createQueryBuilder().orUpdate).toHaveBeenCalled();
   });
 
@@ -249,5 +272,207 @@ describe('ServiceOrdersService import history', () => {
         'import-1',
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  function importRecord(id: string, createdAt: string) {
+    return {
+      id,
+      contractId: 'contract-1',
+      createdAt: new Date(createdAt),
+      user: { id: 'user-1', name: 'Admin' },
+      contract: { id: 'contract-1', name: 'Contrato' },
+    };
+  }
+
+  it('gestor não exclui as ordens inseridas pelo arquivo', async () => {
+    await expect(
+      service.deleteInsertedRecords(
+        { role: UserRole.GESTOR, contracts: [{ id: 'contract-1' }] },
+        'import-1',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(importRepository.findOne).not.toHaveBeenCalled();
+  });
+
+  it('exclui a ordem criada pelo arquivo e mantém a que só foi atualizada', async () => {
+    const removeMany = jest.spyOn(service, 'removeMany').mockResolvedValue(undefined);
+    importRepository.findOne.mockResolvedValue(importRecord('import-1', '2026-11-18T12:00:00Z'));
+    importLineRepository.find.mockResolvedValue([
+      {
+        id: 'line-created',
+        status: ServiceOrderImportLineStatus.ENTERED,
+        osNumber: '1001',
+        sectorName: 'AGUA',
+        resultado: 'CONCLUIDO',
+        createdNew: true,
+        serviceOrderId: 'os-created',
+        removedAt: null,
+      },
+      {
+        id: 'line-updated',
+        status: ServiceOrderImportLineStatus.ENTERED,
+        osNumber: '1002',
+        sectorName: 'AGUA',
+        resultado: 'CONCLUIDO',
+        createdNew: false,
+        serviceOrderId: 'os-existing',
+        removedAt: null,
+      },
+    ]);
+    serviceOrderRepository.find.mockResolvedValue([{ id: 'os-created' }]);
+    inspectionRepository.count.mockResolvedValue(2);
+
+    const preview = await service.previewInsertedDeletion(
+      { role: UserRole.ADMIN },
+      'import-1',
+    );
+    await service.deleteInsertedRecords({ role: UserRole.ADMIN }, 'import-1');
+
+    expect(preview).toEqual({ serviceOrderCount: 1, inspectionCount: 2 });
+    expect(removeMany).toHaveBeenCalledWith(['os-created']);
+    expect(importLineRepository.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: expect.anything() }),
+      expect.objectContaining({ removedAt: expect.any(Date) }),
+    );
+    const criteria = importLineRepository.update.mock.calls[0][0].id;
+    expect(criteria.value ?? criteria._value).toEqual(['line-created']);
+  });
+
+  it('lançamento antigo apaga a ordem que ele inseriu e o posterior não', async () => {
+    const removeMany = jest.spyOn(service, 'removeMany').mockResolvedValue(undefined);
+    const older = importRecord('import-old', '2026-11-16T12:00:00Z');
+    const newer = importRecord('import-new', '2026-11-17T12:00:00Z');
+    importRepository.find.mockResolvedValue([older, newer]);
+    serviceOrderRepository.find.mockResolvedValue([
+      {
+        id: 'os-1',
+        osNumber: '1001',
+        sectorId: 'sector-agua',
+        serviceIdentifier: '',
+      },
+    ]);
+
+    importRepository.findOne.mockResolvedValue(older);
+    importLineRepository.find.mockResolvedValueOnce([
+      {
+        id: 'line-old',
+        status: ServiceOrderImportLineStatus.ENTERED,
+        osNumber: '1001',
+        sectorName: 'AGUA',
+        resultado: 'CONCLUIDO',
+        createdNew: null,
+        serviceOrderId: null,
+        removedAt: null,
+      },
+    ]);
+    await service.deleteInsertedRecords({ role: UserRole.ADMIN }, 'import-old');
+
+    expect(removeMany).toHaveBeenCalledWith(['os-1']);
+    expect(importLineRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'line-old', createdNew: true, serviceOrderId: 'os-1' }),
+    ]);
+
+    removeMany.mockClear();
+    importRepository.findOne.mockResolvedValue(newer);
+    importLineRepository.find
+      .mockResolvedValueOnce([
+        {
+          id: 'line-new',
+          status: ServiceOrderImportLineStatus.ENTERED,
+          osNumber: '1001',
+          sectorName: 'AGUA',
+          resultado: 'OUTRO',
+          createdNew: null,
+          serviceOrderId: null,
+          removedAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'line-old',
+          status: ServiceOrderImportLineStatus.ENTERED,
+          osNumber: '1001',
+          sectorName: 'AGUA',
+          resultado: 'CONCLUIDO',
+          createdNew: true,
+          removedAt: null,
+        },
+      ]);
+    await service.deleteInsertedRecords({ role: UserRole.ADMIN }, 'import-new');
+
+    expect(removeMany).not.toHaveBeenCalled();
+    expect(importLineRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'line-new', createdNew: false }),
+    ]);
+  });
+
+  it('reposição com outro resultado continua sendo ordem inserida por este arquivo', async () => {
+    const removeMany = jest.spyOn(service, 'removeMany').mockResolvedValue(undefined);
+    const older = importRecord('import-old', '2026-11-16T12:00:00Z');
+    const newer = importRecord('import-new', '2026-11-17T12:00:00Z');
+    importRepository.find.mockResolvedValue([older, newer]);
+    importRepository.findOne.mockResolvedValue(newer);
+    serviceOrderRepository.find.mockResolvedValue([
+      {
+        id: 'os-b',
+        osNumber: '1001',
+        sectorId: 'sector-reposicao',
+        serviceIdentifier: 'B',
+      },
+    ]);
+    importLineRepository.find
+      .mockResolvedValueOnce([
+        {
+          id: 'line-new',
+          status: ServiceOrderImportLineStatus.ENTERED,
+          osNumber: '1001',
+          sectorName: 'REPOSICAO',
+          resultado: 'B',
+          createdNew: null,
+          serviceOrderId: null,
+          removedAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'line-old',
+          status: ServiceOrderImportLineStatus.ENTERED,
+          osNumber: '1001',
+          sectorName: 'REPOSICAO',
+          resultado: 'A',
+          createdNew: null,
+          removedAt: null,
+        },
+      ]);
+
+    await service.deleteInsertedRecords({ role: UserRole.ADMIN }, 'import-new');
+
+    expect(removeMany).toHaveBeenCalledWith(['os-b']);
+  });
+
+  it('não apaga de novo uma ordem já removida por este lançamento', async () => {
+    const removeMany = jest.spyOn(service, 'removeMany').mockResolvedValue(undefined);
+    importRepository.findOne.mockResolvedValue(importRecord('import-1', '2026-11-18T12:00:00Z'));
+    importLineRepository.find.mockResolvedValue([
+      {
+        id: 'line-created',
+        status: ServiceOrderImportLineStatus.ENTERED,
+        osNumber: '1001',
+        sectorName: 'AGUA',
+        createdNew: true,
+        serviceOrderId: 'os-old',
+        removedAt: new Date('2026-11-18T13:00:00Z'),
+      },
+    ]);
+
+    const preview = await service.previewInsertedDeletion(
+      { role: UserRole.ADMIN },
+      'import-1',
+    );
+    await service.deleteInsertedRecords({ role: UserRole.ADMIN }, 'import-1');
+
+    expect(preview).toEqual({ serviceOrderCount: 0, inspectionCount: 0 });
+    expect(removeMany).not.toHaveBeenCalled();
+    expect(importLineRepository.update).not.toHaveBeenCalled();
   });
 });

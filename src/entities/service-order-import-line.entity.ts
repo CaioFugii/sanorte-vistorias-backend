@@ -46,4 +46,13 @@ export class ServiceOrderImportLine {
 
   @Column({ name: 'resolved_at', type: 'timestamp', nullable: true })
   resolvedAt: Date | null;
+
+  @Column({ name: 'service_order_id', type: 'uuid', nullable: true })
+  serviceOrderId: string | null;
+
+  @Column({ name: 'created_new', type: 'boolean', nullable: true })
+  createdNew: boolean | null;
+
+  @Column({ name: 'removed_at', type: 'timestamp', nullable: true })
+  removedAt: Date | null;
 }

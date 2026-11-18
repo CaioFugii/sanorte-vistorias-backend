@@ -185,6 +185,27 @@ export class ServiceOrdersController {
     });
   }
 
+  @Get('imports/:id/inserted')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  previewInsertedDeletion(
+    @CurrentUser() user: any,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.serviceOrdersService.previewInsertedDeletion(user, id);
+  }
+
+  @Delete('imports/:id/inserted')
+  @HttpCode(204)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async deleteInserted(
+    @CurrentUser() user: any,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<void> {
+    await this.serviceOrdersService.deleteInsertedRecords(user, id);
+  }
+
   @Post('imports/:id/lines/:lineId/reprocess')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.GESTOR)
