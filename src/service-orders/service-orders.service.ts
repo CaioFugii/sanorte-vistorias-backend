@@ -131,10 +131,7 @@ export class ServiceOrdersService {
     sectorName: string,
     resultado: string | null,
   ): string {
-    if (sectorName === 'REPOSICAO') {
-      return `${osNumber}-${sectorName}-${(resultado ?? '').trim().toUpperCase()}`;
-    }
-    return `${osNumber}-${sectorName}`;
+    return `${osNumber}-${sectorName}-${this.serviceIdentifier(sectorName, resultado)}`;
   }
 
   private parseFimExecucaoBoundary(
@@ -689,10 +686,7 @@ export class ServiceOrdersService {
         cancelledPairs.set(key, {
           osNumber,
           sectorId: sector.id,
-          serviceIdentifier:
-            sectorName === 'REPOSICAO'
-              ? (resultado ?? '').trim().toUpperCase()
-              : '',
+          serviceIdentifier: this.serviceIdentifier(sectorName, resultado),
         });
       }
     }
@@ -1168,12 +1162,10 @@ export class ServiceOrdersService {
   }
 
   private serviceIdentifier(
-    sectorName: string,
+    _sectorName: string,
     resultado: string | null,
   ): string {
-    return sectorName === 'REPOSICAO'
-      ? (resultado ?? '').trim().toUpperCase()
-      : '';
+    return (resultado ?? '').trim().toUpperCase();
   }
 
   private spreadsheetCells(
@@ -1331,13 +1323,10 @@ export class ServiceOrdersService {
     if (left.osNumber !== right.osNumber || left.sectorName !== right.sectorName) {
       return false;
     }
-    if (left.sectorName === 'REPOSICAO') {
-      return (
-        (left.resultado ?? '').trim().toUpperCase() ===
-        (right.resultado ?? '').trim().toUpperCase()
-      );
-    }
-    return true;
+    return (
+      (left.resultado ?? '').trim().toUpperCase() ===
+      (right.resultado ?? '').trim().toUpperCase()
+    );
   }
 
   private async countInspections(serviceOrderIds: string[]): Promise<number> {

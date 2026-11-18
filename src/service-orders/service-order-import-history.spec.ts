@@ -172,6 +172,33 @@ describe('ServiceOrdersService import history', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
+  it('a mesma OS com outro resultado no mesmo setor entra como outra ordem', async () => {
+    const result = await service.importFromExcel(
+      { id: 'user-1', role: UserRole.ADMIN },
+      fileFrom([
+        validRow({ Resultado: 'REATIVADA LIGAÇÃO DE ÁGUA S/V' }),
+        validRow({ Resultado: 'INSTALADO HIDROMETRO DESAPARECIDO' }),
+      ]),
+      'contract-1',
+    );
+
+    expect(result.inserted).toBe(2);
+    expect(result.notRegistered).toBe(0);
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('resultado igual com outra capitalização continua repetido', async () => {
+    const result = await service.importFromExcel(
+      { id: 'user-1', role: UserRole.ADMIN },
+      fileFrom([validRow(), validRow({ Resultado: 'concluido' })]),
+      'contract-1',
+    );
+
+    expect(result.inserted).toBe(1);
+    expect(result.notRegistered).toBe(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it('OS já existente conta como inserida e como linha que entrou', async () => {
     serviceOrderRepository.findOne.mockResolvedValueOnce({ id: 'os-existing' });
     const result = await service.importFromExcel(
@@ -348,7 +375,7 @@ describe('ServiceOrdersService import history', () => {
         id: 'os-1',
         osNumber: '1001',
         sectorId: 'sector-agua',
-        serviceIdentifier: '',
+        serviceIdentifier: 'CONCLUIDO',
       },
     ]);
 
@@ -381,7 +408,7 @@ describe('ServiceOrdersService import history', () => {
           status: ServiceOrderImportLineStatus.ENTERED,
           osNumber: '1001',
           sectorName: 'AGUA',
-          resultado: 'OUTRO',
+          resultado: 'CONCLUIDO',
           createdNew: null,
           serviceOrderId: null,
           removedAt: null,

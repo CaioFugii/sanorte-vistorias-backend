@@ -1396,7 +1396,7 @@ Response 200:
   - `contractId` (UUID, obrigatório)
 - Estrutura do Excel: colunas "Numero da OS" e "Endereço"
 - Regra: uma importação aplica apenas 1 contrato (o `contractId` informado) para todas as OS processadas
-- Regra: `osNumber` é único por setor; duplicatas são ignoradas (não trava o processamento)
+- Regra: a OS é única por contrato, número, setor e resultado. A mesma combinação no arquivo fica em `notRegistered`. Resultado diferente no mesmo número e setor grava outra OS
 - Campos adicionais em cada registro: `field`, `remote`, `postWork` (boolean, default `false`)
 - Regra de escopo: `GESTOR`/`SUPERVISOR` só pode importar para contratos aos quais já está vinculado
 

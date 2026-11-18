@@ -40,6 +40,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Changed
 
+- Importação de OS: a ordem é única por número, setor e resultado. O mesmo número com outro resultado grava outra OS
 - `GET /service-orders/summary`: as caixas de Remoto e Pós-obra seguem o mês de `from`/`to`. Remoto usa esse mês e Pós-obra o anterior
 - `GET /dashboards/quality/inspectors-production` aceita `module` (`CAMPO`, `REMOTO` ou `POS_OBRA`). Campo e Pós-obra incluem obras de investimento do mesmo tipo de avaliação
 - `GET /dashboards/overview`: `averagePercent` passa a ser a média simples das notas mensais com vistoria; mês sem vistoria não entra como 0%
