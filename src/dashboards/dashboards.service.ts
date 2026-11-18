@@ -2775,7 +2775,7 @@ export class DashboardsService {
     to: string;
     contractId?: string;
   }): Promise<FieldSupervisorsRankingResponseDto> {
-    const ranking = await this.getQualityHierarchyRanking(filters, 'supervisor');
+    const ranking = await this.getHierarchyRanking(filters, 'supervisor', 'QUALITY');
     return {
       from: ranking.from,
       to: ranking.to,
@@ -2789,7 +2789,7 @@ export class DashboardsService {
     to: string;
     contractId?: string;
   }): Promise<CoordinatorsRankingResponseDto> {
-    const ranking = await this.getQualityHierarchyRanking(filters, 'coordinator');
+    const ranking = await this.getHierarchyRanking(filters, 'coordinator', 'QUALITY');
     return {
       from: ranking.from,
       to: ranking.to,
@@ -2797,7 +2797,35 @@ export class DashboardsService {
     };
   }
 
-  private async getQualityHierarchyRanking(
+  async getSafetyWorkFieldSupervisorsRanking(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<FieldSupervisorsRankingResponseDto> {
+    const ranking = await this.getHierarchyRanking(filters, 'supervisor', 'SAFETY_WORK');
+    return {
+      from: ranking.from,
+      to: ranking.to,
+      supervisors: ranking.people,
+    };
+  }
+
+  async getSafetyWorkCoordinatorsRanking(filters: {
+    user?: any;
+    from: string;
+    to: string;
+    contractId?: string;
+  }): Promise<CoordinatorsRankingResponseDto> {
+    const ranking = await this.getHierarchyRanking(filters, 'coordinator', 'SAFETY_WORK');
+    return {
+      from: ranking.from,
+      to: ranking.to,
+      coordinators: ranking.people,
+    };
+  }
+
+  private async getHierarchyRanking(
     filters: {
       user?: any;
       from: string;
@@ -2805,6 +2833,7 @@ export class DashboardsService {
       contractId?: string;
     },
     level: 'supervisor' | 'coordinator',
+    sector: DashboardSector,
   ): Promise<{ from: string; to: string; people: HierarchyRankingItemDto[] }> {
     this.validateDateRange(filters.from, filters.to);
     const personAlias = level === 'supervisor' ? 'fieldSupervisor' : 'coordinator';
@@ -2858,8 +2887,8 @@ export class DashboardsService {
       })
       .groupBy(`${personAlias}.id`);
 
-    this.applyQualityHierarchyScope(summaryQb, filters);
-    this.applyQualityHierarchyScope(nonConformitiesQb, filters);
+    this.applyHierarchyScope(summaryQb, filters, sector);
+    this.applyHierarchyScope(nonConformitiesQb, filters, sector);
 
     const [summaryRows, nonConformityRows] = await Promise.all([
       summaryQb.getRawMany<{
@@ -2910,11 +2939,27 @@ export class DashboardsService {
     return { from: filters.from, to: filters.to, people };
   }
 
-  private applyQualityHierarchyScope(
+  private applyHierarchyScope(
     qb: { andWhere: (...args: any[]) => any },
     filters: { user?: any; from: string; to: string; contractId?: string },
+    sector: DashboardSector,
   ): void {
-    this.applyQualityFilters(qb as any, { sector: 'QUALITY' });
+    this.applyQualityFilters(qb as any, { sector });
+    if (sector === 'SAFETY_WORK') {
+      const toLimit = toEndOfDay(filters.to);
+      const periodModule = this.resolvePeriodModule(undefined, 'SAFETY_WORK');
+      this.applyDashboardPeriodFilter(qb as any, {
+        from: filters.from,
+        to: toLimit,
+        module: periodModule,
+      });
+      this.applyDashboardContractScope(qb as any, {
+        user: filters.user,
+        contractId: filters.contractId,
+        module: periodModule,
+      });
+      return;
+    }
     this.applyQualityCalendarPeriod(qb as any, filters);
     const periodModule = this.resolvePeriodModule(undefined, 'QUALITY');
     this.applyDashboardContractScope(qb as any, {

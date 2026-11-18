@@ -103,6 +103,16 @@ describe('DashboardsController (integration)', () => {
       to: '2025-11-30',
       foremen: [],
     }),
+    getSafetyWorkFieldSupervisorsRanking: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      supervisors: [],
+    }),
+    getSafetyWorkCoordinatorsRanking: jest.fn().mockResolvedValue({
+      from: '2025-11-01',
+      to: '2025-11-30',
+      coordinators: [],
+    }),
     getQualityForemenRanking: jest.fn().mockResolvedValue({
       from: '2025-11-01',
       to: '2025-11-30',
@@ -333,6 +343,19 @@ describe('DashboardsController (integration)', () => {
   it('deve permitir GESTOR no ranking de encarregados de Segurança', async () => {
     await request(app.getHttpServer())
       .get('/dashboards/safety-work/foremen-ranking')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'GESTOR')
+      .expect(200);
+  });
+
+  it('deve permitir GESTOR no ranking de supervisores e coordenadores de Segurança', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/safety-work/field-supervisors-ranking')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'GESTOR')
+      .expect(200);
+    await request(app.getHttpServer())
+      .get('/dashboards/safety-work/coordinators-ranking')
       .query({ from: '2025-11-01', to: '2025-11-30' })
       .set('x-role', 'GESTOR')
       .expect(200);

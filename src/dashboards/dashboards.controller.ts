@@ -465,6 +465,32 @@ export class DashboardsController {
     });
   }
 
+  @Get('safety-work/field-supervisors-ranking')
+  getSafetyWorkFieldSupervisorsRanking(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
+    return this.dashboardsService.getSafetyWorkFieldSupervisorsRanking({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
+  @Get('safety-work/coordinators-ranking')
+  getSafetyWorkCoordinatorsRanking(
+    @CurrentUser() user: any,
+    @Query() query: DashboardQueryDto,
+  ) {
+    return this.dashboardsService.getSafetyWorkCoordinatorsRanking({
+      user,
+      from: query.from,
+      to: query.to,
+      contractId: query.contractId,
+    });
+  }
+
   @Get('safety-work/inspectors-production')
   getSafetyWorkInspectorsProduction(
     @CurrentUser() user: any,

@@ -2228,6 +2228,102 @@ describe('DashboardsService', () => {
     );
   });
 
+  it('deve agregar Segurança pelo supervisor e pelo coordenador da hierarquia atual', async () => {
+    const supervisorSummaryQb = createMockQueryBuilder({
+      rawMany: [
+        {
+          personId: 'sup-1',
+          personName: 'Ana',
+          averagePercent: '80',
+          inspectionsCount: '3',
+          pendingAdjustmentsCount: '1',
+          resolvedCount: '1',
+        },
+      ],
+    });
+    const supervisorNcQb = createMockQueryBuilder({
+      rawMany: [{ personId: 'sup-1', nonConformitiesCount: '2' }],
+    });
+    const teamsQb = createMockQueryBuilder({
+      rawMany: [{ id: 'team-a', name: 'Equipe A', personId: 'sup-1' }],
+    });
+    inspectionsRepository.createQueryBuilder
+      .mockReturnValueOnce(supervisorSummaryQb)
+      .mockReturnValueOnce(supervisorNcQb);
+    teamRepository.createQueryBuilder = jest.fn().mockReturnValue(teamsQb);
+
+    const supervisors = await service.getSafetyWorkFieldSupervisorsRanking({
+      from: '2026-09-01',
+      to: '2026-09-30',
+      user: { role: 'ADMIN' },
+    });
+
+    expect(supervisors.supervisors).toEqual([
+      {
+        id: 'sup-1',
+        name: 'Ana',
+        teams: [{ id: 'team-a', name: 'Equipe A' }],
+        averagePercent: 80,
+        inspectionsCount: 3,
+        nonConformitiesCount: 2,
+        pendingAdjustmentsCount: 1,
+        resolvedCount: 1,
+      },
+    ]);
+    expect(supervisorSummaryQb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      { dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO] },
+    );
+    expect(supervisorSummaryQb.andWhere).toHaveBeenCalledWith(
+      'COALESCE(inspection.finalizedAt, inspection.createdAt) >= :from',
+      { from: '2026-09-01' },
+    );
+
+    const coordinatorSummaryQb = createMockQueryBuilder({
+      rawMany: [
+        {
+          personId: 'coord-1',
+          personName: 'Carla',
+          averagePercent: '91.2',
+          inspectionsCount: '4',
+          pendingAdjustmentsCount: '0',
+          resolvedCount: '2',
+        },
+      ],
+    });
+    const coordinatorNcQb = createMockQueryBuilder({ rawMany: [] });
+    const coordinatorTeamsQb = createMockQueryBuilder({ rawMany: [] });
+    inspectionsRepository.createQueryBuilder
+      .mockReturnValueOnce(coordinatorSummaryQb)
+      .mockReturnValueOnce(coordinatorNcQb);
+    teamRepository.createQueryBuilder = jest
+      .fn()
+      .mockReturnValue(coordinatorTeamsQb);
+
+    const coordinators = await service.getSafetyWorkCoordinatorsRanking({
+      from: '2026-09-01',
+      to: '2026-09-30',
+      user: { role: 'ADMIN' },
+    });
+
+    expect(coordinators.coordinators[0]).toEqual(
+      expect.objectContaining({
+        id: 'coord-1',
+        name: 'Carla',
+        averagePercent: 91.2,
+        inspectionsCount: 4,
+      }),
+    );
+    expect(coordinatorSummaryQb.innerJoin).toHaveBeenCalledWith(
+      'fieldSupervisor.coordinator',
+      'coordinator',
+    );
+    expect(coordinatorSummaryQb.andWhere).toHaveBeenCalledWith(
+      'inspection.module IN (:...dashboardSectorModules)',
+      { dashboardSectorModules: [ModuleType.SEGURANCA_TRABALHO] },
+    );
+  });
+
   it('deve rejeitar intervalo invertido na produção de fiscais', async () => {
     await expect(
       service.getSafetyWorkInspectorsProduction({

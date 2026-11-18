@@ -41,6 +41,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 ### Changed
 
 - Histórico de importação: corrigir uma linha não registrada atualiza Inseridas e Não registradas do lançamento
+- Aba Gestão de Segurança do Trabalho: `GET /dashboards/safety-work/field-supervisors-ranking` e `GET /dashboards/safety-work/coordinators-ranking` contam só vistorias de `SEGURANCA_TRABALHO`
 - Importação de OS: a ordem é única por número, setor e resultado. O mesmo número com outro resultado grava outra OS
 - `GET /service-orders/summary`: as caixas de Remoto e Pós-obra seguem o mês de `from`/`to`. Remoto usa esse mês e Pós-obra o anterior
 - `GET /dashboards/quality/inspectors-production` aceita `module` (`CAMPO`, `REMOTO` ou `POS_OBRA`). Campo e Pós-obra incluem obras de investimento do mesmo tipo de avaliação
