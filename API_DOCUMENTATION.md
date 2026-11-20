@@ -666,6 +666,7 @@ Response 200:
     "name": "Fiscal",
     "email": "fiscal@sanorte.com",
     "role": "FISCAL",
+    "areas": ["campo_minhas", "campo_nova", "engenharia_relatorios"],
     "contracts": [
       { "id": "uuid", "name": "CONTRATO_NORTE" }
     ]
@@ -689,13 +690,65 @@ Response 200:
   "name": "Fiscal",
   "email": "fiscal@sanorte.com",
   "role": "FISCAL",
+  "areas": ["campo_minhas", "campo_nova", "engenharia_relatorios"],
   "contracts": [
     { "id": "uuid", "name": "CONTRATO_NORTE" }
   ]
 }
 ```
 
-## Users (ADMIN)
+O token não carrega `areas`. Administrador recebe 7 chaves: todas menos `campo_minhas` e `campo_nova`, porque não executa vistorias. Por isso `POST /inspections` e `GET /inspections/mine` respondem `403` para o Administrador. Os demais recebem só as áreas do Acesso.
+
+## Access Profiles (ADMIN)
+
+A tela de Acessos não faz parte do catálogo de áreas. Só o Administrador lê e grava.
+
+Áreas aceitas em `areas`: `gestao`, `qualidade_dados`, `qualidade_painel`, `qualidade_pendencias`, `seguranca_dados`, `engenharia_obras`, `engenharia_relatorios`, `campo_minhas` e `campo_nova`. Administração (usuários, equipes, hierarquia de campo, contratos, setores, colaboradores e checklists) não entra no Acesso e fica só com o Administrador.
+
+### GET /access-profiles
+
+- Auth: JWT + ADMIN
+- Query: `page`, `limit`
+- Response: paginação de Acesso (`id`, `name`, `description`, `isSystem`, `areas`, `userCount`)
+
+### GET /access-profiles/:id
+
+- Auth: JWT + ADMIN
+- Response: o mesmo objeto, com `userCount`
+
+### POST /access-profiles
+
+- Auth: JWT + ADMIN
+
+```json
+{
+  "name": "Qualidade",
+  "description": "Só os dados de qualidade",
+  "areas": ["qualidade_dados"]
+}
+```
+
+- `400` sem área ou com área fora da lista, inclusive qualquer `admin_*`. `409` quando o nome já existe.
+
+### PUT /access-profiles/:id
+
+- Auth: JWT + ADMIN
+- Mesmo corpo do POST. Os três Acessos de partida podem ser editados.
+
+### POST /access-profiles/:id/duplicate
+
+- Auth: JWT + ADMIN
+- Body: `{ "name": "Qualidade cópia" }`
+- Copia descrição e áreas. O novo Acesso não é de partida.
+
+### DELETE /access-profiles/:id
+
+- Auth: JWT + ADMIN
+- `409` para Acesso de partida ou em uso. Em uso, a mensagem informa quantas pessoas usam.
+
+## Users
+
+Só o Administrador, exceto `GET /users/fiscals`. Nenhum Acesso libera esta tela. As respostas não trazem `passwordHash`.
 
 ### GET /users
 
@@ -730,7 +783,8 @@ Request JSON:
   "email": "novo@sanorte.com",
   "password": "senha123",
   "role": "GESTOR",
-  "contractIds": ["uuid-contrato-1"]
+  "contractIds": ["uuid-contrato-1"],
+  "accessProfileId": "uuid-do-acesso"
 }
 ```
 
@@ -741,7 +795,6 @@ Response 201:
   "id": "uuid",
   "name": "Novo Usuário",
   "email": "novo@sanorte.com",
-  "passwordHash": "$2b$10...",
   "role": "GESTOR",
   "createdAt": "2026-02-19T12:00:00.000Z",
   "updatedAt": "2026-02-19T12:00:00.000Z"
@@ -751,6 +804,7 @@ Response 201:
 ### PUT /users/:id
 
 - Auth: JWT + ADMIN
+- Quem não é Administrador precisa de `accessProfileId`. Administrador é salvo sem Acesso. Enviar Acesso para Administrador responde `400` `Administrador não recebe Acesso`.
 
 Request JSON (parcial, `contractIds` obrigatório):
 
@@ -1544,7 +1598,7 @@ Response 200:
 
 ### POST /inspections
 
-- Auth: JWT + FISCAL ou GESTOR ou SUPERVISOR
+- Auth: JWT + área `campo_nova`. O Administrador não cria vistoria (`403`).
 - Regras:
   - `serviceOrderId` é obrigatório para módulos diferentes de `CAMPO`, `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`.
   - para `CAMPO`, `SEGURANCA_TRABALHO` e `OBRAS_INVESTIMENTO`, `serviceOrderId` é opcional. Em Campo, `teamId` continua obrigatório.
@@ -1675,7 +1729,7 @@ Campos opcionais de pendências de ajuste na listagem:
 
 ### GET /inspections/mine
 
-- Auth: JWT + FISCAL
+- Auth: JWT + área `campo_minhas`. Lista só as vistorias de quem está logado. O Administrador recebe `403`.
 - Query: `page`, `limit` (máximo 100), `osNumber` (busca parcial por número da OS; termos com menos de 3 caracteres são ignorados), `inspectionScope`
 - Response: paginação do mesmo DTO enxuto de `GET /inspections` (`InspectionListDTO`)
 - Regras de serialização:
