@@ -213,13 +213,8 @@ describe('DashboardsService', () => {
     });
 
     expect(qb.andWhere).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'inspection.module = :dashboardSafetyModuleContract',
-      ),
-      expect.objectContaining({
-        dashboardSafetyModuleContract: ModuleType.SEGURANCA_TRABALHO,
-        dashboardContractId: contractId,
-      }),
+      'inspection.contractId = :dashboardContractId',
+      { dashboardContractId: contractId },
     );
   });
 
@@ -677,7 +672,9 @@ describe('DashboardsService', () => {
       },
     ]);
     expect(qb.addSelect).toHaveBeenCalledWith(
-      expect.stringContaining('SUM(CASE WHEN inspection.module = :remoteModule'),
+      expect.stringContaining(
+        'SUM(CASE WHEN inspection.module = :remoteModule',
+      ),
       'remoteCount',
     );
   });
@@ -927,7 +924,7 @@ describe('DashboardsService', () => {
     ).toBe(true);
   });
 
-  it('deve usar regra híbrida no summary quando module não for informado', async () => {
+  it('deve usar data local de finalização e contrato da inspection no summary de Qualidade sem module', async () => {
     const qb = createMockQueryBuilder({
       rawOne: {
         inspectionsCount: '0',
@@ -952,39 +949,24 @@ describe('DashboardsService', () => {
     expect(
       andWhereCalls.some(
         ([sql, params]: [string, any]) =>
-          sql.includes('inspection.module = :dashboardSafetyModulePeriod') &&
-          sql.includes('inspection.module != :dashboardSafetyModulePeriod') &&
-          params?.dashboardSafetyModulePeriod === ModuleType.SEGURANCA_TRABALHO,
+          sql.includes(
+            "DATE(timezone('America/Sao_Paulo', COALESCE(inspection.finalizedAt, inspection.createdAt))) >= :fromDate",
+          ) && params?.fromDate === '2026-01-01',
       ),
     ).toBe(true);
     expect(
-      andWhereCalls.some(
-        ([sql, params]: [string, any]) =>
-          sql.includes('inspection.module = :dashboardSafetyModuleContract') &&
-          sql.includes('inspection.contractId = :dashboardContractId') &&
-          sql.includes('serviceOrder.contractId = :dashboardContractId') &&
-          params?.dashboardSafetyModuleContract ===
-            ModuleType.SEGURANCA_TRABALHO &&
-          params?.dashboardContractId === 'contract-1',
+      andWhereCalls.some(([sql]: [string, any]) =>
+        sql.includes('serviceOrder.fim_execucao'),
       ),
-    ).toBe(true);
-    expect(
-      andWhereCalls.some(
-        ([sql, params]: [string, any]) =>
-          sql.includes(
-            'inspection.module = :dashboardSafetyModuleAllowedContracts',
-          ) &&
-          sql.includes(
-            'inspection.contractId IN (:...dashboardAllowedContractIds)',
-          ) &&
-          sql.includes(
-            'serviceOrder.contractId IN (:...dashboardAllowedContractIds)',
-          ) &&
-          params?.dashboardSafetyModuleAllowedContracts ===
-            ModuleType.SEGURANCA_TRABALHO &&
-          Array.isArray(params?.dashboardAllowedContractIds),
-      ),
-    ).toBe(true);
+    ).toBe(false);
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.contractId = :dashboardContractId',
+      { dashboardContractId: 'contract-1' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.contractId IN (:...allowedContractIds)',
+      { allowedContractIds: ['contract-1', 'contract-2'] },
+    );
   });
 
   it('deve usar finalizedAt no período de qualidade para CAMPO e REMOTO', async () => {
@@ -1246,7 +1228,9 @@ describe('DashboardsService', () => {
         sql.includes(':postWorkModule') &&
         !sql.includes('NOT EXISTS'),
     );
-    const approvedSql = selects.find((sql: string) => sql.includes('NOT EXISTS'));
+    const approvedSql = selects.find((sql: string) =>
+      sql.includes('NOT EXISTS'),
+    );
 
     expect(countSql).toContain(postWorkMatch);
     expect(approvedSql).toContain(postWorkMatch);
@@ -1353,7 +1337,7 @@ describe('DashboardsService', () => {
     );
   });
 
-  it('deve usar regra híbrida de contrato em não conformidades por checklist quando module não for informado', async () => {
+  it('deve usar contrato da inspection em não conformidades por checklist quando module não for informado', async () => {
     const qb = createMockQueryBuilder({ rawMany: [] });
     inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
 
@@ -1368,34 +1352,19 @@ describe('DashboardsService', () => {
       contractId: 'contract-1',
     });
 
-    const andWhereCalls = qb.andWhere.mock.calls;
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.contractId = :dashboardContractId',
+      { dashboardContractId: 'contract-1' },
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      'inspection.contractId IN (:...allowedContractIds)',
+      { allowedContractIds: ['contract-1', 'contract-2'] },
+    );
     expect(
-      andWhereCalls.some(
-        ([sql, params]: [string, any]) =>
-          sql.includes('inspection.module = :dashboardSafetyModuleContract') &&
-          sql.includes('inspection.contractId = :dashboardContractId') &&
-          sql.includes('serviceOrder.contractId = :dashboardContractId') &&
-          params?.dashboardSafetyModuleContract ===
-            ModuleType.SEGURANCA_TRABALHO,
+      qb.andWhere.mock.calls.some(([sql]: [string, any]) =>
+        sql.includes('serviceOrder.contractId'),
       ),
-    ).toBe(true);
-    expect(
-      andWhereCalls.some(
-        ([sql, params]: [string, any]) =>
-          sql.includes(
-            'inspection.module = :dashboardSafetyModuleAllowedContracts',
-          ) &&
-          sql.includes(
-            'inspection.contractId IN (:...dashboardAllowedContractIds)',
-          ) &&
-          sql.includes(
-            'serviceOrder.contractId IN (:...dashboardAllowedContractIds)',
-          ) &&
-          params?.dashboardSafetyModuleAllowedContracts ===
-            ModuleType.SEGURANCA_TRABALHO &&
-          Array.isArray(params?.dashboardAllowedContractIds),
-      ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('deve retornar vistorias usadas na nota da equipe com paginação e métrica', async () => {
@@ -2399,6 +2368,7 @@ describe('DashboardsService', () => {
         qualityStatuses: [
           InspectionStatus.FINALIZADA,
           InspectionStatus.PENDENTE_AJUSTE,
+          InspectionStatus.AGUARDANDO_APROVACAO,
           InspectionStatus.RESOLVIDA,
         ],
       },
@@ -2676,8 +2646,8 @@ describe('DashboardsService', () => {
     const extra = remote.sectors.find(
       (sector) => sector.sectorName === 'DRENAGEM',
     );
-    expect(extra?.checklists.map((checklist) => checklist.checklistName)).toEqual(
-      ['Alfa', 'Zeta'],
-    );
+    expect(
+      extra?.checklists.map((checklist) => checklist.checklistName),
+    ).toEqual(['Alfa', 'Zeta']);
   });
 });
