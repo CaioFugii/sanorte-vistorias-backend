@@ -8,6 +8,9 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Added
 
+- Aba Obras Inv no Painel de Controle: `GET /investment-works/summary` (caixas Campo e Pós Obra) e filtros `from`, `to`, `address`, `district`, `pdaTeam`, `postWork` e `origin` em `GET /investment-works`, com `fieldInspectionCount` e `postWorkInspectionCount`
+- Cadastro em massa de Obras Inv: `POST /investment-works/imports/preview`, `POST /investment-works/imports`, histórico e download do Excel original. A planilha fica no storage com prefixo `investment-works/imports`
+- `origin` (`MANUAL` | `IMPORT`) em obras de investimento e Descrições em `investment_work_descriptions`
 - Cadastro de encarregados (`/foremen`) e `foremanId` em `POST/PUT /teams`; exclusão bloqueada enquanto houver equipe vinculada
 - `GET /dashboards/quality/foremen-ranking` — resultado de Qualidade pelo encarregado atual da equipe
 - `GET /dashboards/quality/inspectors-production` — produção diária dos fiscais nos módulos de Qualidade
@@ -40,6 +43,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Changed
 
+- Filtro "Execução" de `GET /inspections` e do Excel `avaliacoes` usa a data da obra quando a vistoria de Obras Inv não tem OS
+- Acesso com a área Obras Inv e sem Painel de Controle deixa de ver as obras na tela do Painel. O resumo e o histórico exigem as duas áreas
+- `POST /investment-works` não exige mais bacia, rede material nem singularidades. A edição de cadastro por Excel só libera endereço, bairro, equipe PDA, data, status e ativa
+- Excel `avaliacoes` ganha a coluna Contrato, logo após OS / Obra. O item de `GET /inspections` devolve `contract` e `investmentWork.origin` / `executionDate`
 - Histórico de importação: corrigir uma linha não registrada atualiza Inseridas e Não registradas do lançamento
 - Aba Gestão de Segurança do Trabalho: `GET /dashboards/safety-work/field-supervisors-ranking` e `GET /dashboards/safety-work/coordinators-ranking` contam só vistorias de `SEGURANCA_TRABALHO`
 - Importação de OS: a ordem é única por número, setor e resultado. O mesmo número com outro resultado grava outra OS

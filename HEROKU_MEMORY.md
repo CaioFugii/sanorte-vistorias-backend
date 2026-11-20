@@ -90,6 +90,10 @@ Hipótese principal: `POST /inspections` (`create` → clona itens → `findOne(
 
 Mitigação no código (2026-08-18): listagem de checklists só com `sector` + contagens; `POST /inspections` (e update/paralyze/unparalyze/resolve) devolvem `findOneDetail`; o sync cria via `persistNewInspection` sem hidratar o grafo; fill/manage buscam `GET /checklists/:id`; listagem de teams sem joins de colaboradores/contratos.
 
+## Registro — importação de Obras Inv
+
+A prévia (`POST /investment-works/imports/preview`) e a gravação (`POST /investment-works/imports`) leem a planilha com `XLSX.read` sobre o buffer inteiro do arquivo. O pipe recusa arquivo acima de 5 MB antes da leitura. O fluxo não foi alterado para streaming: o teto de 5 MB limita o pico dessa leitura (R-3). Falha depois de gravar o arquivo no storage apaga a chave; erro ao apagar é só logado.
+
 ## Pendências
 
 - [x] Deploy do log por request (`HttpLoggingInterceptor` + `getProcessMemorySnapshot`)

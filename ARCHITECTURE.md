@@ -65,7 +65,7 @@ Cada domínio segue o padrão `*.module.ts` + `*.controller.ts` + `*.service.ts`
 | `dashboards` | KPIs, rankings, analytics |
 | `service-orders` | Ordens de serviço e importação |
 | `contracts` | Contratos e escopo de acesso |
-| `investment-works` | Obras de investimento |
+| `investment-works` | Obras de investimento, resumo do Painel e importação de planilha (`InvestmentWorkImportsController` antes de `InvestmentWorksController`) |
 | `reports` | Tipos e registros de relatórios de engenharia |
 | `excel` | Geração genérica de arquivos `.xlsx` (`ExcelService.build`) usada pelos exporters de domínio |
 | `uploads` / `files` / `cloudinary` | Upload e armazenamento de mídia |
@@ -86,7 +86,9 @@ Checklist ─────────┘       │              └── Eviden
   └── ChecklistItem        ├── PendingAdjustment
 Sector                     ├── ServiceOrder (opcional)
 Contract                   ├── Contract (opcional)
-InvestmentWork             └── InvestmentWork (opcional)
+InvestmentWork (origin MANUAL|IMPORT) └── InvestmentWork (opcional)
+  ├── InvestmentWorkDescription
+  └── InvestmentWorkImport ── InvestmentWorkImportLine
 
 ReportType ── ReportTypeField
 ReportRecord ── ReportFile
@@ -192,6 +194,7 @@ Resposta padrão:
 
 ## Uploads
 
+- Planilhas: `SpreadsheetStorageService` grava e apaga por prefixo de chave. Global usa `service-orders/imports`; Obras Inv usa `investment-works/imports`. Falha na transação de importação apaga o arquivo gravado
 - `POST /uploads` — multipart, autenticado; envia para Cloudinary
 - Evidências de vistoria: `POST /inspections/:id/evidences` (multipart)
 - Assinatura: `POST /inspections/:id/signature` (JSON com imagem base64 ou URL)

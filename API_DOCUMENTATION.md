@@ -136,7 +136,7 @@ Authorization: Bearer <token>
 - `GET /collaborators`: filtros por `name` (busca parcial), `sectorId` e `contractId`.
 - `GET /teams`: filtros por `name` (busca parcial), `contractId` e `sectorId`.
 - `GET /checklists`: filtros por `module`, `inspectionScope`, `active`, `sectorId`. Listagem **não** inclui `items`/`sections` (só `sectionCount`/`itemCount`); o grafo completo fica em `GET /checklists/:id`.
-- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `createdByUserId` (fiscal responsável), `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`, mínimo 3 caracteres), `executionFrom`/`executionTo` (data local de `fimExecucao`), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN.
+- `GET /inspections`: filtros por `periodFrom`, `periodTo`, `module`, `teamId`, `createdByUserId` (fiscal responsável), `contractId`, `status`, `osNumber` (busca parcial por número da OS, mínimo 3 caracteres), `service` (busca parcial em `serviceOrder.resultado`, mínimo 3 caracteres), `executionFrom`/`executionTo` (data local de `fimExecucao` da OS ou, se a vistoria não tem OS, `expectedEndDate` da obra), `inspectionFrom`/`inspectionTo` (data local de `finalizedAt`); regra de ocultar rascunho para GESTOR/SUPERVISOR/ADMIN. O item traz `contract` e `investmentWork.origin` / `executionDate`.
 - `GET /inspections/export`: mesmos filtros de `GET /inspections` (sem paginação) + `layout` (`avaliacoes` | `pendencias`) e `modules` (lista CSV); resposta binária `.xlsx`.
 - `GET /inspections/mine`: filtros por `page`, `limit` (máximo 100) e `osNumber` (busca parcial por número da OS, mínimo 3 caracteres).
 
@@ -401,6 +401,7 @@ Resposta paginada:
 ```json
 {
   "id": "uuid",
+  "origin": "MANUAL",
   "contractId": "uuid",
   "createdByUserId": "uuid",
   "workName": "Ampliação Rede Bairro Norte",
@@ -411,6 +412,8 @@ Resposta paginada:
   "basin": "Bacia 01",
   "service": "Implantação de rede coletora",
   "teamId": "uuid",
+  "pdaTeamName": null,
+  "sectorId": null,
   "materialNetwork": "PVC DN 150",
   "singularities": "Travessia em avenida de grande fluxo",
   "status": "EM_ANDAMENTO",
@@ -419,6 +422,8 @@ Resposta paginada:
   "updatedAt": "2026-05-10T12:00:00.000Z"
 }
 ```
+
+`origin`: `MANUAL` (formulário) ou `IMPORT` (planilha). No cadastro por Excel, `workName` é o número da O.S, `startDate` e `expectedEndDate` nascem iguais à data da planilha, `teamId`, `basin`, `service` e `materialNetwork` podem ser nulos e `pdaTeamName` guarda a Equipe PDA. `sector` aponta para o setor `REPOSICAO`.
 
 ### Inspection
 
@@ -443,7 +448,9 @@ Resposta paginada:
   },
   "investmentWork": {
     "id": "uuid",
-    "workName": "Obra X"
+    "workName": "Obra X",
+    "origin": "MANUAL",
+    "executionDate": "2026-08-10"
   },
   "serviceDescription": "string",
   "locationDescription": "string",
@@ -1542,6 +1549,8 @@ Response 200:
 
 ## Investment Works (Obras de Investimento)
 
+A tela do Painel de Controle exige as áreas `qualidade_painel` e `engenharia_obras` juntas. `GET /investment-works` e `GET /investment-works/:id` continuam por papel (ADMIN, GESTOR, SUPERVISOR ou FISCAL). O resumo e o histórico exigem as duas áreas.
+
 ### GET /investment-works
 
 - Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR ou FISCAL
@@ -1551,8 +1560,31 @@ Response 200:
   - `contractId` (UUID)
   - `search` (busca parcial em obra, endereço, bairro e serviço)
   - `active` (`true` | `false`)
-- Response 200: paginação de `InvestmentWork` com `team`, `contract` e `averageScorePercent` (média de `scorePercent` das vistorias da obra; `null` quando não houver nota)
+  - `from` / `to` (`YYYY-MM-DD`, filtram `expectedEndDate`)
+  - `address`, `district`, `pdaTeam` (busca parcial; termo com menos de 3 caracteres é ignorado, sem 400). `pdaTeam` busca `pdaTeamName` ou o nome da equipe
+  - `postWork` (`true` | `false`): existe, ou não, vistoria realizada de Pós-obra da obra (`module = OBRAS_INVESTIMENTO`, `evaluationModule = POS_OBRA`, status diferente de `RASCUNHO`)
+  - `origin` (`MANUAL` | `IMPORT`)
+- Response 200: paginação de `InvestmentWork` com `team`, `contract`, `sector`, `origin`, `pdaTeamName`, `averageScorePercent`, `fieldInspectionCount` e `postWorkInspectionCount`
+  - as contagens ignoram rascunho. `fieldInspectionCount` conta `evaluationModule = CAMPO`; `postWorkInspectionCount` conta `POS_OBRA`. Vistoria sem obra não entra
+  - com `from` ou `to`, a ordem é `expectedEndDate`, `workName`; sem eles, `createdAt` decrescente
 - Escopo: `ADMIN` vê todos; `GESTOR`/`SUPERVISOR`/`FISCAL` ficam limitados aos contratos vinculados
+
+### GET /investment-works/summary
+
+- Auth: JWT + ADMIN, GESTOR, SUPERVISOR ou FISCAL, com as áreas `qualidade_painel` e `engenharia_obras`. Sem uma das duas: 403
+- Query: `contractId`, `from`, `to`, `address`, `district`, `pdaTeam`, `postWork` (mesmas regras da listagem). O mês de referência sai de `from`/`to` em `America/Sao_Paulo`; mês futuro cai no mês atual
+- Response 200:
+
+```json
+{
+  "field": { "period": { "from": "2026-11-01", "to": "2026-11-30" }, "goal": 12, "done": 4 },
+  "postWork": { "period": { "from": "2026-10-01", "to": "2026-10-31" }, "goal": 3, "done": 1 }
+}
+```
+
+- Campo: meta = 4 × obras `MANUAL` ativas e não canceladas com `expectedEndDate` no mês de referência inteiro; realizadas = soma de no máximo 4 vistorias de Campo por obra
+- Pós Obra: meta = obras `IMPORT` ativas e não canceladas com `expectedEndDate` no mês anterior inteiro; realizadas = quantas dessas têm ao menos uma Pós-obra realizada
+- Os filtros de contrato, endereço, bairro, equipe PDA e `postWork` valem para as duas caixas. Obra inativa ou `CANCELADA` fica fora das duas
 
 ### GET /investment-works/:id
 
@@ -1564,26 +1596,32 @@ Response 200:
   - `inspectionStats.averagePercentual`
   - `inspectionStats.lastInspections` (até 5 últimas)
   - `inspectionStats.pendingTotal`
+  - `descriptions`: rótulos das Descrições do cadastro por Excel, em ordem alfabética. Ausente ou vazio no cadastro manual
 
 ### POST /investment-works
 
-- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR
+- Auth: JWT + área `engenharia_obras` + ADMIN ou GESTOR ou SUPERVISOR
+- A obra nasce com `origin = MANUAL`
 - Validações:
-  - `workName`, `startDate`, `expectedEndDate`, `address`, `district`, `basin`, `service`, `teamId`, `materialNetwork`, `contractId` obrigatórios
+  - `workName`, `startDate`, `expectedEndDate`, `address`, `district`, `service`, `teamId`, `contractId` obrigatórios
+  - `basin`, `materialNetwork` e `singularities` são opcionais
   - `expectedEndDate` não pode ser menor que `startDate`
   - contrato deve existir e estar no escopo do usuário
   - equipe deve existir, estar ativa e estar vinculada ao contrato informado
-- `singularities` e `status` são opcionais
+- `status` é opcional
 
 ### PUT /investment-works/:id
 
-- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR
+- Auth: JWT + área `engenharia_obras` + ADMIN ou GESTOR ou SUPERVISOR
 - Atualização parcial (PATCH-like por `PUT`)
-- Mantém as mesmas validações de contrato, equipe e datas quando os campos relevantes forem enviados
+- Cadastro `MANUAL`: omitir `basin`, `materialNetwork` ou `singularities` preserva o valor já gravado. As validações de contrato, equipe e datas seguem quando os campos relevantes forem enviados
+- Cadastro `IMPORT`: só `address`, `district`, `pdaTeamName`, `expectedEndDate`, `status` e `active`. Qualquer outro campo responde 400 `Campo não editável em cadastro por Excel: {campo}`
+- `expectedEndDate` no cadastro por Excel também grava `startDate` e, na mesma transação, atualiza `execution_date` das Descrições. Colisão com outra chave do mesmo contrato, ativa ou excluída, responde 400 `Já existe cadastro por Excel com esta O.S, data e Descrição neste contrato.`
 
 ### DELETE /investment-works/:id
 
-- Auth: JWT + ADMIN ou GESTOR ou SUPERVISOR
+- Auth: JWT + área `engenharia_obras` + ADMIN ou GESTOR ou SUPERVISOR
+- Cadastro `IMPORT` excluído sem vistoria mantém as Descrições, com `investment_work_id` nulo. A mesma planilha não recria o cadastro
 - Regra: bloqueia exclusão quando houver inspeções vinculadas e retorna:
 
 ```json
@@ -1593,6 +1631,63 @@ Response 200:
   "error": "Bad Request"
 }
 ```
+
+### POST /investment-works/imports/preview
+
+- Auth: JWT + área `qualidade_painel` (ADMIN, GESTOR ou SUPERVISOR) e área `engenharia_obras`. Sem Obras Inv: 403
+- Body: `multipart/form-data` com `file` (`.xlsx` ou `.xls`, até 5 MB). Fora disso: 400 `Arquivo inválido. Envie um Excel (.xlsx ou .xls) de até 5 MB.`
+- Não grava obra, lançamento nem arquivo
+- Colunas obrigatórias, nesta ordem de nome: `O.S`, `data`, `Descrição`, `Endereço`, `Bairro`, `Equipe PDA`. Cabeçalho sem acento ou com caixa diferente é aceito. Coluna ausente: 400 `Colunas ausentes: {nomes}`
+- Response 200:
+
+```json
+{
+  "fileName": "obras.xlsx",
+  "totalLines": 40,
+  "descriptions": [{ "key": "binder(b)", "label": "BINDER(B)", "count": 7 }]
+}
+```
+
+As Descrições saem na ordem da primeira aparição. `key` é a Descrição normalizada.
+
+### POST /investment-works/imports
+
+- Auth: igual à prévia. GESTOR ou SUPERVISOR fora do contrato: 403 `Você não tem acesso ao contrato selecionado para importação.`
+- Body: `multipart/form-data` com `file`, `contractId` (UUID v4) e `descriptions` (string JSON com as chaves marcadas)
+- `descriptions` vazio: 400 `Selecione ao menos uma Descrição`. Chave desconhecida: 400 `Descrição desconhecida: {key}`
+- Sem o setor `REPOSICAO`: 400 `Setor REPOSICAO não encontrado`
+- Response 201:
+
+```json
+{
+  "id": "uuid",
+  "created": 23,
+  "ignored": 0,
+  "notSelected": 0,
+  "notRegistered": 5,
+  "errors": ["Linha 4: O.S 17219247782 de 20/10/2026 com Endereço diferentes entre as linhas"]
+}
+```
+
+Cada cadastro criado nasce `IMPORT`, ativo, `EM_ANDAMENTO`, setor `REPOSICAO`, `workName` = O.S e as duas datas iguais à data da planilha. Linha sem O.S, sem data, com data inválida, sem Descrição ou com Endereço, Bairro ou Equipe PDA divergentes no grupo O.S+data fica não registrada. Chave já existente no contrato, ativa ou excluída, ou repetida no arquivo, fica ignorada.
+
+### GET /investment-works/imports
+
+- Auth: JWT + ADMIN ou GESTOR, com `qualidade_painel` e `engenharia_obras`
+- Query: `page`, `limit`
+- Response 200: paginação com `originalFileName`, `createdAt`, `selectedDescriptions`, `createdCount`, `ignoredCount`, `notSelectedCount`, `notRegisteredCount`, `contract` e `user`
+- GESTOR vê só os contratos dele
+
+### GET /investment-works/imports/:id
+
+- Auth: igual à listagem de lançamentos
+- Response 200: o resumo mais `lines` (só não registradas): `lineNumber`, `osNumber`, `description`, `reason`, `rawRow`
+- Inexistente: 404 `Lançamento de importação não encontrado`. Fora do contrato: 403 `Você não tem acesso a este lançamento.`
+
+### GET /investment-works/imports/:id/file
+
+- Auth: igual ao detalhe
+- Response: o Excel original, `Content-Disposition: attachment`
 
 ## Inspections
 
@@ -1652,7 +1747,7 @@ Observação: imagens de referência dos itens ficam no `GET /checklists/:id` (`
   - `status`
   - `osNumber` (busca parcial por número da OS; ex.: `?osNumber=OS-001`)
   - `service` (busca parcial pelo serviço da OS, coluna `resultado`; ex.: `?service=REPOSIÇÃO`)
-  - `executionFrom` / `executionTo` (`YYYY-MM-DD`, data local `America/Sao_Paulo` de `serviceOrder.fimExecucao`)
+  - `executionFrom` / `executionTo` (`YYYY-MM-DD`, data local `America/Sao_Paulo`). Usa `serviceOrder.fimExecucao` quando a vistoria tem OS; sem OS, usa `expectedEndDate` da obra (`COALESCE`)
   - `inspectionFrom` / `inspectionTo` (`YYYY-MM-DD`, data local `America/Sao_Paulo` de `inspection.finalizedAt`)
   - `investmentWorkId` (UUID da obra de investimento)
   - `page`, `limit`
@@ -1678,8 +1773,8 @@ Observação: imagens de referência dos itens ficam no `GET /checklists/:id` (`
   - não inclui vistorias em `RASCUNHO`
   - se `status=RASCUNHO`, retorna planilha só com cabeçalho
   - máximo de **5000** linhas; acima disso retorna `400` pedindo para refinar os filtros
-- Colunas `avaliacoes`: Módulo, Fiscal, OS / Obra, Descrição, Serviço, Data de execução, Equipe, Endereço, Status, Percentual, Data da vistoria, NC 1–8
-- Colunas `pendencias`: Módulo, OS / Obra, Descrição do serviço, Serviço, Data de execução, Localização, Equipe, Status, Percentual, Data da vistoria, NC 1–8
+- Colunas `avaliacoes`: Módulo, Fiscal, OS / Obra, Contrato, Descrição, Serviço, Data de execução, Equipe, Endereço, Status, Percentual, Data da vistoria, NC 1–8. A data de execução usa a OS quando existe e, sem OS, a data da obra (`dd/mm/aaaa`)
+- Colunas `pendencias`: Módulo, OS / Obra, Descrição do serviço, Serviço, Data de execução, Localização, Equipe, Status, Percentual, Data da vistoria, NC 1–8. Sem coluna Contrato; a data de execução continua só a da OS
 
 Contrato por item (`InspectionListDTO`):
 
@@ -1701,10 +1796,13 @@ Contrato por item (`InspectionListDTO`):
     "fimExecucao": "2026-02-18T17:30:00.000Z",
     "resultado": "EXECUTADO"
   },
+  "contract": { "id": "uuid", "name": "CONTRATO_NORTE" },
   "investmentWork": {
     "id": "uuid",
     "name": "Ampliação Rede Bairro Norte",
-    "workName": "Ampliação Rede Bairro Norte"
+    "workName": "Ampliação Rede Bairro Norte",
+    "origin": "IMPORT",
+    "executionDate": "2026-10-20"
   },
   "pendingItemsCount": 3,
   "pendingItemsPreview": [

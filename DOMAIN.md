@@ -66,6 +66,10 @@ Status da entidade `PendingAdjustment`:
 
 `EM_ANDAMENTO` | `PARALISADA` | `FINALIZADA` | `CANCELADA`
 
+### `InvestmentWorkOrigin`
+
+`MANUAL` (formulário) | `IMPORT` (planilha de Obras Inv). O status de linha gravado na importação é só `NOT_REGISTERED`.
+
 ### Relatórios
 
 - `ReportFieldType`: `text`, `textarea`, `number`, `date`, `datetime`, `select`, `radio`, `checkbox`, `image`, `signature`
@@ -89,6 +93,8 @@ Checklist ─ Section ─ Item ┘       ├── InspectionItem
                                    ├── ServiceOrder (opcional)
                                    ├── Contract (opcional)
                                    └── InvestmentWork (opcional)
+                                          ├── InvestmentWorkDescription
+                                          └── InvestmentWorkImport ── InvestmentWorkImportLine
 
 ReportType ── ReportTypeField
 ReportRecord ── ReportFile
@@ -262,7 +268,13 @@ Importação via parser (`service-order-import-parser.service.ts`) com mapeament
 
 ### Obras de investimento
 
-CRUD com status `InvestmentWorkStatus`. Vistorias podem referenciar `investmentWorkId`.
+CRUD com status `InvestmentWorkStatus` e origem `InvestmentWorkOrigin`. O cadastro manual nasce `MANUAL`. O cadastro por Excel (`IMPORT`) grava a O.S em `workName`, a Equipe PDA em `pdaTeamName` e o setor `REPOSICAO`; `team`, `basin`, `service` e `materialNetwork` podem ser nulos.
+
+`investment_work_descriptions` guarda a chave `(contract_id, os_number, execution_date, description_key)`. `investment_work_id` é anulável (`ON DELETE SET NULL`). `investment_work_imports` e `investment_work_import_lines` guardam o lançamento e só as linhas não registradas.
+
+A planilha vai para o storage com prefixo `investment-works/imports` (`SpreadsheetStorageService`). O prefixo do Global continua `service-orders/imports`.
+
+As caixas do Painel usam o mês de São Paulo: Campo no mês de referência inteiro (obras manuais) e Pós Obra no mês anterior (obras de Excel). Vistoria de Obras Inv ligada só a uma OS fica fora das colunas e das caixas.
 
 ### Relatórios de engenharia
 
