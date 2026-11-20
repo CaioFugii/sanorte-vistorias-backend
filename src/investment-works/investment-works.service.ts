@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import {
   applyContractScopeFilter,
@@ -16,10 +16,17 @@ import {
   Contract,
   Inspection,
   InvestmentWork,
+  InvestmentWorkDescription,
   PendingAdjustment,
   Team,
 } from '../entities';
-import { PendingStatus } from '../common/enums';
+import {
+  InspectionStatus,
+  InvestmentWorkEvaluationModule,
+  InvestmentWorkOrigin,
+  ModuleType,
+  PendingStatus,
+} from '../common/enums';
 import {
   CreateInvestmentWorkDto,
   FilterInvestmentWorksDto,
@@ -41,7 +48,18 @@ export class InvestmentWorksService {
     private readonly inspectionRepository: Repository<Inspection>,
     @InjectRepository(PendingAdjustment)
     private readonly pendingAdjustmentRepository: Repository<PendingAdjustment>,
+    @InjectRepository(InvestmentWorkDescription)
+    private readonly descriptionRepository: Repository<InvestmentWorkDescription>,
   ) {}
+
+  private static readonly importEditableFields = new Set([
+    'address',
+    'district',
+    'pdaTeamName',
+    'expectedEndDate',
+    'status',
+    'active',
+  ]);
 
   async findAll(
     user: any,
@@ -55,7 +73,8 @@ export class InvestmentWorksService {
     const query = this.investmentWorkRepository
       .createQueryBuilder('investmentWork')
       .leftJoinAndSelect('investmentWork.team', 'team')
-      .leftJoinAndSelect('investmentWork.contract', 'contract');
+      .leftJoinAndSelect('investmentWork.contract', 'contract')
+      .leftJoinAndSelect('investmentWork.sector', 'sector');
 
     if (filters?.status) {
       query.andWhere('investmentWork.status = :status', {
@@ -75,6 +94,57 @@ export class InvestmentWorksService {
       });
     }
 
+    if (filters?.origin) {
+      query.andWhere('investmentWork.origin = :origin', {
+        origin: filters.origin,
+      });
+    }
+
+    if (filters?.from) {
+      query.andWhere('investmentWork.expectedEndDate >= :from', {
+        from: filters.from,
+      });
+    }
+
+    if (filters?.to) {
+      query.andWhere('investmentWork.expectedEndDate <= :to', {
+        to: filters.to,
+      });
+    }
+
+    const address = this.searchableTerm(filters?.address);
+    if (address) {
+      query.andWhere('investmentWork.address ILIKE :address', {
+        address: `%${address}%`,
+      });
+    }
+
+    const district = this.searchableTerm(filters?.district);
+    if (district) {
+      query.andWhere('investmentWork.district ILIKE :district', {
+        district: `%${district}%`,
+      });
+    }
+
+    const pdaTeam = this.searchableTerm(filters?.pdaTeam);
+    if (pdaTeam) {
+      query.andWhere(
+        '(investmentWork.pdaTeamName ILIKE :pdaTeam OR team.name ILIKE :pdaTeam)',
+        { pdaTeam: `%${pdaTeam}%` },
+      );
+    }
+
+    if (filters?.postWork !== undefined) {
+      const exists = this.realizedPostWorkExists(query);
+      query.setParameter('obrasModule', ModuleType.OBRAS_INVESTIMENTO);
+      query.setParameter(
+        'posObraEvaluation',
+        InvestmentWorkEvaluationModule.POS_OBRA,
+      );
+      query.setParameter('draftStatus', InspectionStatus.RASCUNHO);
+      query.andWhere(filters.postWork ? exists : `NOT ${exists}`);
+    }
+
     if (filters?.search?.trim()) {
       query.andWhere(
         '(investmentWork.workName ILIKE :search OR investmentWork.address ILIKE :search OR investmentWork.district ILIKE :search OR investmentWork.service ILIKE :search)',
@@ -88,19 +158,30 @@ export class InvestmentWorksService {
       'investmentWork.contractId',
     );
 
-    const [data, total] = await query
-      .skip(skip)
-      .take(limit)
-      .orderBy('investmentWork.createdAt', 'DESC')
-      .getManyAndCount();
+    if (filters?.from || filters?.to) {
+      query
+        .orderBy('investmentWork.expectedEndDate', 'ASC')
+        .addOrderBy('investmentWork.workName', 'ASC');
+    } else {
+      query.orderBy('investmentWork.createdAt', 'DESC');
+    }
 
-    const averagesByWorkId = await this.findAverageScoreByWorkIds(
-      data.map((work) => work.id),
-    );
-    const dataWithAverages = data.map((work) => ({
-      ...work,
-      averageScorePercent: averagesByWorkId.get(work.id) ?? null,
-    }));
+    const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
+
+    const workIds = data.map((work) => work.id);
+    const [averagesByWorkId, countsByWorkId] = await Promise.all([
+      this.findAverageScoreByWorkIds(workIds),
+      this.findRealizedInspectionCountsByWorkIds(workIds),
+    ]);
+    const dataWithAverages = data.map((work) => {
+      const counts = countsByWorkId.get(work.id);
+      return {
+        ...work,
+        averageScorePercent: averagesByWorkId.get(work.id) ?? null,
+        fieldInspectionCount: counts?.field ?? 0,
+        postWorkInspectionCount: counts?.postWork ?? 0,
+      };
+    });
 
     const totalPages = Math.ceil(total / limit);
 
@@ -158,8 +239,14 @@ export class InvestmentWorksService {
           .getCount(),
       ]);
 
+    const descriptionLabels =
+      investmentWork.origin === InvestmentWorkOrigin.IMPORT
+        ? await this.loadDescriptionLabels(investmentWork.id)
+        : undefined;
+
     return {
       ...investmentWork,
+      ...(descriptionLabels ? { descriptions: descriptionLabels } : {}),
       inspectionStats: {
         total: inspectionTotal,
         averageScorePercent:
@@ -198,13 +285,14 @@ export class InvestmentWorksService {
 
     const investmentWork = this.investmentWorkRepository.create({
       ...dto,
+      origin: InvestmentWorkOrigin.MANUAL,
       workName: dto.workName.trim(),
       address: dto.address.trim(),
       district: dto.district.trim(),
-      basin: dto.basin.trim(),
+      basin: this.optionalText(dto.basin) ?? null,
       service: dto.service.trim(),
-      materialNetwork: dto.materialNetwork.trim(),
-      singularities: dto.singularities?.trim() || null,
+      materialNetwork: this.optionalText(dto.materialNetwork) ?? null,
+      singularities: this.optionalText(dto.singularities) ?? null,
       createdByUserId: user.id,
       active: true,
     });
@@ -225,6 +313,9 @@ export class InvestmentWorksService {
     user: any,
   ): Promise<InvestmentWork> {
     const investmentWork = await this.findOneScoped(id, user);
+    if (investmentWork.origin === InvestmentWorkOrigin.IMPORT) {
+      return this.updateImported(investmentWork, dto, user);
+    }
 
     const nextContractId = dto.contractId ?? investmentWork.contractId;
     const nextTeamId = dto.teamId ?? investmentWork.teamId;
@@ -238,21 +329,25 @@ export class InvestmentWorksService {
     await this.ensureTeamIsValidForContract(nextTeamId, nextContractId);
 
     const updatePayload: Partial<InvestmentWork> = {
-      ...dto,
       workName: dto.workName?.trim(),
+      startDate: dto.startDate,
+      expectedEndDate: dto.expectedEndDate,
       address: dto.address?.trim(),
       district: dto.district?.trim(),
-      basin: dto.basin?.trim(),
       service: dto.service?.trim(),
-      materialNetwork: dto.materialNetwork?.trim(),
-      singularities:
-        dto.singularities === undefined ? undefined : dto.singularities.trim(),
       contractId: nextContractId,
       teamId: nextTeamId,
+      status: dto.status,
+      active: dto.active,
     };
-
-    if (dto.singularities !== undefined && !dto.singularities.trim()) {
-      updatePayload.singularities = null;
+    if (dto.basin !== undefined) {
+      updatePayload.basin = dto.basin.trim() || null;
+    }
+    if (dto.materialNetwork !== undefined) {
+      updatePayload.materialNetwork = dto.materialNetwork.trim() || null;
+    }
+    if (dto.singularities !== undefined) {
+      updatePayload.singularities = dto.singularities.trim() || null;
     }
 
     await this.investmentWorkRepository.update(
@@ -289,11 +384,100 @@ export class InvestmentWorksService {
       );
     }
 
-    await this.investmentWorkRepository.delete(investmentWork.id);
+    await this.investmentWorkRepository.manager.transaction(async (manager) => {
+      if (investmentWork.origin === InvestmentWorkOrigin.IMPORT) {
+        await manager.update(
+          InvestmentWorkDescription,
+          { investmentWorkId: investmentWork.id },
+          { investmentWorkId: null },
+        );
+      }
+      await manager.delete(InvestmentWork, investmentWork.id);
+    });
     this.logger.log('Investment work removed', {
       investmentWorkId: investmentWork.id,
       removedByUserId: user.id,
     });
+  }
+
+  private async updateImported(
+    investmentWork: InvestmentWork,
+    dto: UpdateInvestmentWorkDto,
+    user: any,
+  ): Promise<InvestmentWork> {
+    for (const field of Object.keys(dto)) {
+      if (!InvestmentWorksService.importEditableFields.has(field)) {
+        throw new BadRequestException(
+          `Campo não editável em cadastro por Excel: ${field}`,
+        );
+      }
+    }
+
+    const nextExpectedEndDate =
+      dto.expectedEndDate ?? investmentWork.expectedEndDate;
+    const nextStartDate = dto.expectedEndDate ?? investmentWork.startDate;
+    this.validateDateRange(nextStartDate, nextExpectedEndDate);
+    this.ensureContractAccess(user, investmentWork.contractId);
+
+    const updatePayload: Partial<InvestmentWork> = {};
+    if (dto.address !== undefined) updatePayload.address = dto.address.trim();
+    if (dto.district !== undefined) {
+      updatePayload.district = dto.district.trim();
+    }
+    if (dto.pdaTeamName !== undefined) {
+      updatePayload.pdaTeamName = dto.pdaTeamName.trim() || null;
+    }
+    if (dto.expectedEndDate !== undefined) {
+      updatePayload.expectedEndDate = dto.expectedEndDate;
+      updatePayload.startDate = dto.expectedEndDate;
+    }
+    if (dto.status !== undefined) updatePayload.status = dto.status;
+    if (dto.active !== undefined) updatePayload.active = dto.active;
+
+    try {
+      await this.investmentWorkRepository.manager.transaction(async (manager) => {
+        await manager.update(InvestmentWork, investmentWork.id, updatePayload);
+        if (dto.expectedEndDate !== undefined) {
+          await manager.update(
+            InvestmentWorkDescription,
+            { investmentWorkId: investmentWork.id },
+            { executionDate: dto.expectedEndDate },
+          );
+        }
+      });
+    } catch (error) {
+      if (this.isUniqueViolation(error)) {
+        throw new BadRequestException(
+          'Já existe cadastro por Excel com esta O.S, data e Descrição neste contrato.',
+        );
+      }
+      throw error;
+    }
+
+    this.logger.log('Investment work updated', {
+      investmentWorkId: investmentWork.id,
+      contractId: investmentWork.contractId,
+      updatedByUserId: user.id,
+      updatedFields: Object.keys(dto),
+    });
+    return this.findOneScoped(investmentWork.id, user);
+  }
+
+  private async loadDescriptionLabels(investmentWorkId: string): Promise<string[]> {
+    const rows = await this.descriptionRepository.find({
+      where: { investmentWorkId },
+      order: { description: 'ASC' },
+    });
+    return rows.map((row) => row.description);
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const candidate = error as {
+      code?: string;
+      driverError?: { code?: string };
+    };
+    return candidate.code === '23505' || candidate.driverError?.code === '23505';
   }
 
   private async findOneScoped(id: string, user: any): Promise<InvestmentWork> {
@@ -369,6 +553,75 @@ export class InvestmentWorksService {
     }
   }
 
+  private searchableTerm(value?: string): string | undefined {
+    const term = value?.trim() ?? '';
+    return term.length >= 3 ? term : undefined;
+  }
+
+  private realizedPostWorkExists(
+    query: SelectQueryBuilder<InvestmentWork>,
+  ): string {
+    const subquery = query
+      .subQuery()
+      .select('1')
+      .from(Inspection, 'realizedPostWork')
+      .where('realizedPostWork.investmentWorkId = investmentWork.id')
+      .andWhere('realizedPostWork.module = :obrasModule')
+      .andWhere('realizedPostWork.evaluationModule = :posObraEvaluation')
+      .andWhere('realizedPostWork.status <> :draftStatus')
+      .getQuery();
+    return `EXISTS ${subquery}`;
+  }
+
+  private async findRealizedInspectionCountsByWorkIds(
+    investmentWorkIds: string[],
+  ): Promise<Map<string, { field: number; postWork: number }>> {
+    const counts = new Map<string, { field: number; postWork: number }>();
+    if (investmentWorkIds.length === 0) {
+      return counts;
+    }
+
+    const rows = await this.inspectionRepository
+      .createQueryBuilder('inspection')
+      .select('inspection.investmentWorkId', 'investmentWorkId')
+      .addSelect('inspection.evaluationModule', 'evaluationModule')
+      .addSelect('COUNT(*)', 'total')
+      .where('inspection.investmentWorkId IN (:...investmentWorkIds)', {
+        investmentWorkIds,
+      })
+      .andWhere('inspection.module = :module', {
+        module: ModuleType.OBRAS_INVESTIMENTO,
+      })
+      .andWhere('inspection.status <> :draft', {
+        draft: InspectionStatus.RASCUNHO,
+      })
+      .groupBy('inspection.investmentWorkId')
+      .addGroupBy('inspection.evaluationModule')
+      .getRawMany<{
+        investmentWorkId: string;
+        evaluationModule: InvestmentWorkEvaluationModule;
+        total: string;
+      }>();
+
+    for (const row of rows) {
+      if (!row.investmentWorkId) continue;
+      const current = counts.get(row.investmentWorkId) ?? {
+        field: 0,
+        postWork: 0,
+      };
+      const total = Number(row.total);
+      if (row.evaluationModule === InvestmentWorkEvaluationModule.CAMPO) {
+        current.field = total;
+      }
+      if (row.evaluationModule === InvestmentWorkEvaluationModule.POS_OBRA) {
+        current.postWork = total;
+      }
+      counts.set(row.investmentWorkId, current);
+    }
+
+    return counts;
+  }
+
   private async findAverageScoreByWorkIds(
     investmentWorkIds: string[],
   ): Promise<Map<string, number>> {
@@ -396,6 +649,11 @@ export class InvestmentWorksService {
     }
 
     return averages;
+  }
+
+  private optionalText(value: string | undefined): string | null | undefined {
+    if (value === undefined) return undefined;
+    return value.trim() || null;
   }
 
   private validateDateRange(startDate: string, expectedEndDate: string): void {

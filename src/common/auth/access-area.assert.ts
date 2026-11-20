@@ -24,6 +24,15 @@ export function assertCanSeeAnyArea(
   }
 }
 
+export function assertCanSeeAllAreas(
+  user: AccessSubject | null | undefined,
+  areas: AccessArea[],
+): void {
+  if (!areas.every((area) => canSeeArea(user, area))) {
+    throw new ForbiddenException('Área não visível');
+  }
+}
+
 export function assertAreaAction(
   user: AccessSubject | null | undefined,
   area: AccessArea,

@@ -8,10 +8,12 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
-import { InvestmentWorkStatus } from '../common/enums';
+import { InvestmentWorkOrigin, InvestmentWorkStatus } from '../common/enums';
 import { Contract } from './contract.entity';
+import { InvestmentWorkImport } from './investment-work-import.entity';
 import { User } from './user.entity';
 import { Team } from './team.entity';
+import { Sector } from './sector.entity';
 import { Inspection } from './inspection.entity';
 
 @Entity('investment_works')
@@ -33,6 +35,14 @@ export class InvestmentWork {
   @JoinColumn({ name: 'created_by_user_id' })
   createdBy: User;
 
+  @Column({
+    type: 'enum',
+    enum: InvestmentWorkOrigin,
+    enumName: 'investment_work_origin_enum',
+    default: InvestmentWorkOrigin.MANUAL,
+  })
+  origin: InvestmentWorkOrigin;
+
   @Column({ name: 'work_name' })
   workName: string;
 
@@ -48,21 +58,38 @@ export class InvestmentWork {
   @Column({ type: 'text' })
   district: string;
 
-  @Column({ type: 'text' })
-  basin: string;
+  @Column({ name: 'pda_team_name', type: 'text', nullable: true })
+  pdaTeamName: string | null;
 
-  @Column({ type: 'text' })
-  service: string;
+  @Column({ name: 'sector_id', type: 'uuid', nullable: true })
+  sectorId: string | null;
 
-  @Column({ name: 'team_id' })
-  teamId: string;
+  @ManyToOne(() => Sector, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'sector_id' })
+  sector: Sector | null;
 
-  @ManyToOne(() => Team, { nullable: false })
+  @Column({ name: 'import_id', type: 'uuid', nullable: true })
+  importId: string | null;
+
+  @ManyToOne(() => InvestmentWorkImport, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'import_id' })
+  import: InvestmentWorkImport | null;
+
+  @Column({ type: 'text', nullable: true })
+  basin: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  service: string | null;
+
+  @Column({ name: 'team_id', type: 'uuid', nullable: true })
+  teamId: string | null;
+
+  @ManyToOne(() => Team, { nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'team_id' })
-  team: Team;
+  team: Team | null;
 
-  @Column({ name: 'material_network', type: 'text' })
-  materialNetwork: string;
+  @Column({ name: 'material_network', type: 'text', nullable: true })
+  materialNetwork: string | null;
 
   @Column({ type: 'text', nullable: true })
   singularities: string | null;

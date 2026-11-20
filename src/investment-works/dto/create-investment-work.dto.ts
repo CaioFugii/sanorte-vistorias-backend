@@ -31,10 +31,10 @@ export class CreateInvestmentWorkDto {
   @MaxLength(255)
   district: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(255)
-  basin: string;
+  basin?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -44,10 +44,10 @@ export class CreateInvestmentWorkDto {
   @IsUUID('4')
   teamId: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(255)
-  materialNetwork: string;
+  materialNetwork?: string;
 
   @IsOptional()
   @IsString()

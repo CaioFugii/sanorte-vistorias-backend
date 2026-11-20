@@ -15,11 +15,14 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { AreaAction, AreaActionGuard } from '../common/auth/area-action.guard';
+import { assertCanSeeAllAreas } from '../common/auth/access-area.assert';
 import { AccessArea, UserRole } from '../common/enums';
 import { InvestmentWorksService } from './investment-works.service';
+import { InvestmentWorkSummaryService } from './investment-work-summary.service';
 import {
   CreateInvestmentWorkDto,
   FilterInvestmentWorksDto,
+  InvestmentWorkSummaryQueryDto,
   UpdateInvestmentWorkDto,
 } from './dto';
 
@@ -28,6 +31,7 @@ import {
 export class InvestmentWorksController {
   constructor(
     private readonly investmentWorksService: InvestmentWorksService,
+    private readonly summaryService: InvestmentWorkSummaryService,
   ) {}
 
   @Get()
@@ -43,6 +47,20 @@ export class InvestmentWorksController {
       filters.limit || 10,
       filters,
     );
+  }
+
+  @Get('summary')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR, UserRole.FISCAL)
+  summarize(
+    @CurrentUser() user: any,
+    @Query() query: InvestmentWorkSummaryQueryDto,
+  ) {
+    assertCanSeeAllAreas(user, [
+      AccessArea.QUALIDADE_PAINEL,
+      AccessArea.ENGENHARIA_OBRAS,
+    ]);
+    return this.summaryService.summarize(user, query);
   }
 
   @Get(':id')

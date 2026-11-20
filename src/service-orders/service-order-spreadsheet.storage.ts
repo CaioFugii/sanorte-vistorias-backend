@@ -1,68 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { mkdir, readFile, writeFile } from 'fs/promises';
-import * as path from 'path';
-import { StorageProvider } from '../common/enums';
-import { S3AssetStorageAdapter } from '../storage/adapters/s3-asset-storage.adapter';
-import {
-  getLocalStorageRoot,
-  resolveSafeLocalPath,
-} from '../storage/adapters/local-asset-storage.adapter';
-import { resolveStorageProvider } from '../storage/asset-storage.interface';
+import { Injectable } from '@nestjs/common';
+import { SpreadsheetStorageService } from '../common/utils/spreadsheet-storage.service';
+
+const SERVICE_ORDER_IMPORT_PREFIX = 'service-orders/imports';
 
 @Injectable()
 export class ServiceOrderSpreadsheetStorage {
-  private readonly logger = new Logger(ServiceOrderSpreadsheetStorage.name);
+  constructor(private readonly storage: SpreadsheetStorageService) {}
 
-  constructor(private readonly s3Storage: S3AssetStorageAdapter) {}
-
-  async save(
+  save(
     buffer: Buffer,
     originalName: string,
   ): Promise<{ key: string; provider: string }> {
-    const extension = this.extensionFor(originalName);
-    const key = `service-orders/imports/${randomUUID()}.${extension}`;
-    const provider = resolveStorageProvider();
-    if (provider === 's3') {
-      await this.s3Storage.putObjectWithKey(
-        key,
-        buffer,
-        this.contentTypeFor(extension),
-      );
-      return { key, provider: StorageProvider.S3 };
-    }
-
-    if (provider !== 'local') {
-      this.logger.warn(
-        `STORAGE_PROVIDER=${provider} não recebe planilha. O arquivo foi gravado em disco.`,
-      );
-    }
-    const fullPath = resolveSafeLocalPath(getLocalStorageRoot(), key);
-    await mkdir(path.dirname(fullPath), { recursive: true });
-    await writeFile(fullPath, buffer);
-    return { key, provider: StorageProvider.LOCAL };
+    return this.storage.save(buffer, originalName, SERVICE_ORDER_IMPORT_PREFIX);
   }
 
-  async read(key: string, provider: string): Promise<Buffer> {
-    if (provider === StorageProvider.S3) {
-      return this.s3Storage.getObjectBuffer(key);
-    }
-    return readFile(resolveSafeLocalPath(getLocalStorageRoot(), key));
+  read(key: string, provider: string): Promise<Buffer> {
+    return this.storage.read(key, provider);
   }
 
   contentTypeForName(fileName: string): string {
-    return this.contentTypeFor(this.extensionFor(fileName));
-  }
-
-  private extensionFor(fileName: string): 'xls' | 'xlsx' {
-    const lower = fileName.toLowerCase();
-    if (lower.endsWith('.xls') && !lower.endsWith('.xlsx')) return 'xls';
-    return 'xlsx';
-  }
-
-  private contentTypeFor(extension: 'xls' | 'xlsx'): string {
-    return extension === 'xls'
-      ? 'application/vnd.ms-excel'
-      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    return this.storage.contentTypeForName(fileName);
   }
 }

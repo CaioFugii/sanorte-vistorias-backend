@@ -9,6 +9,8 @@ export * from './pending-status.enum';
 export * from './report-field-type.enum';
 export * from './report-orientation.enum';
 export * from './investment-work-status.enum';
+export * from './investment-work-origin.enum';
+export * from './investment-work-import-line-status.enum';
 export * from './investment-work-evaluation-module.enum';
 export * from './storage-provider.enum';
 export * from './service-order-import-line-status.enum';

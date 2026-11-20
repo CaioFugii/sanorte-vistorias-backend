@@ -727,7 +727,12 @@ describe('InspectionsService', () => {
               fimExecucao: new Date('2026-01-09T08:00:00.000Z'),
               resultado: 'EXECUTADO',
             },
-            investmentWork: { id: 'iw-1', workName: 'Obra X' },
+            investmentWork: {
+              id: 'iw-1',
+              workName: 'Obra X',
+              origin: 'MANUAL',
+              expectedEndDate: '2026-02-01',
+            },
           },
         ],
         1,
@@ -752,12 +757,19 @@ describe('InspectionsService', () => {
       finalizedAt: null,
       createdAt: new Date('2026-01-10T10:00:00.000Z'),
       team: { name: 'Equipe A' },
+      contract: null,
       serviceOrder: {
         osNumber: 'OS-1000',
         fimExecucao: new Date('2026-01-09T08:00:00.000Z'),
         resultado: 'EXECUTADO',
       },
-      investmentWork: { id: 'iw-1', name: 'Obra X', workName: 'Obra X' },
+      investmentWork: {
+        id: 'iw-1',
+        name: 'Obra X',
+        workName: 'Obra X',
+        origin: 'MANUAL',
+        executionDate: '2026-02-01',
+      },
       pendingItemsCount: 4,
       pendingItemsPreview: [
         'Extintor vencido',
@@ -822,6 +834,85 @@ describe('InspectionsService', () => {
     expect(response.data[0].pendingItemsPreview).toEqual([]);
   });
 
+  it('findAll devolve contrato e a data da obra por Excel', async () => {
+    const pendingQb: any = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    };
+    const base = {
+      module: ModuleType.OBRAS_INVESTIMENTO,
+      evaluationModule: null,
+      serviceDescription: null,
+      locationDescription: null,
+      status: InspectionStatus.FINALIZADA,
+      hasParalysisPenalty: false,
+      scorePercent: null,
+      finalizedAt: null,
+      createdAt: new Date('2026-10-20T10:00:00.000Z'),
+      team: null,
+      contract: { id: 'contract-1', name: 'Contrato Norte' },
+    };
+    const qb: any = {
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([
+        [
+          {
+            ...base,
+            id: 'with-contract',
+            externalId: 'ext-contract',
+            serviceOrder: {
+              osNumber: 'OS-1',
+              fimExecucao: null,
+              resultado: null,
+            },
+            investmentWork: null,
+          },
+          {
+            ...base,
+            id: 'excel-work',
+            externalId: 'ext-excel',
+            serviceOrder: null,
+            investmentWork: {
+              id: 'work-1',
+              workName: '17219247782',
+              origin: 'IMPORT',
+              expectedEndDate: '2026-10-20',
+            },
+          },
+        ],
+        2,
+      ]),
+    };
+    inspectionsRepository.createQueryBuilder.mockReturnValue(qb);
+    inspectionItemsRepository.createQueryBuilder.mockReturnValue(pendingQb);
+
+    const response = await service.findAll({}, 1, 10, { role: UserRole.ADMIN });
+
+    expect(response.data[0].contract).toEqual({
+      id: 'contract-1',
+      name: 'Contrato Norte',
+    });
+    expect(response.data[1].investmentWork).toEqual({
+      id: 'work-1',
+      name: '17219247782',
+      workName: '17219247782',
+      origin: 'IMPORT',
+      executionDate: '2026-10-20',
+    });
+  });
+
   it('findAll deve aplicar filtros de contrato, equipe, serviço e períodos', async () => {
     const pendingQb: any = {
       innerJoin: jest.fn().mockReturnThis(),
@@ -877,12 +968,13 @@ describe('InspectionsService', () => {
       'serviceOrder.resultado ILIKE :service',
       { service: '%REPOSIÇÃO%' },
     );
+    const executionDateSql = `COALESCE(DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")), "investmentWork"."expected_end_date")`;
     expect(qb.andWhere).toHaveBeenCalledWith(
-      `DATE(timezone('America/Sao_Paulo', serviceOrder.fimExecucao)) >= :executionFrom`,
+      `${executionDateSql} >= :executionFrom`,
       { executionFrom: '2026-05-01' },
     );
     expect(qb.andWhere).toHaveBeenCalledWith(
-      `DATE(timezone('America/Sao_Paulo', serviceOrder.fimExecucao)) <= :executionTo`,
+      `${executionDateSql} <= :executionTo`,
       { executionTo: '2026-05-31' },
     );
     expect(qb.andWhere).toHaveBeenCalledWith(
@@ -994,7 +1086,12 @@ describe('InspectionsService', () => {
             createdAt: new Date('2026-01-11T10:00:00.000Z'),
             team: null,
             serviceOrder: null,
-            investmentWork: { id: 'iw-2', workName: 'Obra Y' },
+            investmentWork: {
+              id: 'iw-2',
+              workName: 'Obra Y',
+              origin: 'MANUAL',
+              expectedEndDate: null,
+            },
           },
         ],
         1,
@@ -1025,8 +1122,15 @@ describe('InspectionsService', () => {
       finalizedAt: null,
       createdAt: new Date('2026-01-11T10:00:00.000Z'),
       team: null,
+      contract: null,
       serviceOrder: null,
-      investmentWork: { id: 'iw-2', name: 'Obra Y', workName: 'Obra Y' },
+      investmentWork: {
+        id: 'iw-2',
+        name: 'Obra Y',
+        workName: 'Obra Y',
+        origin: 'MANUAL',
+        executionDate: null,
+      },
       pendingItemsCount: 0,
       pendingItemsPreview: [],
       resolutionRejectionReason: null,

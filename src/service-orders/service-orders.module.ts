@@ -11,6 +11,7 @@ import {
 import { ServiceOrdersService } from './service-orders.service';
 import { ServiceOrdersController } from './service-orders.controller';
 import { ServiceOrderImportParserService } from './import/service-order-import-parser.service';
+import { SpreadsheetStorageService } from '../common/utils/spreadsheet-storage.service';
 import { ServiceOrderSpreadsheetStorage } from './service-order-spreadsheet.storage';
 import { ExcelModule } from '../excel/excel.module';
 import { StorageModule } from '../storage/storage.module';
@@ -35,6 +36,7 @@ import { ServiceOrdersExcelExporter } from './service-orders-excel.exporter';
   providers: [
     ServiceOrdersService,
     ServiceOrderImportParserService,
+    SpreadsheetStorageService,
     ServiceOrderSpreadsheetStorage,
     ServiceOrdersExcelExporter,
   ],

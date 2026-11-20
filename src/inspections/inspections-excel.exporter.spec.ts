@@ -70,6 +70,7 @@ describe('InspectionsExcelExporter', () => {
       'Módulo',
       'Fiscal',
       'OS / Obra',
+      'Contrato',
       'Descrição',
       'Serviço',
       'Data de execução',
@@ -88,9 +89,9 @@ describe('InspectionsExcelExporter', () => {
       'NC 8',
     ]);
     expect(rows[1]?.[1]).toBe('Fiscal Silva');
-    expect(rows[1]?.[7]).toBe('Rua A');
-    expect(rows[1]?.[11]).toBe('Vala não requadrada');
-    expect(rows[1]?.[12]).toBe('Abatimento');
+    expect(rows[1]?.[8]).toBe('Rua A');
+    expect(rows[1]?.[12]).toBe('Vala não requadrada');
+    expect(rows[1]?.[13]).toBe('Abatimento');
   });
 
   it('exporta pendências com localização e equipe na ordem da tela', async () => {
@@ -121,5 +122,44 @@ describe('InspectionsExcelExporter', () => {
     ]);
     expect(rows[1]?.[5]).toBe('Rua A');
     expect(rows[1]?.[6]).toBe('Equipe A');
+  });
+
+  it('avaliações trazem Contrato e a data da obra quando não há OS', async () => {
+    inspectionsService.findForExport.mockResolvedValue([
+      {
+        ...sampleRow,
+        serviceOrder: null,
+        contract: { id: 'contract-1', name: 'Contrato Norte' },
+        investmentWork: {
+          id: 'work-1',
+          name: '17219247782',
+          workName: '17219247782',
+          origin: 'IMPORT',
+          executionDate: '2026-10-20',
+        },
+      },
+    ]);
+
+    const file = await exporter.export(
+      { contractId: 'contract-1' },
+      { role: 'ADMIN' },
+      InspectionExcelLayout.AVALIACOES,
+    );
+
+    expect(inspectionsService.findForExport).toHaveBeenCalledWith(
+      { contractId: 'contract-1' },
+      InspectionsExcelExporter.MAX_EXPORT_ROWS,
+      { role: 'ADMIN' },
+    );
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const rows = XLSX.utils.sheet_to_json<string[]>(
+      workbook.Sheets.Avaliações,
+      { header: 1 },
+    );
+    expect(rows[0]?.[2]).toBe('OS / Obra');
+    expect(rows[0]?.[3]).toBe('Contrato');
+    expect(rows[1]?.[2]).toBe('17219247782');
+    expect(rows[1]?.[3]).toBe('Contrato Norte');
+    expect(rows[1]?.[6]).toBe('20/10/2026');
   });
 });

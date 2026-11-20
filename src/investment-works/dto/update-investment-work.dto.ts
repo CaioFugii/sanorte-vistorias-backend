@@ -36,6 +36,11 @@ export class UpdateInvestmentWorkDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
+  pdaTeamName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   basin?: string;
 
   @IsOptional()

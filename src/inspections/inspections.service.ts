@@ -530,6 +530,7 @@ export class InspectionsService {
     const query = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .leftJoin('inspection.team', 'team')
+      .leftJoin('inspection.contract', 'contract')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .leftJoin('inspection.investmentWork', 'investmentWork')
       .select([
@@ -549,8 +550,14 @@ export class InspectionsService {
         'inspection.resolutionSubmittedByUserId',
       ])
       .addSelect(['team.name'])
+      .addSelect(['contract.id', 'contract.name'])
       .addSelect(['serviceOrder.id', 'serviceOrder.osNumber'])
-      .addSelect(['investmentWork.id', 'investmentWork.workName'])
+      .addSelect([
+        'investmentWork.id',
+        'investmentWork.workName',
+        'investmentWork.origin',
+        'investmentWork.expectedEndDate',
+      ])
       .where('inspection.createdByUserId = :userId', { userId })
       .orderBy('inspection.createdAt', 'DESC');
 
@@ -605,6 +612,7 @@ export class InspectionsService {
     const query = this.inspectionsRepository
       .createQueryBuilder('inspection')
       .leftJoin('inspection.team', 'team')
+      .leftJoin('inspection.contract', 'contract')
       .leftJoin('inspection.serviceOrder', 'serviceOrder')
       .leftJoin('inspection.investmentWork', 'investmentWork')
       .select([
@@ -624,12 +632,18 @@ export class InspectionsService {
         'inspection.resolutionSubmittedByUserId',
       ])
       .addSelect(['team.name'])
+      .addSelect(['contract.id', 'contract.name'])
       .addSelect([
         'serviceOrder.osNumber',
         'serviceOrder.fimExecucao',
         'serviceOrder.resultado',
       ])
-      .addSelect(['investmentWork.id', 'investmentWork.workName'])
+      .addSelect([
+        'investmentWork.id',
+        'investmentWork.workName',
+        'investmentWork.origin',
+        'investmentWork.expectedEndDate',
+      ])
       .andWhere('inspection.status != :draftStatus', {
         draftStatus: InspectionStatus.RASCUNHO,
       });
@@ -685,16 +699,14 @@ export class InspectionsService {
       });
     }
     if (filters.executionFrom) {
-      query.andWhere(
-        `DATE(timezone('America/Sao_Paulo', serviceOrder.fimExecucao)) >= :executionFrom`,
-        { executionFrom: filters.executionFrom },
-      );
+      query.andWhere(`${this.executionDateSql()} >= :executionFrom`, {
+        executionFrom: filters.executionFrom,
+      });
     }
     if (filters.executionTo) {
-      query.andWhere(
-        `DATE(timezone('America/Sao_Paulo', serviceOrder.fimExecucao)) <= :executionTo`,
-        { executionTo: filters.executionTo },
-      );
+      query.andWhere(`${this.executionDateSql()} <= :executionTo`, {
+        executionTo: filters.executionTo,
+      });
     }
     if (filters.inspectionFrom) {
       query.andWhere(
@@ -735,6 +747,22 @@ export class InspectionsService {
     return query;
   }
 
+  private executionDateSql(): string {
+    return `COALESCE(DATE(timezone('America/Sao_Paulo', "serviceOrder"."fim_execucao")), "investmentWork"."expected_end_date")`;
+  }
+
+  private asDate(value: string | Date | null | undefined): string | null {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(value.getUTCDate()).padStart(2, '0');
+      return `${value.getUTCFullYear()}-${month}-${day}`;
+    }
+    return String(value).slice(0, 10);
+  }
+
   private toInspectionListItem(
     inspection: Inspection,
     pendingSummary?: PendingItemsSummary,
@@ -752,6 +780,9 @@ export class InspectionsService {
       finalizedAt: inspection.finalizedAt ?? null,
       createdAt: inspection.createdAt,
       team: inspection.team?.name ? { name: inspection.team.name } : null,
+      contract: inspection.contract
+        ? { id: inspection.contract.id, name: inspection.contract.name }
+        : null,
       serviceOrder: inspection.serviceOrder
         ? {
             osNumber: inspection.serviceOrder.osNumber,
@@ -764,12 +795,17 @@ export class InspectionsService {
             id: inspection.investmentWork.id,
             name: inspection.investmentWork.workName ?? null,
             workName: inspection.investmentWork.workName ?? null,
+            origin: inspection.investmentWork.origin,
+            executionDate: this.asDate(
+              inspection.investmentWork.expectedEndDate,
+            ),
           }
         : null,
       pendingItemsCount: pendingSummary?.pendingItemsCount ?? 0,
       pendingItemsPreview: pendingSummary?.pendingItemsPreview ?? [],
       resolutionRejectionReason: inspection.resolutionRejectionReason ?? null,
-      resolutionSubmittedByUserId: inspection.resolutionSubmittedByUserId ?? null,
+      resolutionSubmittedByUserId:
+        inspection.resolutionSubmittedByUserId ?? null,
       ...(inspection.createdBy?.name
         ? { createdBy: { name: inspection.createdBy.name } }
         : {}),
@@ -2137,8 +2173,7 @@ export class InspectionsService {
       {
         evaluationModule: inspection.evaluationModule ?? null,
         generatePending,
-        safetyPendingRule:
-          inspection.module === ModuleType.SEGURANCA_TRABALHO,
+        safetyPendingRule: inspection.module === ModuleType.SEGURANCA_TRABALHO,
       },
     );
 
@@ -2315,7 +2350,10 @@ export class InspectionsService {
         ? this.normalizeServiceDescription(payload.serviceDescription)
         : inspection.serviceDescription;
 
-      if (this.isServiceOrderRequired(nextModule) && !inspection.serviceOrderId) {
+      if (
+        this.isServiceOrderRequired(nextModule) &&
+        !inspection.serviceOrderId
+      ) {
         throw new BadRequestException(
           'serviceOrderId é obrigatório para criar nova vistoria. Cadastre a OS via importação de Excel antes de sincronizar.',
         );
@@ -2628,8 +2666,7 @@ export class InspectionsService {
   }
 
   private assertCanUpdateEvaluationModule(userRole: string): void {
-    const allowed =
-      userRole === UserRole.ADMIN || userRole === UserRole.GESTOR;
+    const allowed = userRole === UserRole.ADMIN || userRole === UserRole.GESTOR;
     if (!allowed) {
       throw new ForbiddenException(
         'Apenas administrador e gestor podem alterar o tipo da vistoria.',
@@ -3118,8 +3155,7 @@ export class InspectionsService {
     }
     pending.status = PendingStatus.RESOLVIDA;
     pending.resolvedAt = new Date();
-    pending.resolvedByUserId =
-      inspection.resolutionSubmittedByUserId ?? userId;
+    pending.resolvedByUserId = inspection.resolutionSubmittedByUserId ?? userId;
     await this.pendingAdjustmentsRepository.save(pending);
 
     await this.inspectionsRepository.update(inspectionId, {

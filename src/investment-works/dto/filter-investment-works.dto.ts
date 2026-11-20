@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsOptional,
   IsString,
@@ -8,7 +9,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
-import { InvestmentWorkStatus } from '../../common/enums';
+import { InvestmentWorkOrigin, InvestmentWorkStatus } from '../../common/enums';
 
 const toBoolean = (value: unknown): boolean | undefined => {
   if (value === 'true' || value === true) return true;
@@ -36,4 +37,36 @@ export class FilterInvestmentWorksDto extends PaginationQueryDto {
   @Transform(({ value }) => toBoolean(value))
   @IsBoolean({ message: 'active must be true or false' })
   active?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  district?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  pdaTeam?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => toBoolean(value))
+  @IsBoolean()
+  postWork?: boolean;
+
+  @IsOptional()
+  @IsEnum(InvestmentWorkOrigin)
+  origin?: InvestmentWorkOrigin;
 }

@@ -1,6 +1,7 @@
 import {
   InspectionStatus,
   InvestmentWorkEvaluationModule,
+  InvestmentWorkOrigin,
   ModuleType,
 } from '../../common/enums';
 
@@ -17,6 +18,7 @@ export interface InspectionListItemDto {
   finalizedAt: Date | null;
   createdAt: Date;
   team: { name: string } | null;
+  contract: { id: string; name: string } | null;
   serviceOrder: {
     osNumber: string;
     fimExecucao: Date | null;
@@ -26,6 +28,8 @@ export interface InspectionListItemDto {
     id: string;
     name: string | null;
     workName: string | null;
+    origin: InvestmentWorkOrigin;
+    executionDate: string | null;
   } | null;
   pendingItemsCount?: number;
   pendingItemsPreview?: string[];

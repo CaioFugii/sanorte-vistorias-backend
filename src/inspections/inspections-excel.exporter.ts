@@ -90,13 +90,20 @@ export class InspectionsExcelExporter {
       });
     }
 
+    columns.push({
+      header: 'OS / Obra',
+      width: 22,
+      value: (row) =>
+        row.serviceOrder?.osNumber || row.investmentWork?.workName || '',
+    });
+    if (!isPendencias) {
+      columns.push({
+        header: 'Contrato',
+        width: 28,
+        value: (row) => row.contract?.name ?? '',
+      });
+    }
     columns.push(
-      {
-        header: 'OS / Obra',
-        width: 22,
-        value: (row) =>
-          row.serviceOrder?.osNumber || row.investmentWork?.workName || '',
-      },
       {
         header: descriptionHeader,
         width: 36,
@@ -110,7 +117,10 @@ export class InspectionsExcelExporter {
       {
         header: 'Data de execução',
         width: 20,
-        value: (row) => this.formatDateTime(row.serviceOrder?.fimExecucao),
+        value: (row) =>
+          isPendencias
+            ? this.formatDateTime(row.serviceOrder?.fimExecucao)
+            : this.formatExecutionDate(row),
       },
     );
 
@@ -183,6 +193,18 @@ export class InspectionsExcelExporter {
         ? 'Campo'
         : 'Pós-obra';
     return `${base} (${typeLabel})`;
+  }
+
+  private formatExecutionDate(row: InspectionListItemDto): string {
+    if (row.serviceOrder?.fimExecucao) {
+      return this.formatDateTime(row.serviceOrder.fimExecucao);
+    }
+    const value = row.investmentWork?.executionDate;
+    const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) {
+      return '';
+    }
+    return `${match[3]}/${match[2]}/${match[1]}`;
   }
 
   private formatDate(value?: Date | string | null): string {
