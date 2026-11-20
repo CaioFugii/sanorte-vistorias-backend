@@ -184,6 +184,7 @@ describe('InspectionsService', () => {
       module: ModuleType.QUALIDADE,
       checklistId: 'checklist-id',
       teamId: 'team-id',
+      serviceOrderId: 'service-order-id',
       serviceDescription: 'Vistoria offline',
       locationDescription: null,
       createdOffline: true,
@@ -230,6 +231,7 @@ describe('InspectionsService', () => {
       id: 'server-id-2',
       externalId: '31a9e29b-1ca9-4d69-a6cf-e6367471743f',
       status: 'RASCUNHO',
+      serviceOrderId: 'service-order-id',
       collaborators: [],
     });
     teamsRepository.findOne.mockResolvedValue({ id: 'team-id' });
@@ -607,7 +609,9 @@ describe('InspectionsService', () => {
     const transactionalOrders = { update: jest.fn() };
     const manager = {
       getRepository: jest.fn((entity: { name: string }) =>
-        entity.name === 'ServiceOrder' ? transactionalOrders : transactionalInspections,
+        entity.name === 'ServiceOrder'
+          ? transactionalOrders
+          : transactionalInspections,
       ),
     };
     evidencesRepository.find.mockResolvedValue([]);
@@ -760,6 +764,8 @@ describe('InspectionsService', () => {
         'Sinalização de saída ausente',
         'Quadro elétrico sem identificação',
       ],
+      resolutionRejectionReason: null,
+      resolutionSubmittedByUserId: null,
     });
     expect((response.data[0] as any).items).toBeUndefined();
     expect((response.data[0] as any).checklist).toBeUndefined();
@@ -1023,6 +1029,8 @@ describe('InspectionsService', () => {
       investmentWork: { id: 'iw-2', name: 'Obra Y', workName: 'Obra Y' },
       pendingItemsCount: 0,
       pendingItemsPreview: [],
+      resolutionRejectionReason: null,
+      resolutionSubmittedByUserId: null,
     });
     expect((response.data[0] as any).id).toBeUndefined();
   });
@@ -1305,30 +1313,34 @@ describe('InspectionsService', () => {
   });
 
   it('fiscal em rascunho continua podendo trocar a equipe de uma vistoria', async () => {
-    inspectionsRepository.findOne.mockImplementation((options: { select?: string[] }) => {
-      if (options?.select) {
-        return Promise.resolve({
-          id: 'insp-1',
-          status: InspectionStatus.RASCUNHO,
-          module: ModuleType.CAMPO,
-          contractId: 'contract-1',
-          teamId: 'old-team',
-          serviceOrderId: 'so-1',
-          serviceDescription: 'Rascunho fiscal',
-          inspectionScope: InspectionScope.TEAM,
-          hasParalysisPenalty: false,
-          paralysisPenaltyPercent: null,
-          resolutionSubmittedByUserId: null,
-        });
-      }
-      return Promise.resolve({ collaborators: [] });
-    });
+    inspectionsRepository.findOne.mockImplementation(
+      (options: { select?: string[] }) => {
+        if (options?.select) {
+          return Promise.resolve({
+            id: 'insp-1',
+            status: InspectionStatus.RASCUNHO,
+            module: ModuleType.CAMPO,
+            contractId: 'contract-1',
+            teamId: 'old-team',
+            serviceOrderId: 'so-1',
+            serviceDescription: 'Rascunho fiscal',
+            inspectionScope: InspectionScope.TEAM,
+            hasParalysisPenalty: false,
+            paralysisPenaltyPercent: null,
+            resolutionSubmittedByUserId: null,
+          });
+        }
+        return Promise.resolve({ collaborators: [] });
+      },
+    );
     teamsRepository.findOne.mockResolvedValue({ id: 'new-team' });
     serviceOrderRepository.findOne.mockResolvedValue({
       id: 'so-1',
       resultado: 'QUALQUER',
     });
-    jest.spyOn(service, 'findOneDetail').mockResolvedValue({ id: 'insp-1' } as any);
+    jest
+      .spyOn(service, 'findOneDetail')
+      .mockResolvedValue({ id: 'insp-1' } as any);
 
     await service.update(
       'insp-1',
@@ -1486,7 +1498,9 @@ describe('InspectionsService.changeTeam', () => {
       id: 'team-new',
       contracts: [{ id: 'contract-1' }],
     });
-    inspectionsRepository.find.mockResolvedValue([finalized('insp-a', 'contract-1')]);
+    inspectionsRepository.find.mockResolvedValue([
+      finalized('insp-a', 'contract-1'),
+    ]);
 
     await expect(
       service.changeTeam(['insp-a', 'missing'], 'team-new'),
@@ -1514,7 +1528,10 @@ describe('InspectionsService.changeTeam', () => {
 describe('InspectionsController troca de equipe', () => {
   it('lote é só de ADMIN', () => {
     expect(
-      Reflect.getMetadata(ROLES_KEY, InspectionsController.prototype.changeTeam),
+      Reflect.getMetadata(
+        ROLES_KEY,
+        InspectionsController.prototype.changeTeam,
+      ),
     ).toEqual([UserRole.ADMIN]);
   });
 
