@@ -2,6 +2,8 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
+import { visibleAreas } from '../common/auth/access-area.util';
+import { AccessArea } from '../common/enums';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -48,6 +50,12 @@ export class AuthService {
           id: contract.id,
           name: contract.name,
         })),
+        areas: visibleAreas({
+          role: user.role,
+          areas: (user.accessProfile?.areas ?? []).map(
+            (row: { area: AccessArea }) => row.area,
+          ),
+        }),
       },
     };
   }

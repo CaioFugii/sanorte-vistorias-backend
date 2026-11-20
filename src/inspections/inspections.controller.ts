@@ -24,9 +24,15 @@ import { createTempDiskStorage } from '../common/multer/temp-disk.storage';
 import { InspectionsService } from './inspections.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { AreaAction, AreaActionGuard } from '../common/auth/area-action.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { InspectionExcelLayout, UserRole } from '../common/enums';
+import { AccessArea, InspectionExcelLayout, UserRole } from '../common/enums';
+import {
+  assertAreaAction,
+  assertCanSeeAnyArea,
+  assertCanSeeArea,
+} from '../common/auth/access-area.assert';
 import {
   FilterInspectionsDto,
   ExportInspectionsDto,
@@ -53,12 +59,11 @@ export class InspectionsController {
   ) {}
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL, UserRole.GESTOR, UserRole.SUPERVISOR)
   create(
     @Body() createInspectionDto: CreateInspectionDto,
     @CurrentUser() user: any,
   ) {
+    assertCanSeeArea(user, AccessArea.CAMPO_NOVA);
     return this.inspectionsService.create(createInspectionDto, user.id, user);
   }
 
@@ -71,9 +76,12 @@ export class InspectionsController {
   }
 
   @Get()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   findAll(@CurrentUser() user: any, @Query() filterDto: FilterInspectionsDto) {
+    assertCanSeeAnyArea(user, [
+      AccessArea.QUALIDADE_PAINEL,
+      AccessArea.QUALIDADE_PENDENCIAS,
+      AccessArea.SEGURANCA_DADOS,
+    ]);
     return this.inspectionsService.findAll(
       this.toListFilters(filterDto),
       filterDto.page || 1,
@@ -83,13 +91,16 @@ export class InspectionsController {
   }
 
   @Get('export')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
   async exportExcel(
     @CurrentUser() user: any,
     @Query() filterDto: ExportInspectionsDto,
     @Res({ passthrough: true }) res: Response,
   ) {
+    assertCanSeeAnyArea(user, [
+      AccessArea.QUALIDADE_PAINEL,
+      AccessArea.QUALIDADE_PENDENCIAS,
+      AccessArea.SEGURANCA_DADOS,
+    ]);
     const file = await this.inspectionsExcelExporter.export(
       this.toListFilters(filterDto),
       user,
@@ -99,9 +110,8 @@ export class InspectionsController {
   }
 
   @Get('mine')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.FISCAL)
   findMine(@CurrentUser() user: any, @Query() filterDto: FilterInspectionsDto) {
+    assertCanSeeArea(user, AccessArea.CAMPO_MINHAS);
     return this.inspectionsService.findMine(
       user.id,
       filterDto.page || 1,
@@ -342,15 +352,15 @@ export class InspectionsController {
   }
 
   @Post(':id/approve-resolution')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.QUALIDADE_PENDENCIAS, [UserRole.GESTOR, UserRole.ADMIN])
   approveResolution(@Param('id') id: string, @CurrentUser() user: any) {
     return this.inspectionsService.approveResolution(id, user.id);
   }
 
   @Post(':id/reject-resolution')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.GESTOR, UserRole.ADMIN)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.QUALIDADE_PENDENCIAS, [UserRole.GESTOR, UserRole.ADMIN])
   rejectResolution(
     @Param('id') id: string,
     @Body() body: RejectResolutionDto,

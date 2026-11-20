@@ -1,4 +1,6 @@
 export * from './user.entity';
+export * from './access-profile.entity';
+export * from './access-profile-area.entity';
 export * from './team.entity';
 export * from './foreman.entity';
 export * from './coordinator.entity';

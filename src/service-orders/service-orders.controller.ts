@@ -24,8 +24,9 @@ import { ServiceOrdersService } from './service-orders.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { AreaAction, AreaActionGuard } from '../common/auth/area-action.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { UserRole } from '../common/enums';
+import { AccessArea, UserRole } from '../common/enums';
 import { FilterServiceOrdersDto } from './dto/filter-service-orders.dto';
 import { ReprocessServiceOrderImportLineDto } from './dto/reprocess-service-order-import-line.dto';
 import { BulkDeleteServiceOrdersDto } from './dto/bulk-delete-service-orders.dto';
@@ -111,8 +112,8 @@ export class ServiceOrdersController {
   }
 
   @Post('import')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.QUALIDADE_PAINEL, [UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR])
   @UseInterceptors(FileInterceptor('file'))
   async importFromExcel(
     @CurrentUser() user: any,
@@ -197,8 +198,8 @@ export class ServiceOrdersController {
 
   @Delete('imports/:id/inserted')
   @HttpCode(204)
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.QUALIDADE_PAINEL, [UserRole.ADMIN])
   async deleteInserted(
     @CurrentUser() user: any,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -207,8 +208,8 @@ export class ServiceOrdersController {
   }
 
   @Post('imports/:id/lines/:lineId/reprocess')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.QUALIDADE_PAINEL, [UserRole.ADMIN, UserRole.GESTOR])
   reprocessLine(
     @CurrentUser() user: any,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -220,16 +221,16 @@ export class ServiceOrdersController {
 
   @Post('bulk-delete')
   @HttpCode(204)
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.QUALIDADE_PAINEL, [UserRole.ADMIN])
   async bulkDelete(@Body() body: BulkDeleteServiceOrdersDto): Promise<void> {
     await this.serviceOrdersService.removeMany(body.ids);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.QUALIDADE_PAINEL, [UserRole.ADMIN])
   async remove(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ): Promise<void> {

@@ -28,6 +28,10 @@ export class UpdateUserDto {
   @IsEnum(UserRole)
   role?: UserRole;
 
+  @IsOptional()
+  @IsUUID('4')
+  accessProfileId?: string | null;
+
   @IsArray()
   @ArrayUnique()
   @IsUUID('4', { each: true })

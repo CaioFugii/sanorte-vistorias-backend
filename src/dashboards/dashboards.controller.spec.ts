@@ -11,11 +11,19 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { QualityRankingExcelExporter } from './quality-ranking-excel.exporter';
 import { ExcelService } from '../excel/excel.service';
+import { AREAS_OPERATED_BY_ROLE } from '../common/auth/access-area.util';
+import { UserRole } from '../common/enums';
 
 class HeaderDrivenJwtGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest();
-    req.user = { role: req.headers['x-role'] ?? 'FISCAL' };
+    const role = req.headers['x-role'] ?? 'FISCAL';
+    const rawAreas = req.headers['x-areas'];
+    const areas =
+      typeof rawAreas === 'string'
+        ? rawAreas.split(',').filter(Boolean)
+        : AREAS_OPERATED_BY_ROLE[role as UserRole] ?? [];
+    req.user = { role, areas };
     return true;
   }
 }
@@ -204,6 +212,36 @@ describe('DashboardsController (integration)', () => {
       .expect(403);
   });
 
+  it('recusa Qualidade quando a área está oculta', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/quality/summary')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'FISCAL')
+      .set('x-areas', 'gestao')
+      .expect(403);
+  });
+
+  it('recusa Segurança quando a área está oculta', async () => {
+    await request(app.getHttpServer())
+      .get('/dashboards/safety-work/summary')
+      .query({ from: '2025-11-01', to: '2025-11-30' })
+      .set('x-role', 'FISCAL')
+      .set('x-areas', 'gestao')
+      .expect(403);
+  });
+
+  it('omite Qualidade e Segurança na visão geral quando as áreas estão ocultas', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/dashboards/overview')
+      .query({ from: '2026-06-01', to: '2026-09-19' })
+      .set('x-role', 'FISCAL')
+      .set('x-areas', 'gestao')
+      .expect(200);
+
+    expect(response.body.quality).toBeNull();
+    expect(response.body.safetyWork).toBeNull();
+  });
+
   it('deve permitir ADMIN no endpoint de analytics', async () => {
     await request(app.getHttpServer())
       .get('/dashboards/quality-by-service')
@@ -239,7 +277,7 @@ describe('DashboardsController (integration)', () => {
     ).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
       expect.objectContaining({
-        user: { role: 'ADMIN' },
+        user: expect.objectContaining({ role: 'ADMIN' }),
         from: '2025-11-01',
         to: '2025-11-30',
       }),

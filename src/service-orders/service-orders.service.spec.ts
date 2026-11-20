@@ -1,9 +1,10 @@
 import 'reflect-metadata';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { UserRole } from '../common/enums';
-import { ROLES_KEY } from '../common/decorators/roles.decorator';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { AccessArea, UserRole } from '../common/enums';
+import { AREAS_OPERATED_BY_ROLE } from '../common/auth/access-area.util';
+import { AREA_ACTION_KEY, AreaActionGuard } from '../common/auth/area-action.guard';
 import { ServiceOrder } from '../entities';
-import { RolesGuard } from '../auth/guards/roles.guard';
 import { ServiceOrdersController } from './service-orders.controller';
 import { ServiceOrdersService } from './service-orders.service';
 import { summaryPeriods } from './service-order-periods';
@@ -155,29 +156,48 @@ describe('ServiceOrdersService.remove', () => {
 });
 
 describe('ServiceOrdersController exclusão', () => {
-  it('lote e exclusão unitária são só de ADMIN', () => {
+  it('lote e exclusão unitária exigem o Painel e o papel ADMIN', () => {
     expect(
-      Reflect.getMetadata(ROLES_KEY, ServiceOrdersController.prototype.bulkDelete),
-    ).toEqual([UserRole.ADMIN]);
+      Reflect.getMetadata(AREA_ACTION_KEY, ServiceOrdersController.prototype.bulkDelete),
+    ).toEqual({
+      area: AccessArea.QUALIDADE_PAINEL,
+      allowedRoles: [UserRole.ADMIN],
+    });
     expect(
-      Reflect.getMetadata(ROLES_KEY, ServiceOrdersController.prototype.remove),
-    ).toEqual([UserRole.ADMIN]);
+      Reflect.getMetadata(AREA_ACTION_KEY, ServiceOrdersController.prototype.remove),
+    ).toEqual({
+      area: AccessArea.QUALIDADE_PAINEL,
+      allowedRoles: [UserRole.ADMIN],
+    });
   });
 
-  it('gestor não passa no guard e a API responde 403', () => {
-    const reflector = {
-      getAllAndOverride: jest.fn().mockReturnValue([UserRole.ADMIN]),
-    };
-    const guard = new RolesGuard(reflector as any);
-    const context = {
-      getHandler: () => ServiceOrdersController.prototype.bulkDelete,
-      getClass: () => ServiceOrdersController,
-      switchToHttp: () => ({
-        getRequest: () => ({ user: { role: UserRole.GESTOR } }),
-      }),
-    };
+  it('gestor de partida não exclui e quem ganhou o Painel exclui', () => {
+    const guard = new AreaActionGuard(new Reflector());
+    const contextFor = (user: { role: UserRole; areas: readonly string[] }) =>
+      ({
+        getHandler: () => ServiceOrdersController.prototype.bulkDelete,
+        getClass: () => ServiceOrdersController,
+        switchToHttp: () => ({
+          getRequest: () => ({ user }),
+        }),
+      }) as any;
 
-    expect(guard.canActivate(context as any)).toBe(false);
+    expect(() =>
+      guard.canActivate(
+        contextFor({
+          role: UserRole.GESTOR,
+          areas: AREAS_OPERATED_BY_ROLE[UserRole.GESTOR],
+        }),
+      ),
+    ).toThrow(ForbiddenException);
+    expect(
+      guard.canActivate(
+        contextFor({
+          role: UserRole.FISCAL,
+          areas: [AccessArea.QUALIDADE_PAINEL],
+        }),
+      ),
+    ).toBe(true);
   });
 });
 

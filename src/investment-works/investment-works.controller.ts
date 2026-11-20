@@ -14,7 +14,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { UserRole } from '../common/enums';
+import { AreaAction, AreaActionGuard } from '../common/auth/area-action.guard';
+import { AccessArea, UserRole } from '../common/enums';
 import { InvestmentWorksService } from './investment-works.service';
 import {
   CreateInvestmentWorkDto,
@@ -52,15 +53,15 @@ export class InvestmentWorksController {
   }
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.ENGENHARIA_OBRAS, [UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR])
   create(@Body() dto: CreateInvestmentWorkDto, @CurrentUser() user: any) {
     return this.investmentWorksService.create(dto, user);
   }
 
   @Put(':id')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.ENGENHARIA_OBRAS, [UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR])
   update(
     @Param('id') id: string,
     @Body() dto: UpdateInvestmentWorkDto,
@@ -71,8 +72,8 @@ export class InvestmentWorksController {
 
   @Delete(':id')
   @HttpCode(204)
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
+  @UseGuards(AreaActionGuard)
+  @AreaAction(AccessArea.ENGENHARIA_OBRAS, [UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR])
   async remove(
     @Param('id') id: string,
     @CurrentUser() user: any,

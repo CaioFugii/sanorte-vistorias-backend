@@ -10,10 +10,10 @@ import {
 import { Response } from 'express';
 import { DashboardsService } from './dashboards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import { DashboardAreaGuard } from '../common/auth/dashboard-area.guard';
+import { canSeeArea } from '../common/auth/access-area.util';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { UserRole } from '../common/enums';
+import { AccessArea } from '../common/enums';
 import { ExcelService } from '../excel/excel.service';
 import { QualityRankingExcelExporter } from './quality-ranking-excel.exporter';
 import {
@@ -29,8 +29,7 @@ import {
 } from './dto';
 
 @Controller('dashboards')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.GESTOR, UserRole.SUPERVISOR)
+@UseGuards(JwtAuthGuard, DashboardAreaGuard)
 export class DashboardsController {
   constructor(
     private readonly dashboardsService: DashboardsService,
@@ -161,13 +160,20 @@ export class DashboardsController {
   }
 
   @Get('overview')
-  getOverview(@CurrentUser() user: any, @Query() query: DashboardQueryDto) {
-    return this.dashboardsService.getOverview({
+  async getOverview(@CurrentUser() user: any, @Query() query: DashboardQueryDto) {
+    const overview = await this.dashboardsService.getOverview({
       user,
       from: query.from,
       to: query.to,
       contractId: query.contractId,
     });
+    return {
+      ...overview,
+      quality: canSeeArea(user, AccessArea.QUALIDADE_DADOS) ? overview.quality : null,
+      safetyWork: canSeeArea(user, AccessArea.SEGURANCA_DADOS)
+        ? overview.safetyWork
+        : null,
+    };
   }
 
   @Get('quality/summary')

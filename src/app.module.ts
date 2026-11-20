@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { getDatabaseConfig } from './config/database.config';
 import appConfig from './config/app.config';
 
+import { AccessProfilesModule } from './access-profiles/access-profiles.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { TeamsModule } from './teams/teams.module';
@@ -48,6 +49,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
       ],
     }),
     AuthModule,
+    AccessProfilesModule,
     UsersModule,
     TeamsModule,
     SectorsModule,

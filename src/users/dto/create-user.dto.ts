@@ -3,6 +3,7 @@ import {
   IsArray,
   IsEmail,
   IsEnum,
+  IsOptional,
   IsString,
   IsUUID,
   MinLength,
@@ -22,6 +23,10 @@ export class CreateUserDto {
 
   @IsEnum(UserRole)
   role: UserRole;
+
+  @IsOptional()
+  @IsUUID('4')
+  accessProfileId?: string;
 
   @IsArray()
   @ArrayUnique()

@@ -1,6 +1,7 @@
 export * from './module-type.enum';
 export * from './inspection-scope.enum';
 export * from './user-role.enum';
+export * from './access-area.enum';
 export * from './inspection-status.enum';
 export * from './inspection-notice-type.enum';
 export * from './checklist-answer.enum';

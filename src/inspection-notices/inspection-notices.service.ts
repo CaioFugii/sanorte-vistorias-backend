@@ -4,6 +4,8 @@ import { IsNull, Repository } from 'typeorm';
 import { Observable, Subject } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import { InspectionNoticeType, UserRole } from '../common/enums';
+import { AccessArea } from '../common/enums';
+import { canSeeArea } from '../common/auth/access-area.util';
 import { InspectionNotice, User } from '../entities';
 
 export type ResolutionNoticeInspection = {
@@ -101,25 +103,42 @@ export class InspectionNoticesService {
   ): Promise<string[]> {
     const admins = await this.usersRepository.find({
       where: { role: UserRole.ADMIN },
-      select: ['id'],
+      relations: ['accessProfile', 'accessProfile.areas'],
     });
-    const ids = new Set(admins.map((user) => user.id));
+    const ids = new Set(
+      admins
+        .filter((user) => this.canReceivePendingNotice(user))
+        .map((user) => user.id),
+    );
     if (!contractId) {
       return [...ids];
     }
 
     const gestores = await this.usersRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.accessProfile', 'accessProfile')
+      .leftJoinAndSelect('accessProfile.areas', 'area')
       .innerJoin('user.contracts', 'contract')
       .where('user.role = :role', { role: UserRole.GESTOR })
       .andWhere('contract.id = :contractId', { contractId })
-      .select(['user.id'])
       .getMany();
 
     for (const gestor of gestores) {
-      ids.add(gestor.id);
+      if (this.canReceivePendingNotice(gestor)) {
+        ids.add(gestor.id);
+      }
     }
     return [...ids];
+  }
+
+  private canReceivePendingNotice(user: User): boolean {
+    return canSeeArea(
+      {
+        role: user.role,
+        areas: (user.accessProfile?.areas ?? []).map((row) => row.area),
+      },
+      AccessArea.QUALIDADE_PENDENCIAS,
+    );
   }
 
   private async persistAndPublish(

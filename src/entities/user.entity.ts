@@ -6,9 +6,12 @@ import {
   UpdateDateColumn,
   OneToMany,
   ManyToMany,
+  ManyToOne,
   JoinTable,
+  JoinColumn,
 } from 'typeorm';
 import { UserRole } from '../common/enums';
+import { AccessProfile } from './access-profile.entity';
 import { Inspection } from './inspection.entity';
 import { Contract } from './contract.entity';
 import { InvestmentWork } from './investment-work.entity';
@@ -32,6 +35,16 @@ export class User {
     enum: UserRole,
   })
   role: UserRole;
+
+  @Column({ name: 'access_profile_id', type: 'uuid', nullable: true })
+  accessProfileId: string | null;
+
+  @ManyToOne(() => AccessProfile, (accessProfile) => accessProfile.users, {
+    nullable: true,
+    onDelete: 'RESTRICT',
+  })
+  @JoinColumn({ name: 'access_profile_id' })
+  accessProfile: AccessProfile | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

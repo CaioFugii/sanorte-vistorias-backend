@@ -39,25 +39,30 @@ export class UsersController {
   }
 
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  create(@CurrentUser() user: any, @Body() createUserDto: CreateUserDto) {
+    return this.usersService.create(createUserDto, user);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  update(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    return this.usersService.update(id, updateUserDto, user);
   }
 
   @Put(':id/contracts')
   updateContracts(
+    @CurrentUser() user: any,
     @Param('id') id: string,
     @Body() body: { contractIds: string[] },
   ) {
-    return this.usersService.updateContracts(id, body.contractIds || []);
+    return this.usersService.updateContracts(id, body.contractIds || [], user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  remove(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.usersService.remove(id, user);
   }
 }

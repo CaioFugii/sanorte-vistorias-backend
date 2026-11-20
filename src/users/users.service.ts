@@ -1,11 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Contract, User } from '../entities';
-import { UserRole } from '../common/enums';
+import { AccessProfile, Contract, User } from '../entities';
+import { AccessArea, UserRole } from '../common/enums';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { getAllowedContractIds } from '../common/auth/contract-scope.util';
 import * as bcrypt from 'bcryptjs';
+
+export type PublicUser = Omit<User, 'passwordHash'>;
 
 @Injectable()
 export class UsersService {
@@ -14,6 +20,8 @@ export class UsersService {
     private usersRepository: Repository<User>,
     @InjectRepository(Contract)
     private contractsRepository: Repository<Contract>,
+    @InjectRepository(AccessProfile)
+    private accessProfilesRepository: Repository<AccessProfile>,
   ) {}
 
   async findByEmail(
@@ -22,7 +30,7 @@ export class UsersService {
   ): Promise<User | null> {
     return this.usersRepository.findOne({
       where: { email },
-      relations: withContracts ? ['contracts'] : [],
+      relations: this.authRelations(withContracts),
     });
   }
 
@@ -32,24 +40,21 @@ export class UsersService {
   ): Promise<User | null> {
     return this.usersRepository.findOne({
       where: { id },
-      relations: withContracts ? ['contracts'] : [],
+      relations: this.authRelations(withContracts),
     });
   }
 
   async findOneForAuth(id: string): Promise<
     | (Pick<User, 'id' | 'name' | 'email' | 'role'> & {
         contracts: Pick<Contract, 'id' | 'name'>[];
+        accessProfileId: string | null;
+        areas: AccessArea[];
       })
     | null
   > {
     const user = await this.usersRepository.findOne({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      },
+      relations: ['accessProfile', 'accessProfile.areas'],
     });
 
     if (!user) {
@@ -73,6 +78,8 @@ export class UsersService {
       email: user.email,
       role: user.role,
       contracts,
+      accessProfileId: user.accessProfileId ?? null,
+      areas: this.areasOf(user),
     };
   }
 
@@ -80,7 +87,7 @@ export class UsersService {
     page: number = 1,
     limit: number = 10,
     contractId?: string,
-  ): Promise<PaginatedResponseDto<User>> {
+  ): Promise<PaginatedResponseDto<PublicUser>> {
     const skip = (page - 1) * limit;
     const selectedContractId = contractId?.trim();
 
@@ -114,7 +121,7 @@ export class UsersService {
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data,
+      data: data.map((user) => this.withoutPassword(user)),
       meta: {
         page,
         limit,
@@ -171,17 +178,28 @@ export class UsersService {
     return { data: rows.map((row) => ({ id: row.id, name: row.name })) };
   }
 
-  async create(userData: {
-    name: string;
-    email: string;
-    password: string;
-    role: UserRole;
-    contractIds?: string[];
-  }): Promise<User> {
+  async create(
+    userData: {
+      name: string;
+      email: string;
+      password: string;
+      role: UserRole;
+      contractIds?: string[];
+      accessProfileId?: string | null;
+    },
+    actor?: { role?: string | null },
+  ): Promise<PublicUser> {
+    if (actor?.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Só o Administrador cria usuários');
+    }
     if (!Array.isArray(userData.contractIds)) {
       throw new BadRequestException('contractIds é obrigatório');
     }
 
+    const accessProfileId = await this.resolveAccessAssignment(
+      userData.role,
+      userData.accessProfileId,
+    );
     const passwordHash = await bcrypt.hash(userData.password, 10);
     const contracts = await this.resolveContracts(userData.contractIds);
 
@@ -191,14 +209,20 @@ export class UsersService {
       role: userData.role,
       passwordHash,
       contracts,
+      accessProfileId,
     });
-    return this.usersRepository.save(user);
+    return this.withoutPassword(await this.usersRepository.save(user));
   }
 
   async update(
     id: string,
-    userData: Partial<User> & { contractIds?: string[]; password?: string },
-  ): Promise<User> {
+    userData: Partial<User> & {
+      contractIds?: string[];
+      password?: string;
+      accessProfileId?: string | null;
+    },
+    actor?: { role?: string | null },
+  ): Promise<PublicUser | null> {
     if (!Array.isArray(userData.contractIds)) {
       throw new BadRequestException('contractIds é obrigatório');
     }
@@ -213,33 +237,128 @@ export class UsersService {
       return null;
     }
 
-    const { contractIds, ...baseData } = userData;
+    this.assertActorMayTouchUser(actor, existing);
+    this.assertActorMayChangeAccess(actor, userData);
+
+    const { contractIds, accessProfileId, ...baseData } = userData;
+    const nextRole = userData.role ?? existing.role;
+    const nextAccessId = await this.resolveAccessAssignment(
+      nextRole,
+      accessProfileId === undefined
+        ? existing.accessProfileId
+        : accessProfileId,
+      actor?.role === UserRole.ADMIN,
+    );
     const contracts = await this.resolveContracts(contractIds);
 
     const merged = this.usersRepository.merge(existing, baseData, {
       contracts,
+      accessProfileId: nextAccessId,
     });
+    merged.accessProfile = nextAccessId
+      ? ({ id: nextAccessId } as AccessProfile)
+      : null;
     await this.usersRepository.save(merged);
 
-    return this.findOne(id, true);
+    return this.withoutPassword(await this.findOne(id, true));
   }
 
   async updateContracts(
     id: string,
     contractIds: string[],
-  ): Promise<User | null> {
+    actor?: { role?: string | null },
+  ): Promise<PublicUser | null> {
     const user = await this.findOne(id, true);
     if (!user) {
       return null;
     }
 
+    this.assertActorMayTouchUser(actor, user);
     user.contracts = await this.resolveContracts(contractIds);
     await this.usersRepository.save(user);
-    return this.findOne(id, true);
+    return this.withoutPassword(await this.findOne(id, true));
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, actor?: { role?: string | null }): Promise<void> {
+    const user = await this.usersRepository.findOne({ where: { id } });
+    if (user) {
+      this.assertActorMayTouchUser(actor, user);
+    }
     await this.usersRepository.delete(id);
+  }
+
+  private withoutPassword(user: User): PublicUser;
+  private withoutPassword(user: User | null): PublicUser | null;
+  private withoutPassword(user: User | null): PublicUser | null {
+    if (!user) {
+      return null;
+    }
+    const rest: Partial<User> = { ...user };
+    delete rest.passwordHash;
+    return rest as PublicUser;
+  }
+
+  private assertActorMayTouchUser(
+    actor: { role?: string | null } | undefined,
+    target: Pick<User, 'role'>,
+  ): void {
+    if (actor?.role !== UserRole.ADMIN && target.role === UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Só o Administrador altera ou exclui um Administrador',
+      );
+    }
+  }
+
+  private authRelations(withContracts: boolean): string[] {
+    const relations = ['accessProfile', 'accessProfile.areas'];
+    return withContracts ? ['contracts', ...relations] : relations;
+  }
+
+  private areasOf(user: User): AccessArea[] {
+    return (user.accessProfile?.areas ?? []).map((row) => row.area);
+  }
+
+  private assertActorMayChangeAccess(
+    actor: { role?: string | null } | undefined,
+    userData: { role?: UserRole; accessProfileId?: string | null },
+  ): void {
+    if (actor?.role === UserRole.ADMIN) {
+      return;
+    }
+    if (userData.role === UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Só o Administrador promove um usuário a Administrador',
+      );
+    }
+    if (userData.accessProfileId !== undefined) {
+      throw new ForbiddenException('Só o Administrador escolhe o Acesso');
+    }
+  }
+
+  private async resolveAccessAssignment(
+    role: UserRole,
+    accessProfileId: string | null | undefined,
+    assigning = true,
+  ): Promise<string | null> {
+    if (!assigning) {
+      return accessProfileId ?? null;
+    }
+    if (role === UserRole.ADMIN) {
+      if (accessProfileId) {
+        throw new BadRequestException('Administrador não recebe Acesso');
+      }
+      return null;
+    }
+    if (!accessProfileId) {
+      throw new BadRequestException('Acesso é obrigatório');
+    }
+    const profile = await this.accessProfilesRepository.findOne({
+      where: { id: accessProfileId },
+    });
+    if (!profile) {
+      throw new BadRequestException('Acesso não encontrado');
+    }
+    return profile.id;
   }
 
   private async resolveContracts(contractIds?: string[]): Promise<Contract[]> {

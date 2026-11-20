@@ -13,7 +13,7 @@ import {
 } from '../common/enums';
 import { InspectionDomainService } from './inspection-domain.service';
 import { InspectionNoticesService } from '../inspection-notices/inspection-notices.service';
-import { InspectionNoticeType } from '../common/enums';
+import { InspectionNoticeType, AccessArea } from '../common/enums';
 
 describe('InspectionsService - Regras de Negócio', () => {
   let service: InspectionsService;
@@ -106,14 +106,21 @@ describe('InspectionsService - Regras de Negócio', () => {
       findOne: jest.fn(),
     };
     noticeQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
       innerJoin: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
-      getMany: jest.fn().mockResolvedValue([{ id: 'gestor-1' }]),
+      getMany: jest.fn().mockResolvedValue([
+        {
+          id: 'gestor-1',
+          role: UserRole.GESTOR,
+          accessProfile: { areas: [{ area: AccessArea.QUALIDADE_PENDENCIAS }] },
+        },
+      ]),
     };
     usersRepository = {
-      find: jest.fn().mockResolvedValue([{ id: 'admin-1' }]),
+      find: jest.fn().mockResolvedValue([{ id: 'admin-1', role: UserRole.ADMIN }]),
       createQueryBuilder: jest.fn(() => noticeQueryBuilder),
     };
     inspectionNoticesService = new InspectionNoticesService(
